@@ -142,7 +142,7 @@ jobs:
           result1=$(gh search code "$query1" --json repository --limit 100 | jq '.[].repository.fullName' | sort -u)
           result2=$(gh search code "$query2" --json repository --limit 100 | jq '.[].repository.fullName' | sort -u)
           result=$(echo -e "$result1\n$result2" | sort -u)
-          count=$(echo "$result" | grep -v '^$' | wc -l | tr -d ' ')
+          count=$(echo "$result" | grep -v '^$' -c)
 
           echo "updates_count=$count" >> "$GITHUB_OUTPUT"
           echo "List of repositories using this dependency version: $result" >> "$GITHUB_OUTPUT"
