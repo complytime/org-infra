@@ -1,0 +1,53 @@
+name: Dependencies Reviewer
+
+# --------------------------------------------------------------------------
+# This workflow is only run when explicitly called by another workflow.
+# --------------------------------------------------------------------------
+on:
+  workflow_call:
+    outputs:
+      review_conclusion:
+        description: "Conclusion from the dependencies review process"
+        value: ${{ jobs.dependencies_review.outputs.review_step }}
+
+env:
+  MIN_SCORECARD_LEVEL: '5'
+
+# This workflow is passive so ensure the minimal permissions even if the
+# inherited token is more lenient.
+permissions:
+  contents: read
+  issues: none
+  pull-requests: none
+
+jobs:
+  dependencies_review:
+    runs-on: ubuntu-latest
+
+    outputs:
+      review_step: ${{ steps.set_status.outputs.review_step }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: ${{ github.event.repository.full_name }} # Checkout the caller repo
+          fetch-depth: 0 # This may also capture vulnerabilities unrelated to the PR.
+
+      - name: Run Dependency Review
+        id: dependency_review
+        uses: actions/dependency-review-action@40c09b7dc99638e5ddb0bfd91c1673effc064d8a # v4.8.1
+        with:
+          show-openssf-scorecard: true
+          warn-on-openssf-scorecard-level: ${{ env.MIN_SCORECARD_LEVEL }}
+        continue-on-error: true
+
+      - name: Determine Review Result
+        id: set_status
+        if: ${{ always() }}
+        run: |
+          if [[ "${{ steps.dependency_review.conclusion }}" == "failure" ]]; then
+            echo "review_step=failure" >> $GITHUB_OUTPUT
+          else
+            echo "review_step=success" >> $GITHUB_OUTPUT
+          fi

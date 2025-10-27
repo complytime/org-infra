@@ -1,0 +1,148 @@
+name: Dependabot Reviewer
+
+# --------------------------------------------------------------------------
+# This workflow is only run when explicitly called by another workflow.
+# --------------------------------------------------------------------------
+on:
+  workflow_call:
+    outputs:
+      risk_level:
+        description: "Risk level assessment based on semantic version"
+        value: ${{ jobs.dependabot_review.outputs.risk_level }}
+      updates_count:
+        description: "Rough number of projects that already adopted this dependency"
+        value: ${{ jobs.dependabot_review.outputs.updates_count }}
+
+# This workflow is passive so ensure the minimal permissions even if the
+# inherited token is more lenient.
+permissions:
+  contents: read
+  issues: none
+  pull-requests: none
+
+jobs:
+  dependabot_review:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    outputs:
+      risk_level: ${{ steps.classify_risk.outputs.risk_level }}
+      updates_count: ${{ steps.check_popularity.outputs.updates_count }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: ${{ github.event.repository.full_name }}
+          fetch-depth: 1  # Only the last commit is necessary to capture semantic versions
+
+      - name: Get Dependency Information
+        shell: bash
+        run: |
+          COMMIT_SUBJECT="$(git log -1 --format=%s)"
+
+          # Extract dependency name from commit title
+          dep_name=$(echo "$COMMIT_SUBJECT" | sed -E 's/Bump ([^ ]+) .*/\1/')
+          if [[ -n $dep_name ]]; then
+            echo "Dependency Name: $dep_name"
+            echo "DEP_NAME=$dep_name" >> "$GITHUB_ENV"
+          fi
+
+          # Extract two semantic version numbers (e.g., 1.2.3)
+          mapfile -t versions < <(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' <<< "$COMMIT_SUBJECT")
+
+          if [[ ${#versions[@]} -eq 2 ]]; then
+            echo "Versions: ${versions[0]} -> ${versions[1]}"
+            echo "FROM_VERSION=${versions[0]}" >> "$GITHUB_ENV"
+            echo "TO_VERSION=${versions[1]}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Classify Risk Based on Semantic Version
+        id: classify_risk
+        shell: bash
+        run: |
+          if [[ -z "${{ env.FROM_VERSION }}" || -z "${{ env.TO_VERSION }}" ]]; then
+            echo "risk_level=high" >> $GITHUB_OUTPUT
+            echo "::notice::No clear versioning detected. Defaulting to high risk."
+            exit 0
+          fi
+
+          FROM_VER_MAJOR=$(echo "${{ env.FROM_VERSION }}" | cut -d. -f1)
+          FROM_VER_MINOR=$(echo "${{ env.FROM_VERSION }}" | cut -d. -f2)
+          TO_VER_MAJOR=$(echo "${{ env.TO_VERSION }}" | cut -d. -f1)
+          TO_VER_MINOR=$(echo "${{ env.TO_VERSION }}" | cut -d. -f2)
+
+          if [[ "$FROM_VER_MAJOR" -eq "$TO_VER_MAJOR" && "$FROM_VER_MINOR" -eq "$TO_VER_MINOR" ]]; then
+            echo "Patch update detected."
+            echo "risk_level=low" >> $GITHUB_OUTPUT
+          elif [[ "$FROM_VER_MAJOR" -eq "$TO_VER_MAJOR" && "$FROM_VER_MINOR" -lt "$TO_VER_MINOR" ]]; then
+            echo "Minor update detected."
+            echo "risk_level=medium" >> $GITHUB_OUTPUT
+          else
+            echo "Major update detected. Likely includes breaking changes. Requires manual review."
+            echo "risk_level=high" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get Changed Files
+        id: changed_files
+        uses: tj-actions/changed-files@ed68ef82c095e0d48ec87eccea555d944a631a4c # v46.0.5
+
+      - name: Detect Ecosystem
+        id: detect_ecosystem
+        if: steps.changed_files.outputs.any_changed == 'true'
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed_files.outputs.all_changed_files }}
+        run: |
+          if grep -q "go.mod" $ALL_CHANGED_FILES; then
+            eco="go"
+          elif grep -q -E "requirements\.txt|pyproject\.toml|setup\.cfg" $ALL_CHANGED_FILES; then
+            eco="python"
+          elif grep -q -E "\.ya?ml" $ALL_CHANGED_FILES; then
+            eco="github_actions"
+          else
+            eco="unknown"
+          fi
+
+          echo "Detected ecosystem: $eco"
+          echo "ecosystem=$eco" >> $GITHUB_OUTPUT
+
+      - name: Search GitHub for Dependency Usage
+        id: check_popularity
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dep="${{ env.DEP_NAME }}"
+          ver="${{ env.TO_VERSION }}"
+          eco="${{ steps.detect_ecosystem.outputs.ecosystem }}"
+
+          case "$eco" in
+            python)
+              query1="${dep}==${ver} filename:requirements.txt"
+              query2="\"${dep} = \\\"${ver}\\\"\" filename:pyproject.toml"
+              ;;
+            go)
+              query1="\"${dep} ${ver}\" filename:go.mod"
+              query2="\"${dep} v${ver}\" filename:go.mod"
+              ;;
+            github_actions)
+              query1="uses: ${dep}@${ver} path:.github/workflows/"
+              query2="${dep}@${ver} path:.github/workflows/"
+              ;;
+            *)
+              echo "Unknown ecosystem, skipping search."
+              echo "updates_count=0" >> $GITHUB_OUTPUT
+              exit 0
+              ;;
+          esac
+
+          echo "Searching GitHub for patterns:"
+          echo " - $query1"
+          echo " - $query2"
+
+          result1=$(gh search code "$query1" --json repository --limit 100 | jq '.[].repository.fullName' | sort -u)
+          result2=$(gh search code "$query2" --json repository --limit 100 | jq '.[].repository.fullName' | sort -u)
+          result=$(echo -e "$result1\n$result2" | sort -u)
+          count=$(echo "$result" | grep -v '^$' | wc -l | tr -d ' ')
+
+          echo "updates_count=$count" >> $GITHUB_OUTPUT
+          echo "List of repositories using this dependency version: $result" >> "$GITHUB_OUTPUT"
