@@ -1,5 +1,5 @@
 ---
-name: CI Checks
+name: Reusable CI
 
 # --------------------------------------------------------------------------
 # This workflow is only run when explicitly called by another workflow.

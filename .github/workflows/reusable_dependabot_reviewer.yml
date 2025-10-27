@@ -1,4 +1,4 @@
-name: Dependabot Reviewer
+name: Reusable Dependabot Reviewer
 
 # --------------------------------------------------------------------------
 # This workflow is only run when explicitly called by another workflow.

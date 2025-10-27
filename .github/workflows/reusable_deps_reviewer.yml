@@ -1,4 +1,4 @@
-name: Dependencies Reviewer
+name: Reusable Dependencies Reviewer
 
 # --------------------------------------------------------------------------
 # This workflow is only run when explicitly called by another workflow.
