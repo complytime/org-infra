@@ -1,0 +1,31 @@
+---
+name: CI Checks
+
+# --------------------------------------------------------------------------
+# This workflow is only run when explicitly called by another workflow.
+# --------------------------------------------------------------------------
+on:
+  workflow_call:
+
+# This workflow is passive so ensure the minimal permissions even if the
+# inherited token is more lenient.
+permissions:
+  contents: read
+  issues: none
+  pull-requests: none
+
+jobs:
+  megalinter:
+    name: Run linters
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Run MegaLinter
+        id: megalinter
+        uses: oxsecurity/megalinter@62c799d895af9bcbca5eacfebca29d527f125a57 # v9.1.0
+        env:
+          VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
