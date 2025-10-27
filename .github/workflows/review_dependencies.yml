@@ -27,7 +27,7 @@ jobs:
       pull-requests: write  # Necessary to write a comment
     steps:
       - name: Comment from Dependabot Reviewer
-        uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4.0.0
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
         env:
           REVIEW_CONCLUSION: ${{ needs.call_deps_reviewer.outputs.review_conclusion }}
           RISK_LEVEL: ${{ needs.call_dependabot_reviewer.outputs.risk_level }}
