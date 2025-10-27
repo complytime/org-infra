@@ -11,11 +11,11 @@ on:
 jobs:
   call_deps_reviewer:
     name: General
-    uses: marcusburghardt/github-standards/.github/workflows/reusable_deps_reviewer.yml@main
+    uses: complytime/org-infra/.github/workflows/reusable_deps_reviewer.yml@main
 
   call_dependabot_reviewer:
     name: Dependabot
-    uses: marcusburghardt/github-standards/.github/workflows/reusable_dependabot_reviewer.yml@main
+    uses: complytime/org-infra/.github/workflows/reusable_dependabot_reviewer.yml@main
 
   comment_on_dependabot_prs:
     name: Comment on PR
