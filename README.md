@@ -21,7 +21,7 @@ Specifically, this repository includes:
 
 ## 📁 Directory Structure
 
-```
+```bash
 org-infra/
 ├── .github/
 │  └── workflows/
