@@ -10,7 +10,7 @@ on:
 
 permissions:
   contents: read
-  issues: none
+  issues: write         # Necessary to write a comment
   pull-requests: none
 
 jobs:
