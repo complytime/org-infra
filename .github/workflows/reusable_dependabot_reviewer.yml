@@ -34,15 +34,20 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: "${{ github.event.repository.full_name }}"
-          fetch-depth: 1  # Only the last commit is necessary to capture semantic versions
+          fetch-depth: 2
 
       - name: Get Dependency Information
         shell: bash
+        env:
+          DEPENDABOT_SHA: "${{ github.event.pull_request.head.sha }}"
         run: |
-          COMMIT_SUBJECT="$(git log -1 --format=%s)"
+          # Use 'git log' specifically on the Dependabot commit SHA to get its subject.
+          # This command works regardless of which commit SHA was checked out locally.
+          COMMIT_SUBJECT="$(git log -1 --format=%s $DEPENDABOT_SHA)"
+          echo "Dependabot Commit Subject: $COMMIT_SUBJECT"
 
           # Extract dependency name from commit title
-          dep_name="$(echo "$COMMIT_SUBJECT" | sed -E 's/Bump ([^ ]+) .*/\1/')"
+          dep_name="$(echo "$COMMIT_SUBJECT" | sed -E 's/.*Bump ([^ ]+) .*/\1/')"
           if [[ -n "$dep_name" ]]; then
             echo "Dependency Name: $dep_name"
             echo "DEP_NAME=$dep_name" >> "$GITHUB_ENV"
