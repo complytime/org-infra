@@ -43,7 +43,7 @@ jobs:
         run: |
           # Use 'git log' specifically on the Dependabot commit SHA to get its subject.
           # This command works regardless of which commit SHA was checked out locally.
-          COMMIT_SUBJECT="$(git log -1 --format=%s $DEPENDABOT_SHA)"
+          COMMIT_SUBJECT="$(git log -1 --format=%s "$DEPENDABOT_SHA")"
           echo "Dependabot Commit Subject: $COMMIT_SUBJECT"
 
           # Extract dependency name from commit title
@@ -97,15 +97,19 @@ jobs:
         if: steps.changed_files.outputs.any_changed == 'true'
         env:
           ALL_CHANGED_FILES: "${{ steps.changed_files.outputs.all_changed_files }}"
+          DEP_NAME: "${{ env.DEP_NAME }}"
         run: |
-          if grep -q "go.mod" "$ALL_CHANGED_FILES"; then
+          eco="unknown" # Initialize
+          if [[ "$DEP_NAME" == *"/"* ]]; then
+            eco="github_actions"
+          elif grep -q "go.mod" "$ALL_CHANGED_FILES"; then
             eco="go"
           elif grep -q -E "requirements\.txt|pyproject\.toml|setup\.cfg" "$ALL_CHANGED_FILES"; then
             eco="python"
+          # Fallback for other GitHub Actions changes
+          # (e.g., action updates that don't follow the owner/repo format, or if dependency name check failed)
           elif grep -q -E "\.ya?ml" "$ALL_CHANGED_FILES"; then
             eco="github_actions"
-          else
-            eco="unknown"
           fi
 
           echo "Detected ecosystem: $eco"
