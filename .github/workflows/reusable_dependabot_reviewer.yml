@@ -117,16 +117,16 @@ jobs:
 
           case "$eco" in
             python)
-              query1="${dep}==${ver} filename:requirements.txt"
-              query2="\"${dep} = \\\"${ver}\\\"\" filename:pyproject.toml"
+              # Combined query: (reqs.txt pattern) OR (pyproject.toml pattern)
+              query="((${dep}==${ver} filename:requirements.txt) OR (\"${dep} = \\\"${ver}\\\"\" filename:pyproject.toml))"
               ;;
             go)
-              query1="\"${dep} ${ver}\" filename:go.mod"
-              query2="\"${dep} v${ver}\" filename:go.mod"
+              # Combined query: ("dep $ver" pattern) OR ("dep v$ver" pattern) + file filter
+              query="filename:go.mod ((\"${dep} ${ver}\") OR (\"${dep} v${ver}\"))"
               ;;
             github_actions)
-              query1="uses: ${dep}@${ver} path:.github/workflows/"
-              query2="${dep}@${ver} path:.github/workflows/"
+              # Combined query: (uses: pattern) OR (direct ref pattern) + path filter
+              query="path:.github/workflows/ ((uses: ${dep}@${ver}) OR (${dep}@${ver}))"
               ;;
             *)
               echo "Unknown ecosystem, skipping search."
@@ -135,13 +135,10 @@ jobs:
               ;;
           esac
 
-          echo "Searching GitHub for patterns:"
-          echo " - $query1"
-          echo " - $query2"
+          echo "Searching GitHub with combined pattern:"
+          echo " - $query"
 
-          result1=$(gh search code "$query1" --json repository --limit 100 | jq '.[].repository.fullName' | sort -u)
-          result2=$(gh search code "$query2" --json repository --limit 100 | jq '.[].repository.fullName' | sort -u)
-          result=$(echo -e "$result1\n$result2" | sort -u)
+          result=$(gh search code "$query" --json repository --limit 25 | jq '.[].repository.fullName' | sort -u)
           count=$(echo "$result" | grep -v '^$' -c)
 
           echo "updates_count=$count" >> "$GITHUB_OUTPUT"
