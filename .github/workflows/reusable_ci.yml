@@ -24,6 +24,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
+      - name: Install Dependencies
+        run: npm install @commitlint/cli @commitlint/config-conventional
+
+      - name: Validate PR Title
+        env:
+          PR_TITLE: "${{ github.event.pull_request.title }}"
+        run: echo "$PR_TITLE" | npx commitlint --config commitlint.config.js
+
       - name: Run MegaLinter
         id: megalinter
         uses: oxsecurity/megalinter@62c799d895af9bcbca5eacfebca29d527f125a57 # v9.1.0
