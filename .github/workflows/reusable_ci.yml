@@ -11,7 +11,7 @@ on:
 # inherited token is more lenient.
 permissions:
   contents: read
-  issues: write         # Necessary to write a comment
+  issues: read
   pull-requests: none
 
 jobs:
@@ -29,3 +29,4 @@ jobs:
         uses: oxsecurity/megalinter@62c799d895af9bcbca5eacfebca29d527f125a57 # v9.1.0
         env:
           VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          GITHUB_COMMENT_REPORTER: false
