@@ -45,8 +45,10 @@ jobs:
       - name: Determine Review Result
         id: set_status
         if: "${{ always() }}"
+        env:
+          REVIEW_CONCLUSION: "${{ steps.dependency_review.conclusion }}"
         run: |
-          if [[ "${{ steps.dependency_review.conclusion }}" == "failure" ]]; then
+          if [[ "$REVIEW_CONCLUSION" == "failure" ]]; then
             echo "review_step=failure" >> "$GITHUB_OUTPUT"
           else
             echo "review_step=success" >> "$GITHUB_OUTPUT"
