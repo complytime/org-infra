@@ -63,10 +63,10 @@ jobs:
           fi
 
           # Extract dependency pinned version in case of GitHub Actions
+          git show "$DEPENDABOT_SHA" --format= --unified=0 --no-prefix -- .github/workflows/
           pinned_version="$(
-            git show "$DEPENDABOT_SHA" --format= --unified=0 --no-prefix -- .github/workflows/ \
-              | grep '^+' \
-              | grep -oE '[0-9a-fA-F]{40}' \
+            grep -rEo "$dep_name@[0-9a-f]{40}" .github/workflows/ \
+              | awk -F'@' '{ print $2}' \
               | tail -n1 || echo ''
           )"
           if [[ -n "$pinned_version" ]]; then
@@ -149,7 +149,7 @@ jobs:
               query="${dep} v${ver} filename:go.mod"
               ;;
             github_actions)
-              if [[ -n "ver_sha" ]]; then
+              if [[ -n "${ver_sha}" ]]; then
                 ver="${ver_sha}"
               else
                 ver="v${ver}"
