@@ -144,8 +144,10 @@ jobs:
               query="${dep} v${ver} filename:go.mod"
               ;;
             github_actions)
-              if [[ -z "ver_sha" ]]; then
+              if [[ -n "ver_sha" ]]; then
                 ver="${ver_sha}"
+              else
+                ver="v${ver}"
               fi
               query="${dep}@${ver} path:.github/workflows/"
               ;;
@@ -156,7 +158,7 @@ jobs:
               ;;
           esac
 
-          echo "Searching GitHub with combined pattern:"
+          echo "Searching GitHub with following query:"
           echo " - $query"
 
           result=$(gh search code "$query" --json repository --limit 25 | jq '.[].repository.nameWithOwner' | sort -u)
