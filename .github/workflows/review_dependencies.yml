@@ -18,12 +18,12 @@ jobs:
     uses: complytime/org-infra/.github/workflows/reusable_dependabot_reviewer.yml@main
 
   comment_on_dependabot_prs:
-    name: Comment on PR
+    name: Dependabot Comment
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     needs: [call_deps_reviewer, call_dependabot_reviewer]
     permissions:
-      issues: write         # Necessary to write a comment
+      issues: read
       pull-requests: write  # Necessary to write a comment
     steps:
       - name: Comment from Dependabot Reviewer
@@ -55,7 +55,7 @@ jobs:
             5. Be diligent. When in doubt, ask another maintainer for additional review.
 
   approve_dependabot_prs:
-    name: Auto-approve Dependabot PR
+    name: Dependabot Auto-approve
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     needs: [call_deps_reviewer, call_dependabot_reviewer]

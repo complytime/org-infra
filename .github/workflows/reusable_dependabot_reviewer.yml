@@ -62,6 +62,13 @@ jobs:
             echo "TO_VERSION=${versions[1]}" >> "$GITHUB_ENV"
           fi
 
+          # Extract dependency pinned version in case of GitHub Actions
+          pinned_version="$(git show --unified=0 "$DEPENDABOT_SHA" | tail -n1 | grep -oP '@\K[0-9a-fA-F]+')"
+          if [[ -n "$pinned_version" ]]; then
+            echo "Dependency Commit Hash: $pinned_version"
+            echo "PINNED_VERSION=$pinned_version" >> "$GITHUB_ENV"
+          fi
+
       - name: Classify Risk Based on Semantic Version
         id: classify_risk
         shell: bash
@@ -122,20 +129,25 @@ jobs:
         run: |
           dep="${{ env.DEP_NAME }}"
           ver="${{ env.TO_VERSION }}"
+          ver_sha="${{ env.PINNED_VERSION }}"
           eco="${{ steps.detect_ecosystem.outputs.ecosystem }}"
 
           case "$eco" in
             python)
-              # Combined query: (reqs.txt pattern) OR (pyproject.toml pattern)
-              query="((${dep}==${ver} filename:requirements.txt) OR (\"${dep} = \\\"${ver}\\\"\" filename:pyproject.toml))"
+              # There are many different ways to declare Python dependencies making it hard
+              # to bring consistent results. So, skipping Python dependency count for now.
+              echo "Queries for Python dependencies are not consistent enough. Skipping"
+              echo "updates_count=0" >> "$GITHUB_OUTPUT"
+              exit 0
               ;;
             go)
-              # Combined query: ("dep $ver" pattern) OR ("dep v$ver" pattern) + file filter
-              query="filename:go.mod ((\"${dep} ${ver}\") OR (\"${dep} v${ver}\"))"
+              query="${dep} v${ver} filename:go.mod"
               ;;
             github_actions)
-              # Combined query: (uses: pattern) OR (direct ref pattern) + path filter
-              query="path:.github/workflows/ ((uses: ${dep}@${ver}) OR (${dep}@${ver}))"
+              if [[ -z "ver_sha" ]]; then
+                ver="${ver_sha}"
+              fi
+              query="${dep}@${ver} path:.github/workflows/"
               ;;
             *)
               echo "Unknown ecosystem, skipping search."
@@ -147,8 +159,8 @@ jobs:
           echo "Searching GitHub with combined pattern:"
           echo " - $query"
 
-          result=$(gh search code "$query" --json repository --limit 25 | jq '.[].repository.fullName' | sort -u)
-          count=$(echo "$result" | grep -v '^$' -c)
+          result=$(gh search code "$query" --json repository --limit 25 | jq '.[].repository.nameWithOwner' | sort -u)
+          count=$(echo "$result" | wc -w)
 
           echo "updates_count=$count" >> "$GITHUB_OUTPUT"
           echo "List of repositories using this dependency version: $result" >> "$GITHUB_OUTPUT"
