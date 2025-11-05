@@ -47,7 +47,7 @@ jobs:
           echo "Dependabot Commit Subject: $COMMIT_SUBJECT"
 
           # Extract dependency name from commit title
-          dep_name="$(echo "$COMMIT_SUBJECT" | sed -E 's/.*Bump ([^ ]+) .*/\1/')"
+          dep_name="$(echo "$COMMIT_SUBJECT" | sed -E 's/.*[Bb]ump ([^ ]+) .*/\1/')"
           if [[ -n "$dep_name" ]]; then
             echo "Dependency Name: $dep_name"
             echo "DEP_NAME=$dep_name" >> "$GITHUB_ENV"
@@ -63,7 +63,6 @@ jobs:
           fi
 
           # Extract dependency pinned version in case of GitHub Actions
-          git show "$DEPENDABOT_SHA" --format= --unified=0 --no-prefix -- .github/workflows/
           pinned_version="$(
             grep -rEo "$dep_name@[0-9a-f]{40}" .github/workflows/ \
               | awk -F'@' '{ print $2}' \
