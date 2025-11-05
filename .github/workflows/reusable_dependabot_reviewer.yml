@@ -63,7 +63,7 @@ jobs:
           fi
 
           # Extract dependency pinned version in case of GitHub Actions
-          pinned_version="$(git show --unified=0 "$DEPENDABOT_SHA" | tail -n1 | grep -oE '[0-9a-fA-F]{40}')"
+          pinned_version="$(git show --unified=0 "$DEPENDABOT_SHA" | tail -n1 | grep -oE '[0-9a-fA-F]{40}' || echo '')"
           if [[ -n "$pinned_version" ]]; then
             echo "Dependency Commit Hash: $pinned_version"
             echo "PINNED_VERSION=$pinned_version" >> "$GITHUB_ENV"
