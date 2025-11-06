@@ -1,0 +1,25 @@
+name: Scheduled Jobs
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * *'
+
+permissions:
+  contents: read
+  issues: none
+  pull-requests: none
+  actions: none
+  security-events: none
+
+jobs:
+  security_audit:
+    name: Vulnerabilities Scan
+    permissions:
+      actions: read           # Required to upload SARIF file to CodeQL. See: https://github.com/github/codeql-action/issues/2117
+      security-events: write  # Require writing security events to upload SARIF file to security tab
+    uses: complytime/org-infra/.github/workflows/reusable_scheduled.yml@main
+    with:
+      default-branch: "${{ github.ref_name }}"
