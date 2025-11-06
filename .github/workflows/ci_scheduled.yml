@@ -21,5 +21,3 @@ jobs:
       actions: read           # Required to upload SARIF file to CodeQL. See: https://github.com/github/codeql-action/issues/2117
       security-events: write  # Require writing security events to upload SARIF file to security tab
     uses: complytime/org-infra/.github/workflows/reusable_scheduled.yml@main
-    with:
-      default-branch: "${{ github.ref_name }}"
