@@ -22,6 +22,7 @@ permissions:
 
 jobs:
   dependabot_review:
+    name: Dependabot Review
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
 

@@ -22,6 +22,7 @@ permissions:
 
 jobs:
   dependencies_review:
+    name: Dependencies Review
     runs-on: ubuntu-latest
 
     outputs:
