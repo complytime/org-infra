@@ -8,6 +8,11 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  issues: none
+  pull-requests: none
+
 jobs:
   call_deps_reviewer:
     name: General
@@ -43,7 +48,7 @@ jobs:
             - **Dependencies Review:** **${{ env.REVIEW_CONCLUSION }}**
               - [View detailed logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
             - **Calculated Risk:** **${{ env.RISK_LEVEL }}**
-            - **Dependency Usage:** **${{ env.UPDATES_COUNT }}** repositories are using this dependency version
+            - **Dependency Usage:** At least **${{ env.UPDATES_COUNT }}** repositories are using this dependency version
 
             ---
 

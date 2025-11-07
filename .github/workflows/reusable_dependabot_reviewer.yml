@@ -1,7 +1,7 @@
 name: Reusable Dependabot Reviewer
 
 # --------------------------------------------------------------------------
-# This workflow is only run when explicitly called by another workflow.
+# This workflow only runs when explicitly called by another workflow.
 # --------------------------------------------------------------------------
 on:
   workflow_call:
@@ -22,6 +22,7 @@ permissions:
 
 jobs:
   dependabot_review:
+    name: Dependabot Review
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
 
