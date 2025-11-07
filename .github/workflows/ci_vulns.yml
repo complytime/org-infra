@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   security_audit:
-    name: OVS-Scanner
+    name: OSV-Scanner
     permissions:
       actions: read           # Required to upload SARIF file to CodeQL. See: https://github.com/github/codeql-action/issues/2117
       security-events: write  # Require writing security events to upload SARIF file to security tab

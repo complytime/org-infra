@@ -1,7 +1,7 @@
 name: Reusable Scheduled Jobs
 
 # --------------------------------------------------------------------------
-# This workflow is only run when explicitly called by another workflow.
+# This workflow only runs when explicitly called by another workflow.
 # --------------------------------------------------------------------------
 on:
   workflow_call:
@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   scan:
-    name: OVS-Scanner
+    name: OSV-Scanner
     # https://google.github.io/osv-scanner/github-action/
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9bb69575e74019c2ad085a1860787043adf47ccb # v2.2.4
     permissions:

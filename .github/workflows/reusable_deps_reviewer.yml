@@ -1,7 +1,7 @@
 name: Reusable Dependencies Reviewer
 
 # --------------------------------------------------------------------------
-# This workflow is only run when explicitly called by another workflow.
+# This workflow only runs when explicitly called by another workflow.
 # --------------------------------------------------------------------------
 on:
   workflow_call:
