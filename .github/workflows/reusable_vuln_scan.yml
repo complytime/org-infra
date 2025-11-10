@@ -26,6 +26,7 @@ jobs:
     # https://google.github.io/osv-scanner/github-action/
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@9bb69575e74019c2ad085a1860787043adf47ccb # v2.2.4
     permissions:
+      contents: read
       actions: read           # Required to upload SARIF file to CodeQL. See: https://github.com/github/codeql-action/issues/2117
       security-events: write  # Require writing security events to upload SARIF file to security tab
     with:
