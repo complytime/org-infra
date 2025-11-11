@@ -116,7 +116,7 @@ jobs:
             eco="github_actions"
           elif grep -q "go.mod" "$ALL_CHANGED_FILES"; then
             eco="go"
-          elif grep -q -E "requirements\.txt|pyproject\.toml|setup\.cfg" "$ALL_CHANGED_FILES"; then
+          elif grep -q -E "requirements\.txt|pyproject\.toml|setup\.cfg|poetry\.lock" "$ALL_CHANGED_FILES"; then
             eco="python"
           # Fallback for other GitHub Actions changes
           # (e.g., action updates that don't follow the owner/repo format, or if dependency name check failed)
