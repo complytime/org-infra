@@ -11,14 +11,16 @@ on:
 # inherited token is more lenient.
 permissions:
   contents: read
-  issues: read
+  issues: none
   pull-requests: none
 
 jobs:
   megalinter:
     name: Run linters
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      issues: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
