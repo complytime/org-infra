@@ -1,0 +1,72 @@
+---
+# Configuration file for sync-org-repositories.py
+# This file defines which files and workflows should be synchronized
+# across all organization repositories.
+
+# Repositories to exclude from synchronization
+# org-infra is excluded by default as it's the source repository
+exclude_repos:
+  - .github       # Organization config repository
+  - org-infra     # This repository itself
+  - oscal-content # Empty repository
+
+# Files and workflows to synchronize
+# Each entry specifies:
+#   - source: Path relative to org-infra repository root
+#   - destination: (optional) Path in target repo, defaults to same as source
+#   - exclude_repos: (optional) List of repositories to skip for this file
+files_to_sync:
+  # GitHub Workflows
+  - source: .github/workflows/ci_checks.yml
+    destination: .github/workflows/ci_checks.yml
+
+  - source: .github/workflows/ci_dependencies.yml
+    destination: .github/workflows/ci_dependencies.yml
+
+  - source: .github/workflows/ci_scheduled.yml
+    destination: .github/workflows/ci_scheduled.yml
+
+  - source: .github/workflows/ci_vulns.yml
+    destination: .github/workflows/ci_vulns.yml
+
+  # Configuration Files
+  - source: .github/dependabot.yml
+    destination: .github/dependabot.yml
+
+  - source: .mega-linter.yml
+    destination: .mega-linter.yml
+
+  - source: .yamllint.yml
+    destination: .yamllint.yml
+
+  - source: commitlint.config.js
+    destination: commitlint.config.js
+
+  - source: .golangci.yml
+    destination: .golangci.yml
+    exclude_repos:
+      - complyscribe
+      - complytime-demos
+      - vagrant-boxes
+
+  - source: ruff.toml
+    destination: ruff.toml
+    exclude_repos:
+      - compliance-to-policy-plugins
+      - complybeacon
+      - complyctl
+      - gemara2oscal
+      - vagrant-boxes
+
+  # GitHub Templates
+  - source: .github/pull_request_template.md
+    destination: .github/pull_request_template.md
+
+  - source: .github/ISSUE_TEMPLATE/bug_report.md
+    destination: .github/ISSUE_TEMPLATE/bug_report.md
+
+  - source: .github/ISSUE_TEMPLATE/feature_request.md
+    destination: .github/ISSUE_TEMPLATE/feature_request.md
+
+# Default branch name for creating PRs
+default_base_branch: main
