@@ -48,7 +48,7 @@ You should see the help message with available options.
 
 #### 1. Create Fine-Grained PAT
 
-1. Go to: `https://github.com/settings/personal-access-tokens/new`
+1. Go to: [Set PAT](https://github.com/settings/personal-access-tokens/new)
 2. Configure:
    - **Name:** `repo-sync-testing`
    - **Expiration:** 7 days (short-lived for testing)
