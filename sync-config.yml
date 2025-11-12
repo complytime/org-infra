@@ -7,6 +7,7 @@
 # org-infra is excluded by default as it's the source repository
 exclude_repos:
   - .github       # Organization config repository
+  - org-infra     # This repository itself
   - oscal-content # Empty repository
 
 # Files and workflows to synchronize
