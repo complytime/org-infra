@@ -29,6 +29,7 @@ jobs:
         run: npm install @commitlint/cli @commitlint/config-conventional
 
       - name: Validate PR Title
+        if: ${{ github.event.pull_request.title != '' }}
         env:
           PR_TITLE: "${{ github.event.pull_request.title }}"
         run: echo "$PR_TITLE" | npx commitlint --config commitlint.config.js
