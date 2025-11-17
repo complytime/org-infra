@@ -109,19 +109,21 @@ jobs:
         if: steps.changed_files.outputs.any_changed == 'true'
         env:
           ALL_CHANGED_FILES: "${{ steps.changed_files.outputs.all_changed_files }}"
-          DEP_NAME: "${{ env.DEP_NAME }}"
         run: |
-          eco="unknown" # Initialize
-          if [[ "$DEP_NAME" == *"/"* ]]; then
-            eco="github_actions"
-          elif grep -q "go.mod" "$ALL_CHANGED_FILES"; then
+          if [[ $ALL_CHANGED_FILES =~ (^|[[:space:]])go\.mod($|[[:space:]]) ]]; then
             eco="go"
-          elif grep -q -E "requirements\.txt|pyproject\.toml|setup\.cfg|poetry\.lock" "$ALL_CHANGED_FILES"; then
+          elif [[ $ALL_CHANGED_FILES =~ (^|[[:space:]])requirements\.txt($|[[:space:]]) || \
+                  $ALL_CHANGED_FILES =~ (^|[[:space:]])pyproject\.toml($|[[:space:]]) || \
+                  $ALL_CHANGED_FILES =~ (^|[[:space:]])setup\.cfg($|[[:space:]]) || \
+                  $ALL_CHANGED_FILES =~ (^|[[:space:]])poetry\.lock($|[[:space:]]) ]]; then
             eco="python"
-          # Fallback for other GitHub Actions changes
-          # (e.g., action updates that don't follow the owner/repo format, or if dependency name check failed)
-          elif grep -q -E "\.ya?ml" "$ALL_CHANGED_FILES"; then
+          elif [[ $ALL_CHANGED_FILES == *".github/workflows/"* || \
+                  $ALL_CHANGED_FILES == *".github/actions/"* ]]; then
             eco="github_actions"
+          else
+            echo "No dependency changes detected. Skipping ecosystem detection."
+            echo "ecosystem=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           echo "Detected ecosystem: $eco"
