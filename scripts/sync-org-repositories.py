@@ -78,6 +78,7 @@ def load_sync_config(config_path: str) -> dict:
 def validate_github_api_request(endpoint: str, method: str) -> bool:
     """Validate a GitHub API request."""
     allowed_patterns = [
+        (r"^" + GITHUB_API + "/app$", "GET"),
         (r"^" + GITHUB_API + "/user$", "GET"),
         (r"^" + GITHUB_API + "/repos/[^/]+/[^/]+$", "GET"),
         (r"^" + GITHUB_API + "/repos/[^/]+/[^/]+/forks$", "POST"),
