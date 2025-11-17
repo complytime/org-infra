@@ -129,15 +129,26 @@ def github_api_request(endpoint: str, method: str = "POST", data: Optional[dict]
         return 500, {"error": str(e)}
 
 
-def get_authenticated_user() -> Optional[str]:
-    """Get the username of the authenticated user/app."""
-    url = f"{GITHUB_API}/user"
-    status, data = github_api_request(url, method="GET")
+def get_authenticated_actor() -> Optional[str]:
+    """Identify the actor behind the current GitHub token (user or app)."""
+    user_url = f"{GITHUB_API}/user"
+    status, data = github_api_request(user_url, method="GET")
     if status == 200:
-        return data.get('login')
-    else:
-        print(f"Failed to get authenticated user (HTTP {status}): {data}")
+        return data.get("login")
+
+    # If it's a GitHub App token, /user returns 403
+    if status == 403 and "Resource not accessible by integration" in data.get("message", ""):
+        app_url = f"{GITHUB_API}/app"
+        app_status, app_data = github_api_request(app_url, method="GET")
+        if app_status == 200:
+            app_slug = app_data.get("slug")
+            return f"GitHub App: {app_slug}"
+
+        print(f"Failed to identify GitHub App (HTTP {app_status}): {app_data}")
         return None
+
+    print(f"Failed to get authenticated user (HTTP {status}): {data}")
+    return None
 
 
 def check_fork_exists(org: str, repo_name: str, fork_owner: str) -> bool:
@@ -468,7 +479,7 @@ def main():
         sys.exit(1)
 
     # Get the authenticated user/app name
-    fork_owner = get_authenticated_user()
+    fork_owner = get_authenticated_actor()
     if not fork_owner:
         print("Error: Could not determine authenticated user/app")
         sys.exit(1)

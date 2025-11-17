@@ -6,7 +6,9 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: none
+  issues: none
+  pull-requests: none
   actions: none
   security-events: none
 
@@ -16,4 +18,5 @@ jobs:
     permissions:
       contents: read
       actions: read           # Required to upload SARIF file to CodeQL. See: https://github.com/github/codeql-action/issues/2117
+      security-events: write  # Require writing security events to upload SARIF file to security tab
     uses: complytime/org-infra/.github/workflows/reusable_vuln_scan.yml@main
