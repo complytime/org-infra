@@ -33,6 +33,7 @@ jobs:
       scan-args: "${{ inputs.scan-args }}"
       fail-on-vuln: true
       upload-sarif: true
+      results-file-name: osv-scanner-scheduled-results.sarif
 
   call_reusable_security:
     name: OpenSSF Scorecards
