@@ -33,3 +33,4 @@ jobs:
       scan-args: "${{ inputs.scan-args }}"
       fail-on-vuln: true
       upload-sarif: true
+      results-file-name: osv-scanner-pr-results.sarif
