@@ -26,8 +26,8 @@ files_to_sync:
   - source: .github/workflows/ci_scheduled.yml
     destination: .github/workflows/ci_scheduled.yml
 
-  - source: .github/workflows/ci_vulns.yml
-    destination: .github/workflows/ci_vulns.yml
+  - source: .github/workflows/ci_security.yml
+    destination: .github/workflows/ci_security.yml
 
   # Configuration Files
   - source: .github/dependabot.yml
