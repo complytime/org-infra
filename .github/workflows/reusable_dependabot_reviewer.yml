@@ -63,15 +63,14 @@ jobs:
             echo "TO_VERSION=${versions[1]}" >> "$GITHUB_ENV"
           fi
 
-          # Extract dependency pinned version in case of GitHub Actions
-          pinned_version="$(
-            grep -rEo "$dep_name@[0-9a-f]{40}" .github/workflows/ \
-              | awk -F'@' '{ print $2}' \
-              | tail -n1 || echo ''
-          )"
-          if [[ -n "$pinned_version" ]]; then
-            echo "Dependency Commit Hash: $pinned_version"
-            echo "PINNED_VERSION=$pinned_version" >> "$GITHUB_ENV"
+          # Extract dependency name and version together in case of GitHub Actions
+          # The title is not always standardized, so we need to extract the name and version from the file changes.
+          if grep -rq "$dep_name" .github/workflows/; then
+            dep_name_and_version="$(git show -U0 --no-prefix | sed -n 's/^+ //p' | awk '{ print $2 }' | tail -n1 || echo '')"
+            if [[ -n "$dep_name_and_version" ]]; then
+              echo "Dependency Name and Version: $dep_name_and_version"
+              echo "DEP_NAME_AND_VERSION=$dep_name_and_version" >> "$GITHUB_ENV"
+            fi
           fi
 
       - name: Classify Risk Based on Semantic Version
@@ -136,7 +135,7 @@ jobs:
         run: |
           dep="${{ env.DEP_NAME }}"
           ver="${{ env.TO_VERSION }}"
-          ver_sha="${{ env.PINNED_VERSION }}"
+          name_and_ver="${{ env.DEP_NAME_AND_VERSION }}"
           eco="${{ steps.detect_ecosystem.outputs.ecosystem }}"
 
           case "$eco" in
@@ -151,12 +150,12 @@ jobs:
               query="${dep} v${ver} filename:go.mod"
               ;;
             github_actions)
-              if [[ -n "${ver_sha}" ]]; then
-                ver="${ver_sha}"
+              if [[ -n "${name_and_ver}" ]]; then
+                pattern="${name_and_ver}"
               else
-                ver="v${ver}"
+                pattern="${dep}@v${ver}"
               fi
-              query="${dep}@${ver} path:.github/workflows/"
+              query="${pattern} path:.github/workflows/"
               ;;
             *)
               echo "Unknown ecosystem, skipping search."
