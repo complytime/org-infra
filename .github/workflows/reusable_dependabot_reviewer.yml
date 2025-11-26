@@ -66,11 +66,9 @@ jobs:
           # Extract dependency name and version together in case of GitHub Actions
           # The title is not always standardized, so we need to extract the name and version from the file changes.
           if grep -rq "$dep_name" .github/workflows/; then
-            dep_name_and_version="$(git show -U0 --no-prefix | sed -n 's/^+ //p' | awk '{ print $2 }' | tail -n1 || echo '')"
-            if [[ -n "$dep_name_and_version" ]]; then
-              echo "Dependency Name and Version: $dep_name_and_version"
-              echo "DEP_NAME_AND_VERSION=$dep_name_and_version" >> "$GITHUB_ENV"
-            fi
+            dep_name_and_version="$(git show HEAD~1 -U0 --no-prefix | sed -n 's/^+ //p' | awk '{ print $2 }' | tail -n1 || echo '')"
+            echo "Dependency Name and Version: $dep_name_and_version"
+            echo "DEP_NAME_AND_VERSION=$dep_name_and_version" >> "$GITHUB_ENV"
           fi
 
       - name: Classify Risk Based on Semantic Version
