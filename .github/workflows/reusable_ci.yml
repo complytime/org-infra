@@ -40,3 +40,4 @@ jobs:
         env:
           VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           GITHUB_COMMENT_REPORTER: false
+          GOTOOLCHAIN: auto
