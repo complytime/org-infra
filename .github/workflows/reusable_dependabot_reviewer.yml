@@ -182,6 +182,9 @@ jobs:
           repo_list="$(jq -r '.[].repository.nameWithOwner' <<<"$result" | sort -u)"
           count=$(wc -w <<<"$repo_list")
 
+          echo "Repository Count: $count"
+          echo "Repository List: $repo_list"
+
           {
             echo "updates_count=$count"
             echo "repo_list<<EOF"
