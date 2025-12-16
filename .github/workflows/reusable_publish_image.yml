@@ -52,9 +52,9 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
-      packages: write
-      id-token: write        # for OIDC (attestations / cosign keyless)
-      security-events: write # for the Trivy SARIF step
+      packages: none
+      id-token: none        # for OIDC (attestations / cosign keyless)
+      security-events: none # for the Trivy SARIF step
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
