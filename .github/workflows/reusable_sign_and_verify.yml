@@ -1,0 +1,93 @@
+name: Reusable Sign and Verify
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        description: 'Full image name (e.g., ghcr.io/org/image)'
+        required: true
+        type: string
+      digest:
+        description: 'Pushed image digest to sign/verify'
+        required: true
+        type: string
+      allowed_identity_regex:
+        description: 'Regex for Cosign certificate identity (optional, defaults to org-level)'
+        required: false
+        type: string
+      sign_environment:
+        description: 'Environment name to gate signing (for required reviewers)'
+        required: false
+        type: string
+        default: 'signing'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.image_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      packages: write
+      id-token: write
+      security-events: none
+    environment: ${{ inputs.sign_environment }}
+    env:
+      COSIGN_EXPERIMENTAL: "true"
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+
+      - name: Sign image
+        run: |
+          IMAGE="${{ inputs.image_name }}@${{ inputs.digest }}"
+          echo "Signing: $IMAGE"
+          cosign sign --yes "$IMAGE"
+
+  verify:
+    needs: sign
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      packages: read
+      id-token: none
+      security-events: none
+    env:
+      COSIGN_EXPERIMENTAL: "true"
+      IMAGE: ${{ inputs.image_name }}@${{ inputs.digest }}
+    steps:
+      - name: Verify signature
+        run: |
+          IDENTITY_REGEX="${{ inputs.allowed_identity_regex }}"
+          if [ -z "$IDENTITY_REGEX" ]; then IDENTITY_REGEX="https://github.com/${{ github.repository_owner }}/.*"; fi
+          echo " Verifying: $IMAGE"
+          cosign verify "$IMAGE" \
+            --certificate-identity-regexp="$IDENTITY_REGEX" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          echo "Signature verified!"
+
+      - name: Verify SLSA provenance attestation
+        run: |
+          IDENTITY_REGEX="${{ inputs.allowed_identity_regex }}"
+          if [ -z "$IDENTITY_REGEX" ]; then IDENTITY_REGEX="https://github.com/${{ github.repository_owner }}/.*"; fi
+          echo "🔍 Verifying provenance attestation for: $IMAGE"
+          cosign verify-attestation "$IMAGE" \
+            --type slsaprovenance \
+            --certificate-identity-regexp="$IDENTITY_REGEX" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          echo "Provenance attestation verified!"
+
+      - name: Verify SBOM attestation
+        run: |
+          IDENTITY_REGEX="${{ inputs.allowed_identity_regex }}"
+          if [ -z "$IDENTITY_REGEX" ]; then IDENTITY_REGEX="https://github.com/${{ github.repository_owner }}/.*"; fi
+          echo "🔍 Verifying SBOM attestation for: $IMAGE"
+          cosign verify-attestation "$IMAGE" \
+            --type spdx \
+            --certificate-identity-regexp="$IDENTITY_REGEX" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          echo "SBOM attestation verified!"
+
+
