@@ -1,0 +1,124 @@
+name: Reusable Push Image
+
+on:
+  workflow_call:
+    inputs:
+      component_name:
+        description: 'Component name (e.g., compass, beacon-distro)'
+        required: true
+        type: string
+      containerfile_path:
+        description: 'Containerfile path relative to repo root'
+        required: true
+        type: string
+      context_path:
+        description: 'Build context path'
+        required: true
+        type: string
+      image_name:
+        description: 'Full image name (e.g., ghcr.io/org/image)'
+        required: true
+        type: string
+      force_rebuild:
+        description: 'Force rebuild without cache'
+        required: false
+        default: false
+        type: boolean
+      platforms:
+        description: 'Comma-separated target platforms'
+        required: false
+        default: 'linux/amd64,linux/arm64'
+        type: string
+      registry_username:
+        description: 'Username for registry login when using a custom token (defaults to github.actor)'
+        required: false
+        type: string
+    secrets:
+      registry_token:
+        description: 'Optional registry token for docker/login-action. If not provided, falls back to GITHUB_TOKEN.'
+        required: false
+    outputs:
+      digest:
+        description: 'Pushed image digest'
+        value: ${{ jobs.push.outputs.digest }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.image_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: none
+      security-events: none
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+      
+      #Tradeoff: long‑lived secret vs ephemeral GITHUB_TOKEN.
+      - name: Log in to GHCR (custom token)
+        if: ${{ secrets.registry_token != '' }}
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ inputs.registry_username || github.actor }}
+          password: ${{ secrets.registry_token }}
+
+      - name: Log in to GHCR (GITHUB_TOKEN)
+        if: ${{ secrets.registry_token == '' }}
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Set up Container Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Container metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ${{ inputs.image_name }}
+          tags: |
+            type=ref,event=branch,suffix=-{{sha}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+          flavor: |
+            latest=auto
+          labels: |
+            org.opencontainers.image.title=${{ inputs.component_name }}
+            org.opencontainers.image.description=ComplyBeacon ${{ inputs.component_name }} service
+            org.opencontainers.image.vendor=ComplyTime
+
+      - name: Build and push 
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: ${{ inputs.context_path }}
+          file: ${{ inputs.containerfile_path }}
+          push: true
+          platforms: ${{ inputs.platforms }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ inputs.component_name }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.component_name }}
+          sbom: true
+          provenance: mode=max
+          no-cache: ${{ inputs.force_rebuild }}
+
+      - name: Export digest
+        id: digest
+        run: echo "digest=${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
+
