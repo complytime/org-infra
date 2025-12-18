@@ -35,6 +35,10 @@ on:
         type: string
         default: 'HIGH,CRITICAL,MEDIUM'
 
+permissions: 
+    contents: none
+    security-events: none
+
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.image_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -45,8 +49,6 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-      packages: none
-      id-token: none
       security-events: write
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1

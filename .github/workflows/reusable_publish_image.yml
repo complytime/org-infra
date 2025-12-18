@@ -1,6 +1,7 @@
 # Reusable workflow for building and publishing container images with security best practices
 # This workflow implements a 4-stage secure build pipeline:
 # 1. Local build + 2. Secret & vulnerability scanning + 3. Push (Buildx emits SBOM & provenance) + 4. Signing & verification
+# SBOMs are standardized on SPDX for broad tooling support, Cosign verification (`--type spdx`), and GHCR interoperability.
 # Note: Repository secret scanning and containerfile linting are handled by reusable_ci.yml (MegaLinter)
 
 name: Reusable Build and Publish Image
@@ -48,6 +49,12 @@ on:
         required: false
  
 
+permissions: 
+    contents: none
+    security-events: none
+    id-token: none
+    packages: none
+
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.image_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -57,7 +64,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    uses: complytime/org-infra/.github/workflows/reusable_build_and_scan.yml@main
+    uses: ./.github/workflows/reusable_build_and_scan.yml
     with:
       component_name: ${{ inputs.component_name }}
       containerfile_path: ${{ inputs.containerfile_path }}
@@ -70,7 +77,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: complytime/org-infra/.github/workflows/reusable_push.yml@main
+    uses: ./.github/workflows/reusable_push.yml
     with:
       component_name: ${{ inputs.component_name }}
       containerfile_path: ${{ inputs.containerfile_path }}
@@ -88,7 +95,7 @@ jobs:
     permissions:
       packages: write
       id-token: write
-    uses: complytime/org-infra/.github/workflows/reusable_sign_and_verify.yml@main
+    uses: ./.github/workflows/reusable_sign_and_verify.yml
     with:
       image_name: ${{ inputs.image_name }}
       digest: ${{ needs.push.outputs.digest }}

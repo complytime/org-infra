@@ -42,6 +42,9 @@ on:
         description: 'Pushed image digest'
         value: ${{ jobs.push.outputs.digest }}
 
+permissions: 
+    contents: none
+    packages: none
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.image_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -53,8 +56,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: none
-      security-events: none
     outputs:
       digest: ${{ steps.digest.outputs.digest }}
     steps:
@@ -62,22 +63,14 @@ jobs:
         with:
           persist-credentials: false
       
-      #Tradeoff: long‑lived secret vs ephemeral GITHUB_TOKEN.
-      - name: Log in to GHCR (custom token)
-        if: ${{ secrets.registry_token != '' }}
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ inputs.registry_username || github.actor }}
-          password: ${{ secrets.registry_token }}
-
+      #Tradeoff: long‑lived secret vs ephemeral GITHUB_TOKEN. 
       - name: Log in to GHCR (GITHUB_TOKEN)
         if: ${{ secrets.registry_token == '' }}
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ inputs.registry_username || github.actor }}
+          password: ${{ secrets.registry_token || secrets.GITHUB_TOKEN }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
@@ -101,7 +94,7 @@ jobs:
             org.opencontainers.image.description=ComplyBeacon ${{ inputs.component_name }} service
             org.opencontainers.image.vendor=ComplyTime
 
-      - name: Build and push 
+      - name: Build and push
         id: build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
@@ -113,6 +106,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ inputs.component_name }}
           cache-to: type=gha,mode=max,scope=${{ inputs.component_name }}
+          # We standardize on SPDX SBOMs because they are:
+          # - Widely supported (Docker Buildx default, GHCR, scanners)
+          # - Verifiable with Cosign attestations (`--type spdx`) and policy engines
+          # - Interoperable and vendor-neutral, reducing lock-in
           sbom: true
           provenance: mode=max
           no-cache: ${{ inputs.force_rebuild }}

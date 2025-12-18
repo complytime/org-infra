@@ -21,6 +21,9 @@ on:
         type: string
         default: 'signing'
 
+permissions: 
+    packages: none
+    id-token: none
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.image_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -32,7 +35,6 @@ jobs:
     permissions:
       packages: write
       id-token: write
-      security-events: none
     environment: ${{ inputs.sign_environment }}
     env:
       COSIGN_EXPERIMENTAL: "true"
@@ -52,8 +54,6 @@ jobs:
     timeout-minutes: 20
     permissions:
       packages: read
-      id-token: none
-      security-events: none
     env:
       COSIGN_EXPERIMENTAL: "true"
       IMAGE: ${{ inputs.image_name }}@${{ inputs.digest }}
@@ -79,6 +79,10 @@ jobs:
             --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           echo "Provenance attestation verified!"
 
+      # We standardize on SPDX SBOMs because:
+      # - It is a widely adopted open SBOM standard with strong ecosystem support
+      # - Docker Buildx emits SPDX by default, and GHCR stores/serves SPDX attestations well
+      # - Cosign verification interoperates cleanly with SPDX via `--type spdx` and policy engines
       - name: Verify SBOM attestation
         run: |
           IDENTITY_REGEX="${{ inputs.allowed_identity_regex }}"
