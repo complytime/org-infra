@@ -19,6 +19,11 @@ on:
         description: 'Full image name (e.g., ghcr.io/org/image)'
         required: true
         type: string
+      additional_image_names:
+        description: 'Optional additional full image name(s), e.g., quay.io/org/image (newline or comma separated)'
+        required: false
+        default: ''
+        type: string
       force_rebuild:
         description: 'Force rebuild without cache'
         required: false
@@ -36,6 +41,12 @@ on:
     secrets:
       registry_token:
         description: 'Optional registry token for docker/login-action. If not provided, falls back to GITHUB_TOKEN.'
+        required: false
+      quay_username:
+        description: 'Quay.io username/robot for login (only needed if pushing to quay.io)'
+        required: false
+      quay_password:
+        description: 'Quay.io password/token for login (only needed if pushing to quay.io)'
         required: false
     outputs:
       digest:
@@ -63,14 +74,24 @@ jobs:
         with:
           persist-credentials: false
       
-      #Tradeoff: long‑lived secret vs ephemeral GITHUB_TOKEN. 
-      - name: Log in to GHCR (GITHUB_TOKEN)
-        if: ${{ secrets.registry_token == '' }}
+      # Tradeoff: long‑lived secret vs ephemeral GITHUB_TOKEN.
+      # Always log in to GHCR when we might push there.
+      - name: Log in to GHCR
+        if: ${{ startsWith(inputs.image_name, 'ghcr.io') || (inputs.additional_image_names != '' && contains(inputs.additional_image_names, 'ghcr.io')) }}
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
           registry: ghcr.io
           username: ${{ inputs.registry_username || github.actor }}
           password: ${{ secrets.registry_token || secrets.GITHUB_TOKEN }}
+
+      # Log in to Quay if configured
+      - name: Log in to Quay
+        if: ${{ inputs.additional_image_names != '' && contains(inputs.additional_image_names, 'quay.io') }}
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: quay.io
+          username: ${{ secrets.quay_username }}
+          password: ${{ secrets.quay_password }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
@@ -82,7 +103,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
-          images: ${{ inputs.image_name }}
+          images: |
+            ${{ inputs.image_name }}
+            ${{ inputs.additional_image_names }}
           tags: |
             type=ref,event=branch,suffix=-{{sha}}
             type=sha,prefix=sha-

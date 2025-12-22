@@ -39,6 +39,11 @@ on:
         description: 'Full image name (e.g., ghcr.io/complytime/complybeacon-compass)'
         required: true
         type: string
+      additional_image_names:
+        description: 'Optional additional full image name(s), e.g., quay.io/complytime/complybeacon-compass'
+        required: false
+        type: string
+        default: ''
       registry_username:
         description: 'Username for registry login when using a custom token (defaults to github.actor)'
         required: false
@@ -47,6 +52,12 @@ on:
       registry_token:
         description: 'Optional registry token for docker/login-action. If not provided, falls back to GITHUB_TOKEN.'
         required: false
+      quay_username:
+        description: 'Quay.io username/robot for login (only needed if pushing to quay.io)'
+        required: false
+      quay_password:
+        description: 'Quay.io password/token for login (only needed if pushing to quay.io)'
+        required: false 
  
 
 permissions: 
@@ -83,11 +94,14 @@ jobs:
       containerfile_path: ${{ inputs.containerfile_path }}
       context_path: ${{ inputs.context_path }}
       image_name: ${{ inputs.image_name }}
+      additional_image_names: ${{ inputs.additional_image_names }}
       force_rebuild: ${{ inputs.force_rebuild }}
       platforms: ${{ inputs.platforms }}
       registry_username: ${{ inputs.registry_username }}
     secrets:
       registry_token: ${{ secrets.registry_token }}
+      quay_username: ${{ secrets.quay_username }}
+      quay_password: ${{ secrets.quay_password }}
 
   sign_and_verify:
     if: ${{ github.ref_protected }}
@@ -98,5 +112,17 @@ jobs:
     uses: ./.github/workflows/reusable_sign_and_verify.yml
     with:
       image_name: ${{ inputs.image_name }}
+      digest: ${{ needs.push.outputs.digest }}
+      allowed_identity_regex: ${{ inputs.allowed_identity_regex }}
+
+  sign_and_verify_additional:
+    if: ${{ github.ref_protected && inputs.additional_image_names != '' }}
+    needs: push
+    permissions:
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/reusable_sign_and_verify.yml
+    with:
+      image_name: ${{ inputs.additional_image_names }}
       digest: ${{ needs.push.outputs.digest }}
       allowed_identity_regex: ${{ inputs.allowed_identity_regex }}

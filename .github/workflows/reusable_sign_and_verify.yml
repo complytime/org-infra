@@ -21,9 +21,10 @@ on:
         type: string
         default: 'signing'
 
-permissions: 
-    packages: none
-    id-token: none
+permissions:
+  packages: none
+  id-token: none
+
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.image_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -36,17 +37,23 @@ jobs:
       packages: write
       id-token: write
     environment: ${{ inputs.sign_environment }}
-    env:
-      COSIGN_EXPERIMENTAL: "true"
     steps:
       - name: Install Cosign
         uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
 
       - name: Sign image
+        env:
+          IMAGE_INPUT: ${{ inputs.image_name }}
+          DIGEST: ${{ inputs.digest }}
         run: |
-          IMAGE="${{ inputs.image_name }}@${{ inputs.digest }}"
-          echo "Signing: $IMAGE"
-          cosign sign --yes "$IMAGE"
+          parse_images() {
+            printf '%s\n' "$1" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;/^$/d'
+          }
+          parse_images "$IMAGE_INPUT" | while IFS= read -r NAME; do
+            IMAGE="${NAME}@${DIGEST}"
+            echo "Signing: $IMAGE"
+            cosign sign --yes "$IMAGE"
+          done
 
   verify:
     needs: sign
@@ -54,44 +61,43 @@ jobs:
     timeout-minutes: 20
     permissions:
       packages: read
-    env:
-      COSIGN_EXPERIMENTAL: "true"
-      IMAGE: ${{ inputs.image_name }}@${{ inputs.digest }}
     steps:
-      - name: Verify signature
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+
+      # Verifies signature, SLSA provenance, and SBOM (SPDX) attestations.
+      # See docs/REUSABLE_PUBLISH_IMAGE.md for SBOM attestation details.
+      - name: Verify signature and attestations
+        env:
+          IMAGE_INPUT: ${{ inputs.image_name }}
+          DIGEST: ${{ inputs.digest }}
+          IDENTITY_REGEX: ${{ inputs.allowed_identity_regex || format('https://github.com/{0}/.*', github.repository_owner) }}
         run: |
-          IDENTITY_REGEX="${{ inputs.allowed_identity_regex }}"
-          if [ -z "$IDENTITY_REGEX" ]; then IDENTITY_REGEX="https://github.com/${{ github.repository_owner }}/.*"; fi
-          echo " Verifying: $IMAGE"
-          cosign verify "$IMAGE" \
-            --certificate-identity-regexp="$IDENTITY_REGEX" \
-            --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-          echo "Signature verified!"
-
-      - name: Verify SLSA provenance attestation
-        run: |
-          IDENTITY_REGEX="${{ inputs.allowed_identity_regex }}"
-          if [ -z "$IDENTITY_REGEX" ]; then IDENTITY_REGEX="https://github.com/${{ github.repository_owner }}/.*"; fi
-          echo "🔍 Verifying provenance attestation for: $IMAGE"
-          cosign verify-attestation "$IMAGE" \
-            --type slsaprovenance \
-            --certificate-identity-regexp="$IDENTITY_REGEX" \
-            --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-          echo "Provenance attestation verified!"
-
-      # We standardize on SPDX SBOMs because:
-      # - It is a widely adopted open SBOM standard with strong ecosystem support
-      # - Docker Buildx emits SPDX by default, and GHCR stores/serves SPDX attestations well
-      # - Cosign verification interoperates cleanly with SPDX via `--type spdx` and policy engines
-      - name: Verify SBOM attestation
-        run: |
-          IDENTITY_REGEX="${{ inputs.allowed_identity_regex }}"
-          if [ -z "$IDENTITY_REGEX" ]; then IDENTITY_REGEX="https://github.com/${{ github.repository_owner }}/.*"; fi
-          echo "🔍 Verifying SBOM attestation for: $IMAGE"
-          cosign verify-attestation "$IMAGE" \
-            --type spdx \
-            --certificate-identity-regexp="$IDENTITY_REGEX" \
-            --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-          echo "SBOM attestation verified!"
-
-
+          parse_images() {
+            printf '%s\n' "$1" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;/^$/d'
+          }
+          
+          verify_image() {
+            local image="$1"
+            echo " Verifying signature: $image"
+            cosign verify "$image" \
+              --certificate-identity-regexp="$IDENTITY_REGEX" \
+              --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+            
+            echo "🔍 Verifying SLSA provenance attestation: $image"
+            cosign verify-attestation "$image" \
+              --type slsaprovenance \
+              --certificate-identity-regexp="$IDENTITY_REGEX" \
+              --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+            
+            echo "📦 Verifying SBOM attestation: $image"
+            cosign verify-attestation "$image" \
+              --type spdx \
+              --certificate-identity-regexp="$IDENTITY_REGEX" \
+              --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          }
+          
+          parse_images "$IMAGE_INPUT" | while IFS= read -r NAME; do
+            verify_image "${NAME}@${DIGEST}"
+            echo "✅ All verifications passed for: ${NAME}@${DIGEST}"
+          done
