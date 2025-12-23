@@ -1,8 +1,11 @@
+# Reusable Vulnerabilities Scan Workflow
+# ======================================
+# - OSV-Scanner: Google's Open Source Vulnerabilities database for dependency CVEs
+# - Trivy Source: Filesystem scan for vulnerabilities and secrets in source code
+# - Trivy Image: Container image scan for OS packages and runtime dependencies
+
 name: Reusable Vulnerabilities Scan
 
-# --------------------------------------------------------------------------
-# This workflow only runs when explicitly called by another workflow.
-# --------------------------------------------------------------------------
 on:
   workflow_call:
     inputs:
@@ -66,8 +69,6 @@ on:
         required: false
         type: string
 
-# This workflow is passive so ensure the minimal permissions even if the
-# inherited token is more lenient.
 permissions:
   contents: read
   issues: none
@@ -75,20 +76,31 @@ permissions:
   actions: none
   security-events: none
 
+# Prevent duplicate scans for the same ref
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: reusable-vuln-scan-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  validate_inputs:
+    name: Validate Inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate image_ref when trivy image scan enabled
+        if: ${{ inputs.enable_trivy_image && inputs.image_ref == '' }}
+        run: |
+          echo "::error::enable_trivy_image is true but image_ref is not provided"
+          exit 1
+
   call_ext_osv_scanner:
     name: OSV-Scanner
     if: ${{ inputs.enable_osv }}
-    # https://google.github.io/osv-scanner/github-action/
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@b77c075a1235514558f0eb88dbd31e22c45e0cd2 # v2.3.0
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@375a0e8ebdc98e99b02ac4338a724f5750f21213 # v2.3.1
     permissions:
       contents: read
-      actions: read           # Required to upload SARIF file to CodeQL. See: https://github.com/github/codeql-action/issues/2117
-      security-events: write  # Require writing security events to upload SARIF file to security tab
+      actions: read
+      security-events: write
     with:
       scan-args: "${{ inputs.scan-args }}"
       fail-on-vuln: ${{ inputs.fail_on_vuln }}
@@ -102,7 +114,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      actions: read           # Required to upload SARIF file to CodeQL
+      actions: read
       security-events: write
     env:
       SARIF_FILE: trivy-source-results-${{ github.workflow }}-${{ github.job }}.sarif
@@ -117,7 +129,7 @@ jobs:
         continue-on-error: ${{ !inputs.fail_on_vuln }}
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
         with:
-          scan-type: fs
+          scan-type: fs   # Filesystem scan mode
           scan-ref: ${{ inputs.path }}
           scanners: ${{ inputs.enable_secret_scan && 'vuln,secret' || 'vuln' }}
           skip-dirs: ${{ inputs.skip_dirs }}
@@ -129,20 +141,22 @@ jobs:
           exit-code: '1'
 
       - name: Upload source scan results
-        if: ${{ inputs.upload_sarif }}
-        uses: github/codeql-action/upload-sarif@cf1bb45a277cb3c205638b2cd5c984db1c46a412 # v4.31.7
+        if: ${{ !cancelled() && inputs.upload_sarif }}
+        uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v4.31.9
         with:
           sarif_file: ${{ env.SARIF_FILE }}
           category: ${{ env.SARIF_CATEGORY }}
 
   trivy_image:
     name: Trivy Image
-    if: ${{ inputs.enable_trivy_image && inputs.image_ref != '' }}
+    needs: validate_inputs
+    if: ${{ inputs.enable_trivy_image }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      actions: read           # Required to upload SARIF file to CodeQL
+      actions: read
       security-events: write
+      packages: read
     env:
       SARIF_FILE: trivy-image-results-${{ github.workflow }}-${{ github.job }}.sarif
       SARIF_CATEGORY: vuln-image
@@ -160,8 +174,8 @@ jobs:
           exit-code: '1'
 
       - name: Upload image scan results
-        if: ${{ always() && inputs.upload_sarif }}
-        uses: github/codeql-action/upload-sarif@cf1bb45a277cb3c205638b2cd5c984db1c46a412 # v4.31.7
+        if: ${{ !cancelled() && inputs.upload_sarif }}
+        uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v4.31.9
         with:
           sarif_file: ${{ env.SARIF_FILE }}
           category: ${{ env.SARIF_CATEGORY }}
