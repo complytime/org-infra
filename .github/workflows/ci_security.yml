@@ -22,9 +22,10 @@ jobs:
       actions: read
       security-events: write
     uses: complytime/org-infra/.github/workflows/reusable_vuln_scan.yml@main
-    with:
-      # OSV focuses on known CVEs in dependencies; Trivy adds broader coverage
-      enable_trivy_source: true
+    # TODO: Re-add 'enable_trivy_source: true' once reusable_vuln_scan.yml is merged to main
+    # with:
+    #   # OSV focuses on known CVEs in dependencies; Trivy adds broader coverage
+    #   enable_trivy_source: true
 
   call_reusable_security:
     name: OpenSSF Scorecards
