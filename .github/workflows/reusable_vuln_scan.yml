@@ -95,7 +95,7 @@ jobs:
 
   call_ext_osv_scanner:
     name: OSV-Scanner
-    if: ${{ inputs.enable_osv }}
+    # https://google.github.io/osv-scanner/github-action/
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@375a0e8ebdc98e99b02ac4338a724f5750f21213 # v2.3.1
     permissions:
       contents: read
@@ -103,79 +103,6 @@ jobs:
       security-events: write
     with:
       scan-args: "${{ inputs.scan-args }}"
-      fail-on-vuln: ${{ inputs.fail_on_vuln }}
-      upload-sarif: ${{ inputs.upload_sarif }}
-      results-file-name: osv-scanner-pr-results-${{ github.workflow }}-${{ github.job }}.sarif
-
-  trivy_source:
-    name: "Trivy Source (fs: vuln+secret)"
-    if: ${{ inputs.enable_trivy_source }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      actions: read
-      security-events: write
-    env:
-      SARIF_FILE: trivy-source-results-${{ github.workflow }}-${{ github.job }}.sarif
-      SARIF_CATEGORY: vuln-source
-    steps:
-      - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-        with:
-          persist-credentials: false
-
-      - name: Trivy source scan (SARIF)
-        continue-on-error: ${{ !inputs.fail_on_vuln }}
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
-        with:
-          scan-type: fs   # Filesystem scan mode
-          scan-ref: ${{ inputs.path }}
-          scanners: ${{ inputs.enable_secret_scan && 'vuln,secret' || 'vuln' }}
-          skip-dirs: ${{ inputs.skip_dirs }}
-          format: sarif
-          output: ${{ env.SARIF_FILE }}
-          vuln-type: 'os,library'
-          severity: ${{ inputs.trivy_severity }}
-          ignore-unfixed: ${{ inputs.ignore_unfixed }}
-          exit-code: '1'
-
-      - name: Upload source scan results
-        if: ${{ !cancelled() && inputs.upload_sarif }}
-        uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v4.31.9
-        with:
-          sarif_file: ${{ env.SARIF_FILE }}
-          category: ${{ env.SARIF_CATEGORY }}
-
-  trivy_image:
-    name: Trivy Image
-    needs: validate_inputs
-    if: ${{ inputs.enable_trivy_image }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      actions: read
-      security-events: write
-      packages: read
-    env:
-      SARIF_FILE: trivy-image-results-${{ github.workflow }}-${{ github.job }}.sarif
-      SARIF_CATEGORY: vuln-image
-    steps:
-      - name: Trivy image scan (SARIF)
-        continue-on-error: ${{ !inputs.fail_on_vuln }}
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
-        with:
-          image-ref: ${{ inputs.image_ref }}
-          format: sarif
-          output: ${{ env.SARIF_FILE }}
-          vuln-type: 'os,library'
-          severity: ${{ inputs.trivy_severity }}
-          ignore-unfixed: ${{ inputs.ignore_unfixed }}
-          exit-code: '1'
-
-      - name: Upload image scan results
-        if: ${{ !cancelled() && inputs.upload_sarif }}
-        uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v4.31.9
-        with:
-          sarif_file: ${{ env.SARIF_FILE }}
-          category: ${{ env.SARIF_CATEGORY }}
+      fail-on-vuln: true
+      upload-sarif: true
+      results-file-name: osv-scanner-pr-results-${{ github.workflow_sha }}-${{ github.run_number }}.sarif
