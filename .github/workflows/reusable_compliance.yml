@@ -1,0 +1,109 @@
+---
+name: Reusable Compliance Evaluation
+
+on:
+  workflow_call:
+    inputs:
+      policy_url:
+        description: 'URL to the policy to use for compliance'
+        required: true
+        type: string
+      push_attestation:
+        description: 'Push the attestation to the repository'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      source_token:
+        description: 'GitHub token to use for uploading artifacts and attestations'
+        required: true
+
+# {} also works, but making it explicit which permissions are needed is betters.
+# Now I can more easily track where and how they are used in the workflow.
+permissions:
+  id-token: none
+  attestations: none
+  contents: none
+
+jobs:
+  evaluate-repository-compliance:
+    name: Compliance Evaluation
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup snappy for API Calls
+        uses: carabiner-dev/actions/install/snappy@5cd5f4d66c24fd41d429c6a8e98276247d6242e7
+
+      - name: Setup bnd to Create Attestations Bundles
+        uses: carabiner-dev/actions/install/bnd@5cd5f4d66c24fd41d429c6a8e98276247d6242e7
+
+      - name: Generate Branch Protection Rules Attestation
+        id: attestation
+        env:
+          GITHUB_TOKEN: "${{ secrets.source_token }}"
+        run: |
+          mkdir -p attestations
+
+          # Use snappy to make the API call to the branch rules endpoint
+          # and save the result to a file with the option to hide sensitive data.
+          snappy snap builtin:github/branch-rules.yaml \
+          -v BRANCH="${{ github.ref_name }}" \
+          -v REPO="${{ github.event.repository.name }}" \
+          -v ORG="${{github.repository_owner}}" \
+          --attest > attestations/branch_protection_rules.intoto.json
+
+          # Extract SHA256 digest
+          SHA256=$(jq -r '.subject[0].digest.sha256' attestations/branch_protection_rules.intoto.json)
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+          # Create a bundle from the intoto.json file
+          bnd statement attestations/branch_protection_rules.intoto.json --out attestations/branch_protection_rules.bundle.json
+
+      - name: Upload Branch Protection Rules Results
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: branch-protection-rules.intoto.json
+          path: attestations/branch_protection_rules.intoto.json
+
+      - name: Push Branch Protection Rules Attestation Bundle
+        if: "${{ inputs.push_attestation }}"
+        run: |
+          bnd push github "${{github.repository}}" attestations/branch_protection_rules.bundle.json
+
+      - name: Pack Attestations
+        run: |
+          # Pack the attestations into a single file.
+          # It is using a directory as input but it could also be multiple explicit files.
+          bnd pack attestations/ > attestations_package.jsonl
+
+      - name: Upload Attestation Pack for Analysis
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: attestations_package.jsonl
+          path: attestations_package.jsonl
+
+      - name: Evaluate Compliance
+        id: compliance
+        uses: carabiner-dev/actions/ampel/verify@5cd5f4d66c24fd41d429c6a8e98276247d6242e7
+        with:
+          subject: "sha256:${{ steps.attestation.outputs.sha256 }}"
+          collector: "jsonl:attestations_package.jsonl"
+          policy: "git+${{ inputs.policy_url }}"
+          attest: true
+          fail: false
+
+      - name: Upload Compliance Results
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: ampel.intoto.json
+          path: ampel.intoto.json
