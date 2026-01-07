@@ -36,6 +36,7 @@ org-infra/
 │  │  ├── reusable_ci.yml                   # Generic CI checks, such as linters, typos and PR titles.
 │  │  ├── reusable_dependabot_reviewer.yml  # Specific for dependabot PRs. Classify risk and checks dependency adoption.
 │  │  ├── reusable_deps_reviewer.yml        # Check for vulnerabilities, license issues, and OpenSSF Scorecard Level.
+│  │  ├── reusable_gemini_review.yml        # AI-powered code review using Google Gemini to review pull requests.
 │  │  ├── reusable_scheduled.yml            # Scheduled vulnerability scan. Place for more scheduled jobs.
 │  │  ├── reusable_vuln_scan.yml            # Check for vulnerabilities using OSV-Scanner.
 │  │  └── sync_org_repositories.yml         # Manual, scheduled, and event-based workflow to synchronize files.

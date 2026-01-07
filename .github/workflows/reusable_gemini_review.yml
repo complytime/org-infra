@@ -7,10 +7,6 @@ name: Reusable Gemini AI Code Review
 on:
   workflow_call:
     inputs:
-      credentials_json:
-        description: 'GCP Service Account credentials JSON'
-        required: true
-        type: string
       google_cloud_project:
         description: 'Google Cloud Project ID'
         required: true
@@ -19,6 +15,14 @@ on:
         description: 'Google Cloud Location/Region'
         required: true
         type: string
+    secrets:
+      credentials_json:
+        description: 'GCP Service Account credentials JSON'
+        required: true
+      GH_APP_ID:
+        required: true
+      GH_APP_PRIVATE_KEY:
+        required: true
 
 # This workflow is passive so ensure the minimal permissions even if the
 # inherited token is more lenient.
@@ -51,7 +55,7 @@ jobs:
         name: 'Authenticate to GCP'
         uses: 'google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093' # v3.0.0
         with:
-          credentials_json: "${{ inputs.credentials_json }}"
+          credentials_json: "${{ secrets.credentials_json }}"
 
       # 4. Generate GitHub app token
       - name: Generate GitHub App Token
