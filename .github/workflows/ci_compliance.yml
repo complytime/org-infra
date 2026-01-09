@@ -1,0 +1,37 @@
+name: Compliance Checks
+
+# Only allow manual trigger during testing phase. Above lines will be uncommented when testing is complete.
+on:
+  workflow_dispatch:
+    inputs:
+      policy_url:
+        description: 'URL to the policy to use for compliance'
+        required: true
+        type: string
+      push_attestation:
+        description: 'Push the attestation to the repository'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: none
+  id-token: none
+  security-events: none
+
+jobs:
+  call_reusable_compliance:
+    name: Compliance Evaluation
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+      id-token: write
+      attestations: write
+    uses: complytime/org-infra/.github/workflows/reusable_compliance.yml@main
+    with:
+      policy_url: ${{ inputs.policy_url }}
+      push_attestation: ${{ inputs.push_attestation }}
+    secrets:
+      source_token: ${{ secrets.GITHUB_TOKEN }}
