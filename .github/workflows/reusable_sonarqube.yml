@@ -31,6 +31,9 @@ on:
       SONAR_TOKEN:
         required: true
         description: 'The SonarCloud analysis token.'
+      GITHUB_TOKEN:
+        required: true
+        description: 'Github token'
 
 permissions:
   contents: none
