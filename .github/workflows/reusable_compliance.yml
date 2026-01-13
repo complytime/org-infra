@@ -70,7 +70,7 @@ jobs:
           bnd statement attestations/branch_protection_rules.intoto.json --out attestations/branch_protection_rules.bundle.json
 
       - name: Upload Branch Protection Rules Results
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: branch-protection-rules.intoto.json
           path: attestations/branch_protection_rules.intoto.json
@@ -87,7 +87,7 @@ jobs:
           bnd pack attestations/ > attestations_package.jsonl
 
       - name: Upload Attestation Pack for Analysis
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: attestations_package.jsonl
           path: attestations_package.jsonl
@@ -103,7 +103,7 @@ jobs:
           fail: false
 
       - name: Upload Compliance Results
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ampel.intoto.json
           path: ampel.intoto.json
