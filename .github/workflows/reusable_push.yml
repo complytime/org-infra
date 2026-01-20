@@ -1,6 +1,6 @@
 # Reusable Push Image Workflow
 # ============================
-# Builds and pushes multi-architecture container images with supply chain security artifacts.
+# Builds and pushes container images with supply chain security artifacts.
 # Focused responsibility: build + push only.
 
 name: Reusable Push Image
