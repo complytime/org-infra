@@ -8,7 +8,6 @@
 exclude_repos:
   - cac-content                 # Forked repository for testing transformation from CaC to OSCAL
   - compliance-to-policy-go     # Forked repository for testing features
-  - compliance-to-policy-python # Forked repository for testing features
   - complytime-collector-distro # Empty repository
   - creme-brulee                # Template repository for training purposes
   - org-infra                   # This repository itself
@@ -56,6 +55,8 @@ files_to_sync:
 
   - source: .mega-linter.yml
     destination: .mega-linter.yml
+    exclude_repos:
+      - complytime-collector-components
 
   - source: .yamllint.yml
     destination: .yamllint.yml
