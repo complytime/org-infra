@@ -1,8 +1,9 @@
 # Reusable Vulnerabilities Scan Workflow
 # ======================================
 # - OSV-Scanner: Google's Open Source Vulnerabilities database for dependency CVEs
-# - Trivy Source: Filesystem scan for vulnerabilities and secrets in source code
+# - Trivy Source: Filesystem scan for secrets and misconfig (vuln handled by OSV)
 # - Trivy Image: Container image scan for OS packages and runtime dependencies
+# NOTE: If enable_osv is false but you want vuln scanning, use enable_trivy_image.
 
 name: Reusable Vulnerabilities Scan
 
@@ -14,7 +15,7 @@ on:
         type: boolean
         default: true
       enable_trivy_source:
-        description: 'Enable Trivy source scan (vulns + secrets)'
+        description: 'Enable Trivy source scan (secrets + misconfig + vuln)'
         type: boolean
         default: false
       enable_trivy_image:
@@ -25,25 +26,27 @@ on:
         description: 'Image reference for image scan, e.g., ghcr.io/org/image:sha-<sha>'
         type: string
         default: ''
+      image_digest:
+        description: 'Image digest (e.g., sha256:abc...). If provided, vuln attestation is attached to image.'
+        type: string
+        default: ''
       trivy_severity:
         description: 'Severity levels to report'
         type: string
         default: 'HIGH,CRITICAL'
-      fail_on_vuln:
-        description: 'Fail the job on findings'
-        type: boolean
-        default: true
-      scan-args:
-        description: 'Additional arguments to pass to osv-scanner'
-        required: false
-        type: string
+    outputs:
+      trivy_image_scan_passed:
+        description: 'Whether Trivy image scan completed successfully (no vulns or skipped)'
+        value: ${{ jobs.trivy_image.outputs.scan_passed || 'true' }}
+      vuln_attestation_attached:
+        description: 'Whether vuln attestation was attached to image'
+        value: ${{ jobs.trivy_image.outputs.attestation_attached || 'false' }}
 
 permissions:
-  contents: read
-  issues: none
-  pull-requests: none
-  actions: none
+  contents: none
+  packages: none
   security-events: none
+  id-token: none
 
 concurrency:
   group: reusable-vuln-scan-${{ github.workflow }}-${{ github.ref }}
@@ -60,7 +63,6 @@ jobs:
       actions: read
       security-events: write
     with:
-      scan-args: "${{ inputs.scan-args }}"
       fail-on-vuln: true
       upload-sarif: true
       results-file-name: osv-scanner-pr-results-${{ github.workflow_sha }}-${{ github.run_number }}.sarif
@@ -75,24 +77,26 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Run Trivy source scanner
-        uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5 # v0.30.0
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
         with:
           scan-type: 'fs'
-          scanners: 'vuln,secret'
+          scanners: 'secret,misconfig,vuln'
           severity: ${{ inputs.trivy_severity }}
           ignore-unfixed: true
           format: 'sarif'
-          output: 'trivy-source.sarif'
-          exit-code: ${{ inputs.fail_on_vuln && '1' || '0' }}
+          output: 'trivy-source-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
+          exit-code: '1'
 
       - name: Upload SARIF
         if: ${{ always() }}
-        uses: github/codeql-action/upload-sarif@ea9e4e37992a54ee68a9571e7c3b8b99bea29141 # v3.28.1
+        uses: github/codeql-action/upload-sarif@19b2f06db2b6f5108140aeb04014ef02b648f789 # v4.31.11
         with:
-          sarif_file: 'trivy-source.sarif'
+          sarif_file: 'trivy-source-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
           category: 'trivy-source'
 
   trivy_image:
@@ -100,31 +104,63 @@ jobs:
     if: ${{ inputs.enable_trivy_image && inputs.image_ref != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      scan_passed: ${{ steps.scan_result.outputs.passed }}
+      attestation_attached: ${{ steps.attest.outputs.attached }}
     permissions:
-      packages: read
+      # step-security: ignore packages:write - required for cosign vuln attestation
+      packages: write         # write needed for attestation push
       security-events: write
+      id-token: write         # needed for keyless signing of attestation
     steps:
       - name: Login to GHCR
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy image scanner
-        uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5 # v0.30.0
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
         with:
           scan-type: 'image'
+          scanners: 'vuln'
           image-ref: ${{ inputs.image_ref }}
           severity: ${{ inputs.trivy_severity }}
           ignore-unfixed: true
           format: 'sarif'
-          output: 'trivy-image.sarif'
-          exit-code: ${{ inputs.fail_on_vuln && '1' || '0' }}
+          output: 'trivy-image-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
+          exit-code: '1'
+
+      - name: Mark scan passed
+        id: scan_result
+        run: echo "passed=true" >> "$GITHUB_OUTPUT"
 
       - name: Upload SARIF
         if: ${{ always() }}
-        uses: github/codeql-action/upload-sarif@ea9e4e37992a54ee68a9571e7c3b8b99bea29141 # v3.28.1
+        uses: github/codeql-action/upload-sarif@19b2f06db2b6f5108140aeb04014ef02b648f789 # v4.31.11
         with:
-          sarif_file: 'trivy-image.sarif'
+          sarif_file: 'trivy-image-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
           category: 'trivy-image'
+
+      # Attestation: attach vuln scan proof to image (travels with cosign copy)
+      - name: Install Cosign
+        if: ${{ inputs.image_digest != '' && github.ref_protected }}
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+
+      - name: Attest vulnerability scan
+        id: attest
+        if: ${{ inputs.image_digest != '' && github.ref_protected }}
+        env:
+          IMAGE_REF: ${{ inputs.image_ref }}
+          DIGEST: ${{ inputs.image_digest }}
+          SARIF_FILE: trivy-image-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif
+        run: |
+          # Validate digest format
+          if ! echo "$DIGEST" | grep -qE '^sha256:[a-f0-9]{64}$'; then
+            echo "::error::Invalid image_digest format (expected sha256:<64-hex>): '$DIGEST'"
+            exit 1
+          fi
+          IMAGE="${IMAGE_REF%%[:@]*}@${DIGEST}"
+          cosign attest --predicate "$SARIF_FILE" --type vuln --yes "$IMAGE"
+          echo "attached=true" >> "$GITHUB_OUTPUT"
