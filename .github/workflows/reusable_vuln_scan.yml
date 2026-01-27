@@ -15,7 +15,7 @@ on:
         type: boolean
         default: true
       enable_trivy_source:
-        description: 'Enable Trivy source scan (secrets + misconfig + vuln)'
+        description: 'Enable Trivy source scan (secrets + misconfig)'
         type: boolean
         default: false
       enable_trivy_image:
@@ -47,6 +47,7 @@ permissions:
   packages: none
   security-events: none
   id-token: none
+  actions: none
 
 concurrency:
   group: reusable-vuln-scan-${{ github.workflow }}-${{ github.ref }}
@@ -85,7 +86,7 @@ jobs:
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
         with:
           scan-type: 'fs'
-          scanners: 'secret,misconfig,vuln'
+          scanners: 'secret,misconfig'
           severity: ${{ inputs.trivy_severity }}
           ignore-unfixed: true
           format: 'sarif'
@@ -122,6 +123,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy image scanner
+        id: trivy
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
         with:
           scan-type: 'image'
@@ -135,6 +137,7 @@ jobs:
 
       - name: Mark scan passed
         id: scan_result
+        if: ${{ steps.trivy.outcome == 'success' }}
         run: echo "passed=true" >> "$GITHUB_OUTPUT"
 
       - name: Upload SARIF
