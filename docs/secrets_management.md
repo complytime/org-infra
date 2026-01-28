@@ -18,6 +18,10 @@ To work with encrypted secrets, each maintainer needs to:
     ```bash
     # For macOS with Homebrew:
     brew install age sops
+
+    # For Fedora:
+    sudo dnf install age sops
+
     # For other operating systems, refer to their official documentation.
     # age: https://github.com/FiloSottile/age#installation
     # sops: https://github.com/getsops/sops#installation
