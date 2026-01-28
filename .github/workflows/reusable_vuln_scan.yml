@@ -110,9 +110,8 @@ jobs:
       scan_passed: ${{ steps.scan_result.outputs.passed }}
       attestation_attached: ${{ steps.attest.outputs.attached }}
     permissions:
-      # step-security: ignore packages:write - required for cosign vuln attestation
       packages: write         # write needed for attestation push
-      security-events: write
+      security-events: write  # Upload SARIF
       id-token: write         # needed for keyless signing of attestation
     steps:
       - name: Login to GHCR
