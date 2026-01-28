@@ -50,7 +50,6 @@ on:
         value: ${{ jobs.sign-and-verify.outputs.image }}
 
 permissions:
-  contents: none
   packages: none
   id-token: none
 

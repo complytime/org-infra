@@ -53,6 +53,9 @@ on:
 permissions:
   contents: none
   packages: none
+  id-token: none
+  attestations: none
+  actions: none
 
 concurrency:
   group: reusable-push-${{ inputs.image_name }}-${{ github.ref }}
@@ -144,7 +147,7 @@ jobs:
 
       - name: Generate SBOM
         if: ${{ github.ref_protected }}
-        uses: anchore/sbom-action@62ad5284b8ced813296287a0b63906cb364b73ee # v0.22.0
+        uses: anchore/sbom-action@deef08a0db64bfad603422135db61477b16cef56 # v0.22.1
         with:
           image: ${{ steps.images.outputs.image }}@${{ steps.build.outputs.digest }}
           format: spdx-json
