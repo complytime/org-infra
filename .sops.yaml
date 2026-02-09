@@ -2,4 +2,5 @@ creation_rules:
   - path_regex: .*\.enc\.yaml$
     age: >-
       age18lu3ywt8ln9l9xghq89ly0q7f9ztj2evtpysd8u3a4rydkhzzvkqfxzu45,
-      age1pwaqt3z4asd2pg87rhmmr8vljyfuxla70kev54w3r4h8w0fq3qwqc07k0m
+      age1pwaqt3z4asd2pg87rhmmr8vljyfuxla70kev54w3r4h8w0fq3qwqc07k0m,
+      age1xhkpm049h66zswwp55q720szq3d6ffjs70hl4wluxq62v5dez9hst6nvuv
