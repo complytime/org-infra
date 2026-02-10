@@ -20,7 +20,13 @@ To work with encrypted secrets, each maintainer needs to:
     brew install age sops
 
     # For Fedora:
-    sudo dnf install age sops
+    sudo dnf install age
+    # sops is not packaged for Fedora; install via Homebrew/LinuxBrew:
+    brew install sops
+    # Or install from GitHub releases:
+    curl -LO https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64
+    sudo mv sops-v3.11.0.linux.amd64 /usr/local/bin/sops
+    sudo chmod +x /usr/local/bin/sops
 
     # For other operating systems, refer to their official documentation.
     # age: https://github.com/FiloSottile/age#installation
