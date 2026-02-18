@@ -53,8 +53,7 @@ org-infra/
 │  ├── dependabot_python.yml                # Dependabot settings for GitHub Actions (Python repos) and pip.
 │  └── pull_request_template.md             # PR template applicable to all repositories.
 ├── compliance/
-│  └── ampel/
-│     └── branch-protection-rules.json      # Policy definitions for branch protection rule compliance checks.
+│  └── ampel/                               # Policy definitions for branch protection rule compliance checks.
 ├── docs/                                   # More detailed and specific documentation.
 │  ├── LOCAL_TESTING.md                     # Documentation on how to test synchronization locally.
 │  └── SYNC_REPOSITORIES_SETUP.md           # Documentation on how to setup the repository synchronization infrastructure.
