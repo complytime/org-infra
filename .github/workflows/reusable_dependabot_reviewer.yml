@@ -77,7 +77,7 @@ jobs:
                 from_ref="${old_entry#*@}"
                 if [[ "$oname" == "$name" && "$from_ref" != "$to_ref" ]]; then
                   dep_name="$name"
-                  uses_query="uses: ${name}@${to_ref}"
+                  uses_query=" ${name}@${to_ref}"
                   extracted_from_diff=true
                   old_line="$(echo "$DIFF" | grep -F -- "${name}@${from_ref}" | head -1)"
                   new_line="$(echo "$DIFF" | grep -F -- "${name}@${to_ref}" | head -1)"
