@@ -4,7 +4,7 @@
 #
 # Prerequisites (attestations must exist before calling this workflow):
 #   - SLSA provenance: from reusable_push_ghcr.yml (actions/attest-build-provenance)
-#   - SBOM:            from reusable_push_ghcr.yml (actions/attest-sbom)
+#   - SBOM:            from reusable_push_ghcr.yml (actions/attest)
 #   - Vuln scan:       from reusable_vuln_scan.yml (cosign attest --type vuln)
 #
 # Security guarantees:
