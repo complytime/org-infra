@@ -42,10 +42,10 @@ jobs:
           persist-credentials: false
 
       - name: Setup snappy for API Calls
-        uses: carabiner-dev/actions/install/snappy@e4fb157a59e9b54ffc40979a0b5ff374809a2bc1
+        uses: carabiner-dev/actions/install/snappy@0570e3a4d7706694cec05dcec429beb9b1321da6
 
       - name: Setup bnd to Create Attestations Bundles
-        uses: carabiner-dev/actions/install/bnd@e4fb157a59e9b54ffc40979a0b5ff374809a2bc1
+        uses: carabiner-dev/actions/install/bnd@0570e3a4d7706694cec05dcec429beb9b1321da6
 
       - name: Generate Branch Protection Rules Attestation
         id: attestation
@@ -94,7 +94,7 @@ jobs:
 
       - name: Evaluate Compliance
         id: compliance
-        uses: carabiner-dev/actions/ampel/verify@e4fb157a59e9b54ffc40979a0b5ff374809a2bc1
+        uses: carabiner-dev/actions/ampel/verify@0570e3a4d7706694cec05dcec429beb9b1321da6
         with:
           subject: "sha256:${{ steps.attestation.outputs.sha256 }}"
           collector: "jsonl:attestations_package.jsonl"
