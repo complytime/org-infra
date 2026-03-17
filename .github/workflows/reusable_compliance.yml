@@ -77,6 +77,8 @@ jobs:
 
       - name: Push Branch Protection Rules Attestation Bundle
         if: "${{ inputs.push_attestation }}"
+        env:
+          GITHUB_TOKEN: "${{ secrets.source_token }}"
         run: |
           bnd push github "${{github.repository}}" attestations/branch_protection_rules.bundle.json
 
