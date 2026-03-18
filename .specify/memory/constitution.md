@@ -175,9 +175,9 @@ Repositories SHOULD define Go-specific lint rules (e.g., via `.golangci.yml`) an
 
 #### Code Formatting
 
-- **Style**: Code MUST be formatted with `black` and `isort`.
+- **Style**: Code MUST be formatted with `black` and `isort`, or equivalently with `ruff format` and `ruff check --select I`.
 - **Lint**: Code MUST pass `ruff` linting.
-- **Static type check**: Code MUST pass `mypy` static type checking.
+- **Static type check**: Code SHOULD pass `mypy` static type checking. Repositories with minimal scripting (e.g., a single utility script) MAY omit `mypy` if type hints are present.
 - **Non-Python files**: SHOULD use [Megalinter](https://github.com/oxsecurity/megalinter) or equivalent to lint non-Python files in a CI task. Repository-specific configuration details belong in each repository's own constitution increment.
 
 ### Containers
