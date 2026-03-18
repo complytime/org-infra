@@ -1,4 +1,3 @@
-
 # https://megalinter.io/latest/supported-linters/
 ADDITIONAL_EXCLUDED_DIRECTORIES:
   - vendor
