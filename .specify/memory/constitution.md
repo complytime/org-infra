@@ -1,6 +1,6 @@
 <!--
 Sync Impact Report:
-Version: 1.0.2 → 1.1.0 (Agent-optimized wording, repo-agnostic refactor, RFC 2119 normalization)
+Version: 1.0.2 → 1.1.0 → 1.2.0 (Agent-optimized wording, repo-agnostic refactor, RFC 2119 normalization, org-infra alignment)
 Modified Principles:
   - III. Incremental Improvement: Reframed from human-motivational to agent-enforceable MUST rules
   - IV. Code is Written for Humans First → IV. Readability First: Retitled and tightened intro
@@ -261,4 +261,4 @@ This constitution is the org-wide shared reference for all ComplyTime repositori
 
 Repository-level constitutions are incremental -- they extend, not replace, this document. In case of conflict, this org-wide constitution takes precedence.
 
-**Version**: 1.1.0 | **Ratified**: 2026-02-25 | **Last Amended**: 2026-02-25
+**Version**: 1.2.0 | **Ratified**: 2026-02-25 | **Last Amended**: 2026-03-18
