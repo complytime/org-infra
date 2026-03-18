@@ -118,7 +118,7 @@ All commit messages MUST follow the **Conventional Commits** [specification](htt
 
 ## Infrastructure Standards Centralization
 
-We SHOULD centralize workflows, configurations, and templates as much as possible. Refer to [org-infra](https://github.com/complytime/org-infra).
+Workflows, configurations, and templates SHOULD be centralized in the [org-infra](https://github.com/complytime/org-infra) repository, which serves as the canonical source for organization-wide CI/CD standards. Repository-specific overrides MAY exist but MUST NOT conflict with centralized definitions. Changes to shared infrastructure MUST be proposed in org-infra first.
 
 ## Coding Standards
 
