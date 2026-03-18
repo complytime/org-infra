@@ -180,6 +180,32 @@ Repositories SHOULD define Go-specific lint rules (e.g., via `.golangci.yml`) an
 - **Static type check**: Code SHOULD pass `mypy` static type checking. Repositories with minimal scripting (e.g., a single utility script) MAY omit `mypy` if type hints are present.
 - **Non-Python files**: SHOULD use [Megalinter](https://github.com/oxsecurity/megalinter) or equivalent to lint non-Python files in a CI task. Repository-specific configuration details belong in each repository's own constitution increment.
 
+### YAML / GitHub Actions Workflows
+
+#### Naming Conventions
+
+- **Reusable workflows**: MUST be prefixed with `reusable_` and have a clear, descriptive name reflecting their function (e.g., `reusable_vuln_scan.yml`).
+- **Consumer workflows**: Workflows that call reusable workflows MUST be prefixed with `ci_` (e.g., `ci_security.yml`).
+
+#### Security
+
+- Workflows MUST follow the **Principle of Least Privilege**. Write permissions MUST be avoided; when necessary, they MUST be defined in the minimal possible scope.
+- Prefer defining explicit `permissions` per Job over workflow-level permissions.
+- Secrets MUST NOT be hardcoded in workflow files. Use GitHub Secrets or environment-based injection.
+
+#### Design
+
+- Reusable workflows MUST be generic enough to be consumed by any repository within the organization.
+- Workflow inputs MUST have descriptive `description` fields.
+- Required inputs MUST be marked with `required: true`.
+- Optional inputs SHOULD provide sensible `default` values.
+
+#### Formatting
+
+- YAML files MUST be linted with `yamllint` using the repository's `.yamllint.yml` configuration.
+- YAML line length is governed by the `.yamllint.yml` configuration and is exempt from the 99-character general rule.
+- Workflow files MUST include a header comment block describing the workflow's purpose.
+
 ### Containers
 
 <!-- TODO(CONTAINERS_GUIDE): Containers guide referenced in style guide but content not yet provided. Add containerization standards when available. -->
