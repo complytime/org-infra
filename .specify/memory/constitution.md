@@ -21,7 +21,6 @@ Templates requiring updates:
   ✅ tasks-template.md - No changes needed (generic template)
   ✅ checklist-template.md - No changes needed (generic template)
 Follow-up TODOs:
-  - Containers section: Referenced in style guide but content not yet provided - pending addition
   - plan-template.md: Verify Constitution Check references updated Principle IV title
 -->
 
@@ -208,7 +207,26 @@ Repositories SHOULD define Go-specific lint rules (e.g., via `.golangci.yml`) an
 
 ### Containers
 
-<!-- TODO(CONTAINERS_GUIDE): Containers guide referenced in style guide but content not yet provided. Add containerization standards when available. -->
+#### Image Building
+
+- Container images MUST be built using the org-infra reusable workflow (`reusable_publish_ghcr.yml`) or an equivalent workflow that produces the same supply chain artifacts.
+- Containerfiles MUST use a specific base image tag or digest. MUST NOT use `latest` or floating tags.
+- Multi-stage builds SHOULD be used to minimize final image size and attack surface.
+
+#### Supply Chain Security
+
+- All container images MUST include the following attestations:
+  - **SLSA provenance**: Generated during the build process.
+  - **SBOM**: Software Bill of Materials attached to the image.
+  - **Vulnerability scan**: Scan results attested to the image.
+- All attestations MUST be signed using Sigstore keyless signing with Rekor transparency log entries.
+- Signature verification MUST validate certificate identity and OIDC issuer.
+
+#### Registry Standards
+
+- Primary registry: GitHub Container Registry (`ghcr.io`).
+- Promotion to secondary registries (e.g., Quay.io) MUST verify source image signatures before copying.
+- OCI labels (`org.opencontainers.image.*`) SHOULD be applied for description, vendor, source, and version metadata.
 
 ## Governance
 
