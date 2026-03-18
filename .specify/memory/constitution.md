@@ -127,7 +127,7 @@ Workflows, configurations, and templates SHOULD be centralized in the [org-infra
 - **Pre-commit Hooks**: Repositories SHOULD configure pre-commit and pre-push hooks via [pre-commit](https://pre-commit.com/).
 - **Makefile**: Repositories MUST use a Makefile to centralize code-specific commands.
 - **Testing**: All code MUST have tests. Test functions MUST use descriptive names and include edge cases. Inputs from external sources MUST be tested. Each test scenario MUST include at least one positive and one negative test case to verify that errors and exceptions are properly handled.
-- **Line Length**: Lines MUST be limited to 99 characters unless exceeding the limit demonstrably improves readability.
+- **Line Length**: Lines in source code MUST be limited to 99 characters unless exceeding the limit demonstrably improves readability. YAML files are exempt and follow the `.yamllint.yml` configuration instead.
 - **Lint**: Code MUST have zero lint issues according to the lint configuration defined in the repository. No trailing spaces.
 - **Lint Configuration Awareness**: Before making code changes, agents MUST read the repository's lint and formatter configuration files to understand the enforced rules. All generated or modified code MUST conform to these configurations. If no lint configuration is present, agents SHOULD follow the language-specific defaults defined in this constitution. The ComplyTime organization standardizes on the following configuration files:
   - `.golangci.yml` -- Go linting rules
