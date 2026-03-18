@@ -137,6 +137,8 @@ We SHOULD centralize workflows, configurations, and templates as much as possibl
   - `.pre-commit-config.yaml` -- Pre-commit and pre-push hook definitions
   - `.yamllint.yml` -- YAML linting rules
 
+**Note**: The following language-specific sections apply to repositories containing source code in the respective language. Repositories that host configuration files as sync templates (e.g., `.golangci.yml` in org-infra) are not subject to these sections for their own code.
+
 ### Go
 
 #### General Guidelines
