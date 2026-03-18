@@ -35,9 +35,11 @@ org-infra/
 │  │  ├── ci_dependencies.yml               # Workflow to consume `reusable_dependabot_reviewer` and `reusable_deps_reviewer`
 │  │  │                                     # plus local jobs to auto-approve and comment on dependabot PRs.
 │  │  ├── ci_scheduled.yml                  # Scheduled OSV-Scanner and OpenSSF Scorecards via `reusable_scheduled`.
+│  │  ├── ci_crapload.yml                   # Workflow to consume `reusable_crapload_analysis` for CRAP load analysis.
 │  │  ├── ci_security.yml                   # Workflow to consume `reusable_vuln_scan` and `reusable_security`.
 │  │  ├── reusable_ci.yml                   # Generic CI checks, such as linters, typos and PR titles.
 │  │  ├── reusable_compliance.yml           # Compliance evaluation with attestation-based policy checks.
+│  │  ├── reusable_crapload_analysis.yml    # CRAP (Change Risk Anti-Patterns) load analysis for Go code using Gaze.
 │  │  ├── reusable_dependabot_reviewer.yml  # Specific for dependabot PRs. Classify risk and checks dependency adoption.
 │  │  ├── reusable_deps_reviewer.yml        # Check for vulnerabilities, license issues, and OpenSSF Scorecard Level.
 │  │  ├── reusable_gemini_review.yml        # AI-powered code review using Google Gemini to review pull requests.
