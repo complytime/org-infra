@@ -67,6 +67,7 @@ jobs:
 
       # The calling workflow MUST ensure the coverage file exists before calling this.
       # This step just runs the SonarCloud analysis with the provided inputs.
+      # Inject dynamic coverage properties only if path is provided
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
         env:
@@ -82,5 +83,4 @@ jobs:
             "-Dsonar.organization=${{ env.SONAR_ORGANIZATION }}"
             "-Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}"
             "-Dsonar.qualitygate.wait=true"
-            # Inject dynamic coverage properties only if path is provided
             "${{ env.COVERAGE_FILE_PATH && format('-D{0}={1}', env.LANGUAGE_SCANNER_PROPERTY, env.COVERAGE_FILE_PATH) || '' }}"
