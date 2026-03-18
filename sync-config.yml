@@ -33,6 +33,15 @@ files_to_sync:
   - source: .github/workflows/ci_security.yml
     destination: .github/workflows/ci_security.yml
 
+  - source: .github/workflows/ci_crapload.yml
+    destination: .github/workflows/ci_crapload.yml
+    exclude_repos:
+      - complyscribe
+      - complytime-demos
+      - complytime-policies
+      - vagrant-boxes
+      - community
+
   # Configuration Files
   - source: .github/dependabot.yml
     destination: .github/dependabot.yml
