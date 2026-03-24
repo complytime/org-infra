@@ -12,6 +12,14 @@ updates:
       prefix: "ci"
       include: "scope"
 
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
   - package-ecosystem: "gomod"
     directories:
       - "/"
