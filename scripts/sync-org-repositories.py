@@ -186,7 +186,7 @@ def create_fork(org: str, repo_name: str) -> bool:
 
 def delete_fork_branch(fork_owner: str, repo_name: str, branch_name: str) -> bool:
     """Delete a branch from the fork (cleanup old sync branches)."""
-    status, _ = github_api_request(f"/repos/{fork_owner}/{repo_name}/git/refs/heads/{branch_name}", method="DELETE")
+    status, _ = github_api_request(f"{GITHUB_API}/repos/{fork_owner}/{repo_name}/git/refs/heads/{branch_name}", method="DELETE")
     return status == 204
 
 
@@ -509,7 +509,8 @@ def main():
         print("DRY RUN MODE - No changes will be made")
         print("="*60)
 
-    print(f"{len(excluded_repos)} repositories were excluded in this sync:\n- {'\n- '.join(excluded_repos)}")
+    excluded_list = "\n- ".join(excluded_repos)
+    print(f"{len(excluded_repos)} repositories were excluded in this sync:\n- {excluded_list}")
     print(f"\nWill process {len(repositories)} repository(ies)")
 
     success_count = 0

@@ -22,7 +22,7 @@ lint-yaml: ## Lint YAML files
 
 .PHONY: lint-python
 lint-python: ## Lint Python files
-	ruff check scripts/
+	ruff check scripts/ tests/
 
 ##@ Sync
 
