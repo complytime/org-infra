@@ -1,36 +1,32 @@
 name: Compliance Checks
 
-# Only allow manual trigger during testing phase. Above lines will be uncommented when testing is complete.
 on:
   workflow_dispatch:
     inputs:
-      policy_url:
-        description: 'URL to the policy to use for compliance'
-        required: true
-        type: string
-      push_attestation:
-        description: 'Push the attestation to the repository'
+      complytime_config_path:
+        description: 'Relative path of the complytime.yaml file in this repository'
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: 'complytime.yaml'
+      policy_id:
+        description: 'Policy ID to use for complyctl generate and scan commands'
+        required: false
+        type: string
+        default: 'ampel-bp'
+  schedule:
+    - cron: '0 0 * * *'
 
 permissions:
-  contents: read
-  actions: none
-  id-token: none
-  security-events: none
+  contents: none
 
 jobs:
   call_reusable_compliance:
     name: Compliance Evaluation
     permissions:
       contents: read
-      actions: read
-      id-token: write
-      attestations: write
     uses: complytime/org-infra/.github/workflows/reusable_compliance.yml@main
     with:
-      policy_url: ${{ inputs.policy_url }}
-      push_attestation: ${{ inputs.push_attestation }}
+      complytime_config_path: ${{ inputs.complytime_config_path || 'complytime.yaml' }}
+      policy_id: ${{ inputs.policy_id || 'ampel-bp' }}
     secrets:
       source_token: ${{ secrets.GITHUB_TOKEN }}
