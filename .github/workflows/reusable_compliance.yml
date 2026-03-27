@@ -1,111 +1,162 @@
 ---
-name: Reusable Compliance Evaluation
+name: Reusable GitHub Branch Protection Scan
 
+# --------------------------------------------------------------------------
+# This workflow builds complyctl from source and uses it with a local
+# mock-oci-registry to scan GitHub branch protection rules via the
+# ampel-branch-protection policy.
+# --------------------------------------------------------------------------
 on:
   workflow_call:
     inputs:
-      policy_url:
-        description: 'URL to the policy to use for compliance'
+      complytime_config_path:
+        description: 'Relative path of the complytime.yaml file in the calling repository'
         required: true
         type: string
-      push_attestation:
-        description: 'Push the attestation to the repository'
+      policy_id:
+        description: 'Policy ID to use for complyctl generate and scan commands'
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: 'ampel-bp'
     secrets:
       source_token:
-        description: 'GitHub token to use for uploading artifacts and attestations'
+        description: 'GitHub token used by snappy to read branch protection rules via the GitHub API'
         required: true
 
-# {} also works, but making it explicit which permissions are needed is betters.
-# Now I can more easily track where and how they are used in the workflow.
 permissions:
   id-token: none
   attestations: none
   contents: none
 
 jobs:
-  evaluate-repository-compliance:
-    name: Compliance Evaluation
+  github-branch-protection-scan:
+    name: GitHub Branch Protection Scan
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write
-      attestations: write
       contents: read
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout complyctl source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          repository: complytime/complyctl
           persist-credentials: false
 
-      - name: Setup snappy for API Calls
-        uses: carabiner-dev/actions/install/snappy@e4fb157a59e9b54ffc40979a0b5ff374809a2bc1
+      - name: Checkout calling repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: _caller
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
-      - name: Setup bnd to Create Attestations Bundles
-        uses: carabiner-dev/actions/install/bnd@e4fb157a59e9b54ffc40979a0b5ff374809a2bc1
+      - name: Setup Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: './go.mod'
 
-      - name: Generate Branch Protection Rules Attestation
-        id: attestation
+      - name: Build
+        run: |
+          make build
+
+      - name: Install snappy
+        uses: carabiner-dev/actions/install/snappy@1745afdfe30ebe15d2ffafbe659376241a37dbb1
+
+      - name: Install ampel
+        uses: carabiner-dev/actions/install/ampel@1745afdfe30ebe15d2ffafbe659376241a37dbb1
+
+      - name: Register ampel-plugin provider with complyctl
+        run: |
+          mkdir -p ~/.complytime/providers
+          cp bin/ampel-plugin ~/.complytime/providers/complyctl-provider-ampel
+
+      - name: Start mock-oci-registry in background
+        run: |
+          ./bin/mock-oci-registry &
+          echo "MOCK_REGISTRY_PID=$!" >> "$GITHUB_ENV"
+
+          # Wait up to 15 seconds for the registry to be ready
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:8765/v2/ >/dev/null 2>&1; then
+              echo "Mock registry is ready."
+              break
+            fi
+            sleep 0.5
+          done
+
+          if ! curl -sf http://localhost:8765/v2/ >/dev/null 2>&1; then
+            echo "ERROR: mock-oci-registry did not start in time."
+            exit 1
+          fi
+
+      - name: Copy workspace configuration
+        run: cp "_caller/${{ inputs.complytime_config_path }}" complytime.yaml
+
+      - name: Copy ampel policy files
+        run: |
+          mkdir -p .complytime/ampel/granular-policies
+          cp cmd/ampel-plugin/convert/testdata/policies/* .complytime/ampel/granular-policies/
+
+      - name: Fetch ampel-branch-protection policy from mock registry
+        run: ./bin/complyctl get
+
+      - name: Generate policy graph
+        run: ./bin/complyctl generate --policy-id ${{ inputs.policy_id }}
+
+      - name: Scan branch protection rules
         env:
           GITHUB_TOKEN: "${{ secrets.source_token }}"
+        run: ./bin/complyctl scan --policy-id ${{ inputs.policy_id }} --format pretty
+
+      - name: Publish report to GitHub Step Summary
         run: |
-          mkdir -p attestations
+          for f in .complytime/ampel/results/*-ampel.intoto.json; do
+            [ -f "$f" ] || continue
+            label=$(basename "$f" -ampel.intoto.json)
 
-          # Use snappy to make the API call to the branch rules endpoint
-          # and save the result to a file with the option to hide sensitive data.
-          snappy snap builtin:github/branch-rules.yaml \
-          -v BRANCH="${{ github.ref_name }}" \
-          -v REPO="${{ github.event.repository.name }}" \
-          -v ORG="${{github.repository_owner}}" \
-          --attest > attestations/branch_protection_rules.intoto.json
+            jq -r --arg label "$label" '
+              .predicate |
+              "## Branch Protection Scan: \($label)",
+              "",
+              ("**Overall Status:** " + (if .status == "PASS" then "✅ PASS" else "❌ FAIL" end)),
+              "",
+              "| Policy | Description | Status |",
+              "|--------|-------------|--------|",
+              (.results[] | "| \(.policy.id) | \(.meta.description) | \(if .status == "PASS" then "✅ PASS" else "❌ FAIL" end) |"),
+              "",
+              (.results[] |
+                "### \(.policy.id) — \(.meta.description)",
+                "",
+                (.eval_results[] |
+                  if .status == "PASS" then
+                    "- ✅ **Tenet \(.id):** \(.assessment.message)"
+                  else
+                    "- ❌ **Tenet \(.id):** \(.error.message)",
+                    (if (.error.guidance? // "") != "" then "  > **Guidance:** \(.error.guidance)" else empty end)
+                  end
+                ),
+                ""
+              )
+            ' "$f" >> "$GITHUB_STEP_SUMMARY"
+          done
 
-          # Extract SHA256 digest
-          SHA256=$(jq -r '.subject[0].digest.sha256' attestations/branch_protection_rules.intoto.json)
-          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
-
-          # Create a bundle from the intoto.json file
-          bnd statement attestations/branch_protection_rules.intoto.json --out attestations/branch_protection_rules.bundle.json
-
-      - name: Upload Branch Protection Rules Results
+      - name: Upload scan results
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: branch-protection-rules.intoto.json
-          path: attestations/branch_protection_rules.intoto.json
+          name: report-policies-ampel-branch-protection.md
+          path: report-*.md
+          if-no-files-found: warn
 
-      - name: Push Branch Protection Rules Attestation Bundle
-        if: "${{ inputs.push_attestation }}"
-        env:
-          GITHUB_TOKEN: "${{ secrets.source_token }}"
-        run: |
-          bnd push github "${{github.repository}}" attestations/branch_protection_rules.bundle.json
-
-      - name: Pack Attestations
-        run: |
-          # Pack the attestations into a single file.
-          # It is using a directory as input but it could also be multiple explicit files.
-          bnd pack attestations/ > attestations_package.jsonl
-
-      - name: Upload Attestation Pack for Analysis
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: attestations_package.jsonl
-          path: attestations_package.jsonl
-
-      - name: Evaluate Compliance
-        id: compliance
-        uses: carabiner-dev/actions/ampel/verify@e4fb157a59e9b54ffc40979a0b5ff374809a2bc1
-        with:
-          subject: "sha256:${{ steps.attestation.outputs.sha256 }}"
-          collector: "jsonl:attestations_package.jsonl"
-          policy: "git+${{ inputs.policy_url }}"
-          attest: true
-          fail: false
-
-      - name: Upload Compliance Results
+      - name: Upload Ample Results
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: ampel.intoto.json
-          path: ampel.intoto.json
+          path: .complytime/ampel/results/*-ampel.intoto.json
+          if-no-files-found: warn
+
+      - name: Upload Snappy Results
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: snappy.intoto.json
+          path: .complytime/ampel/results/*-snappy.intoto.json
+          if-no-files-found: warn
