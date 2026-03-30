@@ -99,7 +99,7 @@ jobs:
 
       - name: Upload SARIF
         if: ${{ always() }}
-        uses: github/codeql-action/upload-sarif@b8bb9f28b8d3f992092362369c57161b755dea45 # v4.35.0
+        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4.35.1
         with:
           sarif_file: 'trivy-source-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
           category: 'trivy-source'
@@ -150,7 +150,7 @@ jobs:
 
       - name: Upload SARIF
         if: ${{ always() }}
-        uses: github/codeql-action/upload-sarif@b8bb9f28b8d3f992092362369c57161b755dea45 # v4.35.0
+        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4.35.1
         with:
           sarif_file: 'trivy-image-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
           category: 'trivy-image'
