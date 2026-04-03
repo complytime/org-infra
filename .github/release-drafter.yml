@@ -1,0 +1,146 @@
+---
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+prerelease: true
+prerelease-identifier: "rc"
+
+category-template: |
+  ### $TITLE
+
+  $CHANGES
+
+template: |
+  ## org-infra $RESOLVED_VERSION
+
+  Central **reusable GitHub Actions workflows**, CI templates, **compliance** policy assets, and **org sync** tooling. Downstream repos usually consume this repo via workflow `uses:` pins or version tags.
+
+  #### Before you upgrade
+
+  - Treat **workflow YAML** updates as potentially **breaking for every consumer** until you’ve reviewed them.
+  - Use the **Workflows & GitHub Actions** section below for PRs that touched pipelines; for exact paths and hunks, open the compare link and narrow **Files changed** to `.github/workflows/`.
+
+  **[View full diff: `$PREVIOUS_TAG` → `v$RESOLVED_VERSION`](https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION)**
+
+  ## Changes
+
+  $CHANGES
+
+  ---
+
+  **Compare:** [`$PREVIOUS_TAG`…`v$RESOLVED_VERSION`](https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION)
+
+  **Thanks** to $CONTRIBUTORS for this release.
+
+change-template: "- $TITLE — [#$NUMBER]($URL) · @$AUTHOR"
+no-changes-template: |
+  *No pull requests are included in this release since the previous tag. If that’s unexpected, check that PRs are merged to the default branch and not labeled `skip-changelog`.*
+sort-by: merged_at
+sort-direction: ascending
+
+categories:
+  - title: "Breaking changes"
+    labels:
+      - "breaking"
+      - "major"
+  - title: "Workflows & GitHub Actions"
+    labels:
+      - "workflows"
+    collapse-after: 12
+  - title: "Compliance & policy assets"
+    labels:
+      - "compliance"
+    collapse-after: 8
+  - title: "Sync & repository configuration"
+    labels:
+      - "sync-config"
+    collapse-after: 8
+  - title: "Features"
+    labels:
+      - "feature"
+      - "enhancement"
+  - title: "Bug fixes"
+    labels:
+      - "fix"
+      - "bugfix"
+      - "bug"
+  - title: "Performance"
+    labels:
+      - "performance"
+  - title: "Maintenance"
+    labels:
+      - "infrastructure"
+      - "automation"
+      - "documentation"
+      - "dependencies"
+      - "maintenance"
+      - "revert"
+
+exclude-labels:
+  - "skip-changelog"
+
+exclude-contributors:
+  - "github-actions[bot]"
+  - "dependabot[bot]"
+
+version-resolver:
+  major:
+    labels:
+      - "breaking"
+      - "major"
+  minor:
+    labels:
+      - "feature"
+      - "enhancement"
+      - "minor"
+  patch:
+    labels:
+      - "fix"
+      - "documentation"
+      - "maintenance"
+      - "patch"
+      - "performance"
+      - "workflows"
+      - "compliance"
+      - "sync-config"
+  default: patch
+
+autolabeler:
+  - label: "workflows"
+    files:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+  - label: "compliance"
+    files:
+      - "compliance/**"
+  - label: "sync-config"
+    files:
+      - "sync-config.yml"
+      - "complytime.yaml"
+      - "scripts/**"
+  - label: "performance"
+    title:
+      - "/^(perf).*/i"
+  - label: "automation"
+    title:
+      - "/^(build|ci|refactor|test).*/i"
+  - label: "enhancement"
+    title:
+      - "/^(style).*/i"
+  - label: "documentation"
+    title:
+      - "/^(docs).*/i"
+  - label: "feature"
+    title:
+      - "/^(feat).*/i"
+  - label: "fix"
+    title:
+      - "/^(fix).*/i"
+  - label: "infrastructure"
+    title:
+      - "/^(infrastructure).*/i"
+  - label: "maintenance"
+    title:
+      - "/^(chore|maintenance).*/i"
+  - label: "revert"
+    title:
+      - "/^(revert).*/i"
