@@ -1,4 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
+#
+# workflow_dispatch: pick the branch in the "Use workflow from" dropdown (or `gh workflow run --ref <branch>`).
+# That branch supplies the workflow file and, by default, the commit you check out. Optional `checkout_ref`
+# overrides the checkout only (e.g. same workflow on main, code from another ref—rare).
 
 name: Release
 
@@ -6,9 +10,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., v1.0.0)'
+        description: 'Tag to release (e.g., v1.0.0); must already exist on the repo'
         required: true
         type: string
+      checkout_ref:
+        description: 'Optional ref to check out (branch name, tag, or refs/heads/…). Leave empty to use the branch you selected when starting the run.'
+        required: false
+        type: string
+        default: ''
 
 permissions: {}
 
@@ -17,24 +26,33 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
 
+    env:
+      CHECKOUT_REF: ${{ github.event.inputs.checkout_ref != '' && github.event.inputs.checkout_ref || github.ref }}
+
     permissions:
       contents: write # To push artifacts to the release
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ env.CHECKOUT_REF }}
           fetch-depth: 0
-  
+
   release-notes:
     needs: release
     runs-on: ubuntu-latest
+
+    env:
+      CHECKOUT_REF: ${{ github.event.inputs.checkout_ref != '' && github.event.inputs.checkout_ref || github.ref }}
+
     permissions:
       contents: write
     steps:
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ env.CHECKOUT_REF }}
           fetch-depth: 0
 
       - name: Publish GitHub release
