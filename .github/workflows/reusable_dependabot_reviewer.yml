@@ -2,6 +2,8 @@ name: Reusable Dependabot Reviewer
 
 # --------------------------------------------------------------------------
 # This workflow only runs when explicitly called by another workflow.
+# It extracts dependency information from dependabot PRs, classifies risk,
+# checks release age, detects ecosystem, and searches for dependency usage.
 # --------------------------------------------------------------------------
 on:
   workflow_call:
@@ -12,6 +14,15 @@ on:
       updates_count:
         description: "Rough number of projects that already adopted this dependency"
         value: "${{ jobs.dependabot_review.outputs.updates_count }}"
+      dep_name:
+        description: "Fully qualified dependency name"
+        value: "${{ jobs.dependabot_review.outputs.dep_name }}"
+      dep_version:
+        description: "New dependency version"
+        value: "${{ jobs.dependabot_review.outputs.dep_version }}"
+      release_age_hours:
+        description: "Hours since the dependency version was released, -1 if unknown"
+        value: "${{ jobs.dependabot_review.outputs.release_age_hours }}"
 
 # This workflow is passive so ensure the minimal permissions even if the
 # inherited token is more lenient.
@@ -29,6 +40,9 @@ jobs:
     outputs:
       risk_level: "${{ steps.classify_risk.outputs.risk_level }}"
       updates_count: "${{ steps.check_popularity.outputs.updates_count }}"
+      dep_name: "${{ steps.get_dep_info.outputs.dep_name }}"
+      dep_version: "${{ steps.get_dep_info.outputs.dep_version }}"
+      release_age_hours: "${{ steps.check_release_age.outputs.release_age_hours }}"
 
     steps:
       - name: Checkout Repository
@@ -39,149 +53,101 @@ jobs:
           fetch-depth: 2
 
       - name: Get Dependency Information
+        id: get_dep_info
         shell: bash
         env:
           DEPENDABOT_SHA: "${{ github.event.pull_request.head.sha }}"
         run: |
-          set -e
           REF="${DEPENDABOT_SHA:-HEAD}"
-          DIFF="$(git diff "$REF^..$REF" 2>/dev/null || git diff HEAD^..HEAD 2>/dev/null)"
-          COMMIT_SUBJECT="$(git log -1 --format=%s "$REF" 2>/dev/null || echo "")"
           COMMIT_BODY="$(git log -1 --format=%B "$REF" 2>/dev/null || echo "")"
+          COMMIT_SUBJECT="$(git log -1 --format=%s "$REF" 2>/dev/null || echo "")"
           echo "Dependabot Commit Subject: $COMMIT_SUBJECT"
-          echo "Diff length: ${#DIFF} bytes"
 
           dep_name=""
-          from_version=""
-          to_version=""
+          dep_version=""
+          update_type=""
           uses_query=""
-          extracted_from_diff=false
 
-          # ---- Actions: extract exact "uses: name@ref" from diff ----
-          if [[ -n "$DIFF" ]]; then
-            rm -f /tmp/uses_old.txt /tmp/uses_new.txt
-            while IFS= read -r line; do
-              if [[ "$line" =~ ^-[[:space:]]*uses:[[:space:]]*([^@[:space:]]+)@([^[:space:]#]+) ]]; then
-                echo "${BASH_REMATCH[1]}@${BASH_REMATCH[2]}" >> /tmp/uses_old.txt
-              fi
-              if [[ "$line" =~ ^\+[[:space:]]*uses:[[:space:]]*([^@[:space:]]+)@([^[:space:]#]+) ]]; then
-                echo "${BASH_REMATCH[1]}@${BASH_REMATCH[2]}" >> /tmp/uses_new.txt
-              fi
-            done <<< "$DIFF"
-            for f in /tmp/uses_old.txt /tmp/uses_new.txt; do [[ -f "$f" ]] || touch "$f"; done
-            while read -r new_entry; do
-              name="${new_entry%%@*}"
-              to_ref="${new_entry#*@}"
-              while read -r old_entry; do
-                oname="${old_entry%%@*}"
-                from_ref="${old_entry#*@}"
-                if [[ "$oname" == "$name" && "$from_ref" != "$to_ref" ]]; then
-                  dep_name="$name"
-                  uses_query=" ${name}@${to_ref}"
-                  extracted_from_diff=true
-                  old_line="$(echo "$DIFF" | grep -F -- "${name}@${from_ref}" | head -1)"
-                  new_line="$(echo "$DIFF" | grep -F -- "${name}@${to_ref}" | head -1)"
-                  from_version="$(echo "$old_line" | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | tail -1 | sed 's/^v//')"
-                  to_version="$(echo "$new_line" | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | tail -1 | sed 's/^v//')"
-                  break 2
-                fi
-              done < /tmp/uses_old.txt
-            done < /tmp/uses_new.txt
-            rm -f /tmp/uses_old.txt /tmp/uses_new.txt
-            if [[ -n "$dep_name" ]]; then
-              echo "Detected (diff) GitHub Action: USES_QUERY=$uses_query"
-            elif echo "$DIFF" | grep -qE '^[+-].*uses:'; then
-              echo "Debug: diff has uses: lines but no matching pair. Sample:"
-              echo "$DIFF" | grep -E '^[+-].*uses:' | head -5
-            fi
-          fi
+          # Source 1: Commit metadata (updated-dependencies block)
+          dep_name="$(echo "$COMMIT_BODY" | grep -m1 'dependency-name:' \
+            | sed 's/.*dependency-name:[[:space:]]*//' | tr -d '[:space:]')" || true
+          dep_version="$(echo "$COMMIT_BODY" | grep -m1 'dependency-version:' \
+            | sed 's/.*dependency-version:[[:space:]]*//' | tr -d '[:space:]')" || true
+          update_type="$(echo "$COMMIT_BODY" | grep -m1 'update-type:' \
+            | sed 's/.*update-type:[[:space:]]*//' | tr -d '[:space:]')" || true
+          [[ -n "$dep_name" ]] && echo "Metadata: name=$dep_name version=$dep_version type=$update_type"
 
-          # ---- go.mod: require path vX.Y.Z ----
-          if [[ -z "$dep_name" && -n "$DIFF" ]] && echo "$DIFF" | grep -q 'go\.mod'; then
-            rm -f /tmp/gomod_removed.txt /tmp/gomod_added.txt
-            while IFS= read -r line; do
-              if [[ "$line" =~ ^-[[:space:]]+([^[:space:]]+)[[:space:]]+v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-                echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]}" >> /tmp/gomod_removed.txt
-              fi
-              if [[ "$line" =~ ^\+[[:space:]]+([^[:space:]]+)[[:space:]]+v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-                echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]}" >> /tmp/gomod_added.txt
-              fi
-            done <<< "$DIFF"
-            for f in /tmp/gomod_removed.txt /tmp/gomod_added.txt; do [[ -f "$f" ]] || touch "$f"; done
-            while read -r added; do
-              path="${added% *}"
-              to_v="${added#* }"
-              while read -r removed; do
-                rpath="${removed% *}"
-                from_v="${removed#* }"
-                if [[ "$rpath" == "$path" && "$from_v" != "$to_v" ]]; then
-                  dep_name="$path"
-                  from_version="$from_v"
-                  to_version="$to_v"
-                  extracted_from_diff=true
-                  break 2
-                fi
-              done < /tmp/gomod_removed.txt
-            done < /tmp/gomod_added.txt
-            rm -f /tmp/gomod_removed.txt /tmp/gomod_added.txt
-            if [[ -n "$dep_name" ]]; then
-              echo "Detected (diff) go.mod: $dep_name $from_version -> $to_version"
-            fi
-          fi
-
-          # ---- Fallback: title/body (no Actions query from fallback) ----
+          # Source 2: Title fallback for dep_name
           if [[ -z "$dep_name" ]]; then
-            dep_name="$(echo "$COMMIT_SUBJECT" | sed -E 's/.*[Bb]ump ([^ ]+) .*/\1/; t; s/.*[Uu]pdate ([^ ]+) .*/\1/')"
+            dep_name="$(echo "$COMMIT_SUBJECT" \
+              | sed -E 's/.*[Bb]ump ([^ ]+) .*/\1/; t; s/.*[Uu]pdate ([^ ]+) .*/\1/')" || true
             [[ "$dep_name" == "$COMMIT_SUBJECT" ]] && dep_name=""
-          fi
-          if [[ -n "$dep_name" && "$extracted_from_diff" != "true" ]]; then
-            echo "Dependency Name (title): $dep_name"
-          fi
-          if [[ -z "$from_version" || -z "$to_version" ]]; then
-            text="$COMMIT_SUBJECT"
-            [[ "$text" =~ [0-9]+\.[0-9]+\.[0-9]+ ]] || text="$(echo "$COMMIT_BODY" | grep -iE 'bump|update|version' | head -5)"
-            mapfile -t versions < <(echo "$text" | grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+' | sed 's/^v//' | head -2)
-            if [[ "${#versions[@]}" -ge 2 ]]; then
-              from_version="${versions[0]}"
-              to_version="${versions[1]}"
-              echo "Versions (title/body): $from_version -> $to_version"
-            elif [[ "${#versions[@]}" -eq 1 ]]; then
-              to_version="${versions[0]}"
-            fi
+            [[ -n "$dep_name" ]] && echo "Title fallback: name=$dep_name"
           fi
 
-          [[ -n "$dep_name" ]] && echo "DEP_NAME=$dep_name" >> "$GITHUB_ENV"
-          [[ -n "$from_version" ]] && echo "FROM_VERSION=$from_version" >> "$GITHUB_ENV"
-          [[ -n "$to_version" ]] && echo "TO_VERSION=$to_version" >> "$GITHUB_ENV"
-          [[ -n "$uses_query" ]] && echo "USES_QUERY=$uses_query" >> "$GITHUB_ENV"
-          echo "Final DEP_NAME=$dep_name FROM_VERSION=$from_version TO_VERSION=$to_version USES_QUERY=$uses_query"
+          # Extract versions from title (always needed for from_version)
+          mapfile -t versions < <(echo "$COMMIT_SUBJECT" \
+            | grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+' | sed 's/^v//' | head -2)
+          from_version=""
+          to_version="${dep_version}"
+          [[ "${#versions[@]}" -ge 2 ]] && from_version="${versions[0]}"
+          [[ "${#versions[@]}" -ge 2 && -z "$to_version" ]] && to_version="${versions[1]}"
+          [[ "${#versions[@]}" -eq 1 && -z "$to_version" ]] && to_version="${versions[0]}"
+
+          # Source 3: Diff enrichment (SHA-pinned refs for usage search only)
+          DIFF="$(git diff "$REF^..$REF" 2>/dev/null || echo "")"
+          if [[ -n "$DIFF" && -n "$dep_name" ]]; then
+            uses_ref="$(echo "$DIFF" \
+              | grep -oE "^\+.*uses:[[:space:]]*${dep_name}@[a-f0-9]{40}" \
+              | grep -oE "${dep_name}@[a-f0-9]{40}" | head -1)" || true
+            [[ -n "$uses_ref" ]] && uses_query=" $uses_ref"
+          fi
+
+          # Export to GITHUB_ENV for downstream steps
+          dep_version_final="${dep_version:-$to_version}"
+          {
+            [[ -n "$dep_name" ]] && echo "DEP_NAME=$dep_name"
+            [[ -n "$dep_version_final" ]] && echo "DEP_VERSION=$dep_version_final"
+            [[ -n "$from_version" ]] && echo "FROM_VERSION=$from_version"
+            [[ -n "$to_version" ]] && echo "TO_VERSION=$to_version"
+            [[ -n "$update_type" ]] && echo "UPDATE_TYPE=$update_type"
+            [[ -n "$uses_query" ]] && echo "USES_QUERY=$uses_query"
+          } >> "$GITHUB_ENV"
+
+          # Export to GITHUB_OUTPUT for job outputs
+          echo "dep_name=${dep_name}" >> "$GITHUB_OUTPUT"
+          echo "dep_version=${dep_version_final}" >> "$GITHUB_OUTPUT"
+
+          echo "Final: DEP_NAME=$dep_name DEP_VERSION=$dep_version_final FROM=$from_version TO=$to_version TYPE=$update_type USES=$uses_query"
 
       - name: Classify Risk Based on Semantic Version
         id: classify_risk
         shell: bash
         run: |
-          risk="high"  # Default risk level
+          risk="high"
 
-          if [[ -z "${{ env.FROM_VERSION }}" || -z "${{ env.TO_VERSION }}" ]]; then
-            echo "No clear versioning detected."
-            echo "Risk level: $risk"
-            echo "risk_level=$risk" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          FROM_VER_MAJOR=$(echo "${{ env.FROM_VERSION }}" | cut -d. -f1)
-          FROM_VER_MINOR=$(echo "${{ env.FROM_VERSION }}" | cut -d. -f2)
-          TO_VER_MAJOR=$(echo "${{ env.TO_VERSION }}" | cut -d. -f1)
-          TO_VER_MINOR=$(echo "${{ env.TO_VERSION }}" | cut -d. -f2)
-
-          if [[ "$FROM_VER_MAJOR" -eq "$TO_VER_MAJOR" && "$FROM_VER_MINOR" -eq "$TO_VER_MINOR" ]]; then
-            echo "Patch update detected."
-            risk="low"
-          elif [[ "$FROM_VER_MAJOR" -eq "$TO_VER_MAJOR" && "$FROM_VER_MINOR" -lt "$TO_VER_MINOR" ]]; then
-            echo "Minor update detected."
-            risk="medium"
+          # Primary: use update-type from commit metadata
+          if [[ -n "${{ env.UPDATE_TYPE }}" ]]; then
+            case "${{ env.UPDATE_TYPE }}" in
+              *semver-patch*) risk="low"; echo "Patch update (metadata)." ;;
+              *semver-minor*) risk="medium"; echo "Minor update (metadata)." ;;
+              *semver-major*) risk="high"; echo "Major update (metadata). Requires manual review." ;;
+            esac
+          # Fallback: compare semantic versions
+          elif [[ -n "${{ env.FROM_VERSION }}" && -n "${{ env.TO_VERSION }}" ]]; then
+            from_major=$(echo "${{ env.FROM_VERSION }}" | cut -d. -f1)
+            from_minor=$(echo "${{ env.FROM_VERSION }}" | cut -d. -f2)
+            to_major=$(echo "${{ env.TO_VERSION }}" | cut -d. -f1)
+            to_minor=$(echo "${{ env.TO_VERSION }}" | cut -d. -f2)
+            if [[ "$from_major" -eq "$to_major" && "$from_minor" -eq "$to_minor" ]]; then
+              risk="low"; echo "Patch update (semver)."
+            elif [[ "$from_major" -eq "$to_major" && "$from_minor" -lt "$to_minor" ]]; then
+              risk="medium"; echo "Minor update (semver)."
+            else
+              echo "Major update (semver). Requires manual review."
+            fi
           else
-            echo "Major update detected. Likely includes breaking changes. Requires manual review."
+            echo "No version info available. Defaulting to high risk."
           fi
 
           echo "Risk level: $risk"
@@ -197,12 +163,12 @@ jobs:
         env:
           ALL_CHANGED_FILES: "${{ steps.changed_files.outputs.all_changed_files }}"
         run: |
-          if [[ $ALL_CHANGED_FILES =~ (^|[[:space:]])go\.mod($|[[:space:]]) ]]; then
+          if [[ $ALL_CHANGED_FILES == *"go.mod"* ]]; then
             eco="go"
-          elif [[ $ALL_CHANGED_FILES =~ (^|[[:space:]])requirements\.txt($|[[:space:]]) || \
-                  $ALL_CHANGED_FILES =~ (^|[[:space:]])pyproject\.toml($|[[:space:]]) || \
-                  $ALL_CHANGED_FILES =~ (^|[[:space:]])setup\.cfg($|[[:space:]]) || \
-                  $ALL_CHANGED_FILES =~ (^|[[:space:]])poetry\.lock($|[[:space:]]) ]]; then
+          elif [[ $ALL_CHANGED_FILES == *"requirements.txt"* || \
+                  $ALL_CHANGED_FILES == *"pyproject.toml"* || \
+                  $ALL_CHANGED_FILES == *"setup.cfg"* || \
+                  $ALL_CHANGED_FILES == *"poetry.lock"* ]]; then
             eco="python"
           elif [[ $ALL_CHANGED_FILES == *".github/workflows/"* || \
                   $ALL_CHANGED_FILES == *".github/actions/"* ]]; then
@@ -215,6 +181,70 @@ jobs:
           echo "Detected ecosystem: $eco"
           echo "ecosystem=$eco" >> "$GITHUB_OUTPUT"
 
+      - name: Check Release Age
+        id: check_release_age
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        run: |
+          dep="${{ env.DEP_NAME }}"
+          version="${{ env.DEP_VERSION }}"
+          eco="${{ steps.detect_ecosystem.outputs.ecosystem }}"
+          release_date=""
+
+          # Skip if no dependency info available
+          if [[ -z "$dep" || -z "$version" ]]; then
+            echo "No dependency info available. Skipping release age check."
+            echo "release_age_hours=-1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          case "$eco" in
+            github_actions)
+              # Try GitHub Releases first (with and without v prefix)
+              release_date="$(gh api "repos/${dep}/releases/tags/v${version}" \
+                --jq '.published_at' 2>/dev/null)" || true
+              if [[ -z "$release_date" || "$release_date" == "null" ]]; then
+                release_date="$(gh api "repos/${dep}/releases/tags/${version}" \
+                  --jq '.published_at' 2>/dev/null)" || true
+              fi
+              # Fall back to tag creation date
+              if [[ -z "$release_date" || "$release_date" == "null" ]]; then
+                tag_url="$(gh api "repos/${dep}/git/ref/tags/v${version}" \
+                  --jq '.object.url' 2>/dev/null)" || true
+                if [[ -n "$tag_url" && "$tag_url" != "null" ]]; then
+                  release_date="$(gh api "$tag_url" \
+                    --jq '.tagger.date // .author.date' 2>/dev/null)" || true
+                fi
+              fi
+              ;;
+            go)
+              release_date="$(curl -sL \
+                "https://proxy.golang.org/${dep}/@v/v${version}.info" \
+                | jq -r '.Time' 2>/dev/null)" || true
+              ;;
+            python)
+              release_date="$(curl -sL \
+                "https://pypi.org/pypi/${dep}/${version}/json" \
+                | jq -r '.urls[0].upload_time_iso_8601 // empty' 2>/dev/null)" || true
+              ;;
+          esac
+
+          if [[ -n "$release_date" && "$release_date" != "null" ]]; then
+            release_epoch="$(date -d "$release_date" +%s 2>/dev/null)" || true
+            now_epoch="$(date +%s)"
+            if [[ -n "$release_epoch" ]]; then
+              age_hours=$(( (now_epoch - release_epoch) / 3600 ))
+              echo "Release date: $release_date (${age_hours}h ago)"
+              echo "release_age_hours=$age_hours" >> "$GITHUB_OUTPUT"
+            else
+              echo "Could not parse release date: $release_date"
+              echo "release_age_hours=-1" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "Release date not available for $dep v$version ($eco)"
+            echo "release_age_hours=-1" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Search GitHub for Dependency Usage
         id: check_popularity
         env:
@@ -226,7 +256,7 @@ jobs:
 
           case "$eco" in
             python)
-              echo "Queries for Python dependencies are not consistent enough. Skipping"
+              echo "Queries for Python dependencies are not consistent enough. Skipping."
               echo "updates_count=0" >> "$GITHUB_OUTPUT"
               exit 0
               ;;
@@ -249,23 +279,24 @@ jobs:
               ;;
           esac
 
-          echo "Searching GitHub with following query:"
-          echo " - gh search code \"$query\" --json repository --limit 25"
+          echo "Searching GitHub: gh search code \"$query\" --json repository --limit 10"
 
-          # Run search with retry logic
+          result=""
           for i in {1..3}; do
-            result="$(gh search code "$query" --json repository --limit 25 2>/dev/null)" && break
-            echo "Search failed (attempt $i), retrying..."
-            sleep "$((i * 5))"
+            result="$(timeout 30 gh search code "$query" --json repository --limit 10 2>&1)" && break
+            echo "Search attempt $i failed: ${result:0:200}"
+            result=""
+            sleep "$((i * 15))"
           done
 
-          if [[ -z "$result" ]]; then
+          if [[ -z "$result" || "$result" == "[]" ]]; then
             echo "updates_count=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          repo_list="$(jq -r '.[].repository.nameWithOwner' <<<"$result" | sort -u)"
-          count=$(wc -w <<<"$repo_list")
+          repo_list="$(jq -r '.[].repository.nameWithOwner' <<<"$result" | sort -u)" || true
+          count="$(echo "$repo_list" | grep -c . 2>/dev/null)" || true
+          [[ -z "$count" ]] && count=0
 
           echo "Repository Count: $count"
           echo "Repository List: $repo_list"
