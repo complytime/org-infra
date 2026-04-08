@@ -92,6 +92,19 @@ files_to_sync:
       - gemara2oscal
       - vagrant-boxes
 
+  # AI Tooling
+  - source: .specify/memory/constitution.md
+    destination: .specify/memory/constitution.md
+
+  - source: ai/README.md
+    destination: ai/README.md
+
+  - source: .agents/skills/.gitkeep
+    destination: .agents/skills/.gitkeep
+
+  - source: .opencode/command/review_pr.md
+    destination: .opencode/command/review_pr.md
+
   # GitHub Templates
   - source: .github/pull_request_template.md
     destination: .github/pull_request_template.md

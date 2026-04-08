@@ -115,6 +115,11 @@ These files MUST link to org-wide definitions whenever available and MAY be incr
 
 All commit messages MUST follow the **Conventional Commits** [specification](https://www.conventionalcommits.org/).
 
+### Commit Trailers
+
+- **Signed-off-by**: All commits MUST include a `Signed-off-by` trailer with the author's name and email (use `git commit -s`). This certifies the contributor's right to submit the code under the project's license ([Developer Certificate of Origin](https://developercertificate.org/)).
+- **Assisted-by**: Commits that were authored or substantially assisted by an AI tool MUST include an `Assisted-by` trailer identifying the tool and model (e.g., `Assisted-by: OpenCode (claude-opus-4-6)`). This ensures transparency and traceability of AI-assisted contributions.
+
 ## Infrastructure Standards Centralization
 
 Workflows, configurations, and templates SHOULD be centralized in the [org-infra](https://github.com/complytime/org-infra) repository, which serves as the canonical source for organization-wide CI/CD standards. Repository-specific overrides MAY exist but MUST NOT conflict with centralized definitions. Changes to shared infrastructure MUST be proposed in org-infra first.
