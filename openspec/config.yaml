@@ -1,20 +1,62 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Repo: complytime/org-infra — CI/CD infrastructure hub for the ComplyTime organization.
+  Maintains and syncs reusable GitHub Actions workflows, lint configs, pre-commit hooks,
+  and AI tooling to all org repositories via sync-config.yml and sync_org_repositories.py.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Tech stack:
+    - GitHub Actions (YAML workflows) — primary artifact
+    - Python (sync scripts, lint checkers) — tooling layer
+    - pre-commit (yamllint, ruff, conventional-pre-commit) — quality gates
+
+  Workflow naming conventions (enforced by constitution):
+    - Reusable workflows: reusable_<name>.yml (e.g., reusable_publish_oras.yml)
+    - Consumer workflows: ci_<name>.yml (e.g., ci_security.yml)
+    - Org sync: sync_org_repositories.yml
+
+  GitHub Actions security conventions (enforced by constitution):
+    - Workflow-level permissions: none
+    - Job-level permissions: only the minimum required (contents, packages, id-token, attestations)
+    - All action `uses:` pinned to full 40-character commit SHAs with inline `# vX.Y.Z` comment
+    - No mutable tags (e.g., @v4, @main) in action references
+    - Secrets via GitHub Secrets only — never hardcoded
+
+  Supply-chain security pattern (for any publish workflow):
+    - SLSA provenance: actions/attest-build-provenance
+    - SBOM: anchore/sbom-action → actions/attest
+    - Signature verification: cosign verify-attestation
+    - All attestations gated on github.ref_protected
+
+  Spec conventions:
+    - Specs live in specs/<NNN>-<feature-name>/ (legacy SpecKit layout, committed to git)
+    - New specs also tracked in openspec/specs/<capability>/spec.md (OpenSpec layout)
+    - Numbered sequentially: 001, 002, 003, ...
+    - Each spec has: spec.md, plan.md, tasks.md, quickstart.md, checklists/requirements.md
+
+  Commit conventions:
+    - Conventional commits (enforced by pre-commit)
+    - Signed-off-by trailer required
+    - Assisted-by: <Tool> (<model>) trailer required when AI-assisted
+
+  Constitution: .specify/memory/constitution.md — authoritative source for all standards.
+  Key principles: Single Source of Truth, Simplicity & Isolation, Incremental Improvement,
+  Readability First, No Reinventing the Wheel, Composability (Unix philosophy),
+  Convention Over Configuration.
+
+rules:
+  proposal:
+    - Always include a Non-goals section
+    - Reference the upstream issue number if one exists (e.g., "Closes #172")
+    - Keep Why/What/Impact structure; avoid implementation details in the proposal
+  design:
+    - Every decision must include the alternative(s) considered and why they were rejected
+    - Document risks and mitigations explicitly
+  specs:
+    - Use BDD-style WHEN/THEN scenarios for every requirement
+    - No implementation details (languages, SHAs, API calls) in requirements
+    - Each requirement must be independently testable
+  tasks:
+    - Each task must name the exact file to create or modify
+    - Group tasks into phases that match the workflow sections (scaffold, permissions, steps, validation)
+    - Validation tasks (yamllint, SHA-pin check, end-to-end POC) must be the final phase
