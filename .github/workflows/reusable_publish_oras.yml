@@ -5,7 +5,7 @@
 # No Containerfile or Docker build required — designed for data-only artifacts (YAML, JSON, etc.).
 #
 # Downstream note: reusable_sign_and_verify.yml requires the vuln attestation by default.
-# Callers publishing ORAS artifacts must set enable_verify_vuln: false.
+# Callers publishing ORAS artifacts must set verify_vuln: false.
 
 name: Reusable Publish OCI Artifact (ORAS)
 
