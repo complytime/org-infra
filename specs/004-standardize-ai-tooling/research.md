@@ -1,96 +1,120 @@
 # Research: Standardize AI Tooling
 
-**Branch**: `004-standardize-ai-tooling` | **Date**: 2026-04-08
+**Branch**: `004-standardize-ai-tooling` | **Date**: 2026-04-09 (updated)
 
 ## R1: Constitution Location
 
-**Decision**: Root-level `constitution.md`
+**Decision**: `.specify/memory/constitution.md` (SpecKit's standard path)
 
-**Rationale**: The constitution is the organizational governance document — not AI-specific. Placing it at root makes it maximally discoverable (alongside README.md, CONTRIBUTING.md, etc.) and avoids coupling to any framework directory. Both OpenSpec and SpecKit discover it by convention at this well-known path.
+**Rationale**: The constitution is project-specific content committed to the repository and consumed by all spec frameworks at this well-known path. SpecKit hardcodes this path in its commands. Moving it to root was attempted (T003) and reverted — it broke SpecKit's references without functional benefit. OpenSpec discovers the constitution at this path by convention. The file is project-owned, not framework-owned.
 
 **Alternatives considered**:
-- `ai/constitution.md` — neutral but implies the constitution is AI-specific; it governs all development
-- `.specify/memory/constitution.md` — current location; creates coupling between OpenSpec and SpecKit's directory convention
-- `.project/constitution.md` — adds a new non-standard directory
-
-**Migration**: The existing constitution at `.specify/memory/constitution.md` will be moved to `constitution.md` at root. The `.specify/memory/` path will be gitignored as part of the framework territory.
+- Root-level `constitution.md` — initially chosen, reverted. Breaks SpecKit hardcoded references. No discoverability improvement since `ai/README.md` links to the canonical path.
+- `ai/constitution.md` — implies constitution is AI-specific; it governs all development
+- `.project/constitution.md` — adds a non-standard directory
 
 ## R2: Project-Specific Command Location
 
 **Decision**: `.opencode/command/` with selective gitignore patterns
 
-**Rationale**: OpenCode auto-discovers commands from `.opencode/command/`. Placing project-specific commands there ensures zero-configuration discovery. Framework commands (speckit.\*, opsx-\*) are excluded via gitignore patterns, while project-specific commands (like `review_pr.md`) are committed.
+**Rationale**: OpenCode auto-discovers commands from `.opencode/command/`. Framework commands (speckit.\*, opsx-\*) are excluded via gitignore patterns, while project-specific commands (like `review_pr.md`) are committed. This achieves zero-configuration discovery for project commands while keeping framework-managed commands out of version control.
 
-**Alternatives considered**:
-- `ai/commands/` — tool-neutral but OpenCode can't auto-discover commands from non-standard directories
-- Symlinks from `ai/commands/` to `.opencode/command/` — fragile, platform-dependent
-- Commit all commands — creates maintenance burden when framework updates
-
-**Gitignore pattern**:
+**Gitignore patterns**:
 ```
 .opencode/command/speckit.*
 .opencode/command/opsx-*
 ```
-This excludes framework commands by name prefix while allowing project-specific commands.
+
+**Alternatives considered**:
+- `ai/commands/` — tool-neutral but OpenCode cannot auto-discover from non-standard paths
+- Commit all commands — creates maintenance burden when framework updates
+- Symlinks — fragile, platform-dependent
 
 ## R3: Skills Directory Structure
 
-**Decision**: `ai/skills/` with `.gitkeep` and documentation in `ai/README.md`
+**Decision**: `.agents/skills/` with `.gitkeep` (agent-agnostic discovery path)
 
-**Rationale**: Skills are currently tool-agnostic concept (specialized instruction sets). Placing the structure in `ai/` keeps it neutral. The `.gitkeep` ensures the directory is preserved in git. The documentation in `ai/README.md` explains how to create skills without shipping any initially.
+**Rationale**: OpenCode discovers skills from `.agents/skills/`, `.opencode/skills/`, and `.claude/skills/` (project-local) or their global equivalents. The committed, agent-agnostic path is `.agents/skills/`. This is discoverable by OpenCode and other compatible tools without coupling to any specific agent directory. Skills placed elsewhere (e.g., `ai/skills/`) are not loaded by OpenCode.
 
 **Alternatives considered**:
-- `.opencode/skills/` — OpenCode-specific; wouldn't be discoverable by other tools
-- No directory at all — user explicitly requested the structure be created
+- `ai/skills/` — initially chosen (T001), reverted. Not in OpenCode's discovery paths. Skills would not be auto-loaded.
+- `.opencode/skills/` — OpenCode-specific; less discoverable by other tools
+- No directory at all — user requested the structure be created for organic growth
 
 ## R4: Documentation Strategy
 
-**Decision**: Single `ai/README.md` covering setup, commands, skills, and multi-tool guidance
+**Decision**: Single `docs/AI_TOOLING.md` covering setup, commands, skills, and multi-tool guidance
 
-**Rationale**: The user requested "clear, short, and objective documentation for users so they can quickly read and understand how to take the best of AI tools." A single README in the `ai/` directory serves as the entry point. It covers all audience levels — from first-time contributors to maintainers creating new commands and skills.
+**Rationale**: A single README serves as the entry point for all AI tooling. Covers all audience levels: first-time contributors (getting started), regular users (command usage), and maintainers (creating commands and skills). Target: under 3 minutes to read.
 
 **Alternatives considered**:
 - Multiple docs (SETUP.md, SKILLS.md, COMMANDS.md) — splits information, harder to discover
-- Root-level AI_TOOLING.md — clutters root with another file
-- Only inline comments in files — insufficient for onboarding
+- Root-level AI_TOOLING.md — clutters root alongside README.md
+- Dedicated `ai/` directory — adds a directory for a single file when `docs/` already exists
+- Only inline comments — insufficient for onboarding
 
 ## R5: Review PR Command Design
 
-**Decision**: Single-pass review command in `.opencode/command/review_pr.md` inspired by unbound-force's review-council but simplified
+**Decision**: Single-pass, token-efficient review command with CI-aware triage and fix-branch capability
 
-**Rationale**: The unbound-force reference uses a multi-agent review council (5+ sub-agents, parallel execution, 3-iteration fix loops). This is too complex for the initial minimalist approach. A single-pass review command that covers alignment checking, security review, and constitution compliance provides the core value without the orchestration complexity.
-
-**Key capabilities**:
-1. Accepts PR number as argument
-2. Fetches PR metadata and diff via `gh` CLI
-3. Locates associated specification in `specs/` (if exists)
-4. Checks alignment between PR intent/spec and code changes
-5. Reviews for security issues (non-sanitized inputs, unexpected workflows, injection risks)
-6. Checks constitution compliance (coding standards, naming, testing)
-7. Outputs structured findings with severity levels
+**Rationale**: A 9-step flow that delegates deterministic checks (lint, tests) to local tools and CI before applying AI judgment. Key capabilities: (1) CI failure causality determination (PR-caused vs. pre-existing), (2) local tool pre-flight, (3) AI-only review for alignment/security/compliance, (4) fix-branch for pre-existing failures, (5) in-line PR comments with mandatory human confirmation.
 
 **Alternatives considered**:
-- Multi-agent review council (unbound-force style) — too complex for initial adoption
-- Minimal linting-only review — doesn't address alignment or security per user request
-- External review tool integration — adds dependencies, contradicts "do not reinvent the wheel" when OpenCode can do this natively
+- Multi-agent review council — too complex for initial adoption
+- Minimal linting-only review — does not address alignment or security
+- External review tool integration — adds dependencies unnecessarily
 
 ## R6: Agent Context File Strategy
 
-**Decision**: No committed agent context file initially. CLAUDE.md is gitignored (local-only).
+**Decision**: AGENTS.md committed (auto-derived), CLAUDE.md gitignored (local-only)
 
-**Rationale**: The constitution at root-level provides organizational standards. The `ai/README.md` provides tooling documentation. Tool-specific agent context files (CLAUDE.md for Claude Code, future OpenCode equivalents) are generated locally by each contributor's tool setup. This avoids committing tool-specific files while keeping the essential project-specific content (constitution) tool-neutral.
+**Rationale**: AGENTS.md provides repository-specific instructions derived from the constitution and feature plans via `update-agent-context.sh`. It is tool-neutral and committed. CLAUDE.md is Claude-specific and maintained locally by contributors who use Claude Code. This keeps committed content tool-neutral while allowing tool-specific local context.
 
 **Alternatives considered**:
-- `AGENTS.md` at root (unbound-force pattern) — adds complexity; the constitution already serves this purpose for org-infra's scope
-- Auto-generated CLAUDE.md committed — tool-specific, contradicts the "only commit tool-neutral content" principle
+- No committed agent context — insufficient; AGENTS.md provides essential repo structure and constraints for AI agents
+- CLAUDE.md committed — tool-specific, contradicts the "only commit tool-neutral content" principle
 
 ## R7: Sync Strategy for Organization Replication
 
-**Decision**: Add `constitution.md`, `ai/` directory, `.gitignore`, and `.opencode/command/review_pr.md` to `sync-config.yml`
+**Decision**: Add AI tooling files to `sync-config.yml` for distribution via existing sync mechanism
 
-**Rationale**: The existing sync mechanism in org-infra distributes configuration files across org repositories. Adding the AI tooling files to this configuration enables automatic replication. Each target repo gets the same constitution, documentation, command, and gitignore without manual setup.
+**Rationale**: The sync mechanism distributes configuration files across org repositories. Adding the AI tooling files enables automatic replication without manual setup in target repos.
+
+**Synced files**:
+- `.specify/memory/constitution.md` — governance standards
+- `docs/AI_TOOLING.md` — AI tooling documentation
+- `.agents/skills/.gitkeep` — skill directory structure
+- `.opencode/command/review_pr.md` — PR review command
 
 **Considerations**:
-- Constitution may need per-repo increments (the constitution itself allows this)
-- Some repos may need different review_pr behavior — the synced version serves as a baseline
-- The `.gitignore` patterns may need per-repo adjustments for non-standard setups
+- Constitution allows per-repo increments (tighten SHOULD → MUST, never relax MUST)
+- Review command serves as baseline; repos may add repo-specific commands
+- `.gitignore` patterns may need per-repo adjustments for non-standard setups
+
+## R8: Dual-Directory Spec Model
+
+**Decision**: `specs/` for SpecKit, `openspec/` for OpenSpec — both coexist with coordinated sequential numbering
+
+**Rationale**: Each framework uses its native output directory. Cross-referencing via shared naming conventions (sequential numbering, descriptive short names) bridges history across directories. Each framework reads from the other's directory when it needs historical context (e.g., to assign the next sequential number or review prior decisions).
+
+**Numbering coordination**: Branch-based. Each feature branch picks the next available number by scanning both directories at creation time. Collisions (from concurrent branches picking the same number) are detected at PR merge and resolved by renumbering the later-merged feature.
+
+**Spec format**: Framework-native. Each framework uses its own template without custom structural enforcement. Cross-directory reading relies on specs being human-readable as-is.
+
+**Migration**: No migration. Existing SpecKit specs (001-004) remain in `specs/`. New OpenSpec features go to `openspec/`. Unified sequential numbering preserves chronological continuity.
+
+**Alternatives considered**:
+- Single directory for both — overrides one framework's native convention
+- Mirror/symlink strategy — adds complexity for marginal discoverability benefit
+- Centralized registry for numbering — unnecessary overhead; branch-based coordination is sufficient
+- Standardized template across frameworks — over-constrains frameworks, adds maintenance burden
+
+## R9: Cross-Framework Portability
+
+**Decision**: Spec-level portability only
+
+**Rationale**: The spec file (in each framework's output directory) is the shared contract between frameworks. Plans and tasks are framework-specific but human-readable. A contributor using a different framework than the one that started the feature can read the spec and restart their own framework's planning workflow. Seamless mid-feature handoff is not guaranteed — this avoids coupling the two frameworks' internal formats.
+
+**Alternatives considered**:
+- Full portability (identical plan/task formats) — impractical; couples framework internals
+- No portability (each feature owned by one framework) — too restrictive; spec-level sharing is valuable

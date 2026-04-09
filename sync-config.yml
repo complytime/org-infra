@@ -96,8 +96,8 @@ files_to_sync:
   - source: .specify/memory/constitution.md
     destination: .specify/memory/constitution.md
 
-  - source: ai/README.md
-    destination: ai/README.md
+  - source: docs/AI_TOOLING.md
+    destination: docs/AI_TOOLING.md
 
   - source: .agents/skills/.gitkeep
     destination: .agents/skills/.gitkeep

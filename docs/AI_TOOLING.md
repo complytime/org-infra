@@ -109,22 +109,32 @@ Skills provide domain knowledge the agent loads as context when activated. Unlik
 | File | Purpose |
 |------|---------|
 | `.specify/memory/constitution.md` | Organizational governance and coding standards |
-| `ai/README.md` | This file — AI tooling documentation |
+| `docs/AI_TOOLING.md` | This file — AI tooling documentation |
 | `.agents/skills/` | Directory for AI skills — agent-agnostic, auto-discovered by OpenCode |
 | `.opencode/command/review_pr.md` | PR review command |
-| `specs/` | Feature specifications (managed by OpenSpec/SpecKit) |
+| `specs/` | Feature specifications — SpecKit output |
+| `openspec/` | Feature specifications — OpenSpec output |
 
 ## Specifications
 
-Features are managed via spec-driven development. Both OpenSpec and SpecKit are agent-agnostic and output specifications to the `specs/` directory using sequential numbering:
+Features are managed via spec-driven development. SpecKit and OpenSpec use separate output directories with coordinated sequential numbering:
 
 ```
-specs/
+specs/                        # SpecKit output
 ├── 001-first-feature/
 │   └── spec.md
 ├── 002-second-feature/
 │   └── spec.md
 └── ...
+
+openspec/                     # OpenSpec output
+├── 005-next-feature/
+│   └── spec.md
+└── ...
 ```
+
+Sequential numbers are coordinated across both directories. The next feature (in either directory) uses the next available number by scanning both. If `specs/004-*` is the highest, the next feature is `005-*` regardless of which framework creates it.
+
+Review both directories for a complete chronological timeline of all features.
 
 Use `/speckit.specify` (or the equivalent OpenSpec command) to create a new feature specification.

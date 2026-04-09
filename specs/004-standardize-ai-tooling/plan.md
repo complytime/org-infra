@@ -1,49 +1,42 @@
 # Implementation Plan: Standardize AI Tooling
 
-**Branch**: `004-standardize-ai-tooling` | **Date**: 2026-04-08 | **Spec**: [spec.md](spec.md)
+**Branch**: `004-standardize-ai-tooling` | **Date**: 2026-04-09 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `/specs/004-standardize-ai-tooling/spec.md`
 
 ## Summary
 
-Establish a minimalist, tool-agnostic AI tooling standardization for the org-infra repository. The implementation keeps the constitution at its canonical SpecKit path (`.specify/memory/constitution.md`), creates a project-specific PR review command, sets up an empty skills directory at `.agents/skills/` (agent-agnostic discovery path, supported by OpenCode and other compatible tools), adds clear documentation, and enforces commit/ignore boundaries via a root `.gitignore`. The approach is designed to be replicated across all organization repositories through the existing sync mechanism.
-
-**Key decisions** (from [research.md](research.md)):
-- Constitution at `.specify/memory/constitution.md` (SpecKit standard path, consumed by all frameworks)
-- Project-specific commands in `.opencode/command/` with selective gitignore
-- Single `ai/README.md` for all documentation (setup, commands, skills)
-- Single-pass `review_pr` command (simplified from unbound-force's multi-agent council)
-- No committed agent context files — CLAUDE.md is local-only
+Standardize AI tooling in org-infra so contributors can clone the repository and immediately use AI-assisted development with OpenCode (recommended agent) and OpenSpec or SpecKit (spec-driven frameworks). The implementation creates a minimal set of committed project-specific files — constitution, documentation, PR review command, skills directory, and gitignore — that define the AI tooling contract. Both spec frameworks coexist: SpecKit outputs to `specs/` and OpenSpec outputs to `openspec/`, sharing a coordinated sequential numbering scheme and a single constitution at `.specify/memory/constitution.md`. Framework commands, scripts, and templates are tool-managed (gitignored), not committed. The sync mechanism distributes AI tooling files to all organization repositories.
 
 ## Technical Context
 
-**Language/Version**: Markdown (documentation, commands), YAML (gitignore patterns, sync config)
-**Primary Dependencies**: OpenCode (AI agent tool, recommended), OpenSpec (spec framework, recommended — agent-agnostic)
-**Storage**: File-based (Markdown, YAML)
-**Testing**: Manual validation (clone repo, install plugin, verify commands)
-**Target Platform**: Any platform supporting OpenCode; tool-neutral files work with any AI agent
-**Project Type**: Configuration/infrastructure repository
-**Performance Goals**: N/A (static configuration files)
-**Constraints**: Minimalist — only essential files. Tool-neutral where possible. Scalable across org.
-**Scale/Scope**: Proven in org-infra first, then replicated to ~20+ org repos via sync
+**Language/Version**: YAML (GitHub Actions syntax), Markdown, Python 3.x (sync scripts only)
+**Primary Dependencies**: OpenCode (agent), OpenSpec/SpecKit (spec frameworks — plugin-managed), `gh` CLI (PR review command), GitPython + PyYAML + requests (sync script — existing)
+**Storage**: N/A (filesystem-only; no database or persistent storage)
+**Testing**: Manual clone-and-verify (file-based configuration); existing `pytest` for sync script
+**Target Platform**: GitHub (CI/CD), local development environments (Linux, macOS)
+**Project Type**: Infrastructure/configuration repository
+**Performance Goals**: N/A (no runtime service; SC-001 targets <5 min onboarding)
+**Constraints**: sync-config.yml governs distribution scope; constitution is the authoritative reference for all standards
+**Scale/Scope**: Organization-wide (all ComplyTime repositories)
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-| Principle | Status | Notes |
-|-----------|--------|-------|
-| I. Single Source of Truth | PASS | Constitution at `.specify/memory/constitution.md` is the centralized reference. No duplication. |
-| II. Simplicity & Isolation | PASS | Each file has one purpose. Only essential files included. |
-| III. Incremental Improvement | PASS | Single-concern feature branch. |
-| IV. Readability First | PASS | Documentation must be clear, short, objective. Command uses explicit naming. |
-| V. Do Not Reinvent the Wheel | PASS | Leverages OpenCode/OpenSpec, existing sync mechanism, `gh` CLI for PR review. |
-| VI. Composability | PASS | Commands are modular. Constitution is independent of commands. |
-| VII. Convention Over Configuration | PASS | Standard directories, sensible defaults, minimal setup. |
-| Repository Structure | PASS | Standard files exist. New files follow established conventions. |
-| Contribution Workflow | PASS | Feature branch, PR-based, conventional commits. |
-| Makefile | N/A | No code-specific commands needed for configuration files. |
+| # | Principle | Status | Assessment |
+|---|-----------|--------|------------|
+| I | Single Source of Truth | PASS | Constitution at `.specify/memory/constitution.md` — single canonical copy consumed by all tools. No duplication. Synced to org repos. |
+| II | Simplicity & Isolation | PASS | Each file has a single responsibility: constitution (standards), gitignore (boundaries), docs/AI_TOOLING.md (AI docs), review_pr.md (PR review), skills/.gitkeep (extensibility placeholder). Documentation lives in `docs/` alongside existing project docs. |
+| III | Incremental Improvement | PASS | Feature is focused on AI tooling standardization. No unrelated changes. |
+| IV | Readability First | PASS | All deliverables are Markdown with explicit naming. Documentation targets <3 min read. Skill and command creation have documented structures. |
+| V | Do Not Reinvent the Wheel | PASS | Uses existing sync mechanism (sync-config.yml), existing frameworks (OpenSpec, SpecKit), existing agent (OpenCode). No custom implementations where established tools exist. |
+| VI | Composability | PASS | Modular files in standard formats (YAML, Markdown). Skills are self-contained in `.agents/skills/<name>/SKILL.md`. Constitution is a standalone document referenced by all tools. |
+| VII | Convention Over Configuration | PASS | OpenCode is the default agent, OpenSpec is the recommended framework. Standard paths (`.agents/skills/`, `.opencode/command/`) follow tool conventions. Contributors only configure if deviating. |
+| — | Repository Structure | PASS | README.md, LICENSE, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, .github/ all present. |
+| — | Commit Standards | PASS | Conventional Commits, Signed-off-by, Assisted-by trailers all required per constitution. |
+| — | Lint/Format | PASS | YAML linted with yamllint (.yamllint.yml), Python linted with ruff (ruff.toml). Feature produces Markdown/YAML — both covered by existing lint. |
 
-**Post-design re-check**: All gates still pass. No violations introduced.
+**Gate result: PASS** — No violations. Proceed to Phase 0.
 
 ## Project Structure
 
@@ -52,116 +45,150 @@ Establish a minimalist, tool-agnostic AI tooling standardization for the org-inf
 ```text
 specs/004-standardize-ai-tooling/
 ├── plan.md              # This file
-├── spec.md              # Feature specification
-├── research.md          # Phase 0 research decisions
-├── data-model.md        # Phase 1 file structure model
-├── quickstart.md        # Phase 1 contributor quick-start guide
-├── checklists/
-│   └── requirements.md  # Specification quality checklist
-└── tasks.md             # Phase 2 output (created by /speckit.tasks)
+├── research.md          # Phase 0 output
+├── data-model.md        # Phase 1 output
+├── quickstart.md        # Phase 1 output
+└── tasks.md             # Phase 2 output (created by /speckit.tasks, NOT by this plan)
 ```
 
 ### Source Code (repository root)
 
 ```text
-# New files (5 total — committed, project-specific)
-# constitution.md stays at .specify/memory/constitution.md (not moved)
-ai/
-└── README.md                       # AI tooling docs: setup, commands, skills, multi-tool guide
-.opencode/
-└── command/
-    └── review_pr.md                # Project-specific PR review command
+# Committed project-specific content
 .agents/
-└── skills/
-    └── .gitkeep                    # Preserves empty skills directory (agent-agnostic path)
-.gitignore                          # Root-level gitignore (new file)
+  skills/
+    .gitkeep                     # Agent-agnostic skill discovery path (empty initially)
 
-# Modified files (1 total)
-sync-config.yml                     # Updated to sync AI tooling files to org repos
+.opencode/
+  command/
+    review_pr.md                 # Project-specific PR review command
 
-# Gitignored (tool-managed, NOT committed)
-.specify/scripts/                   # Framework scripts
-.specify/templates/                 # Framework templates
-.specify/extensions/.cache/         # Extension cache
-.specify/extensions/.backup/        # Extension backups
-.opencode/command/speckit.*         # Framework commands (SpecKit/OpenSpec)
-.opencode/command/opsx-*            # Framework commands (OpenSpec tactical)
-.opencode/node_modules/             # Plugin runtime
-.opencode/package.json              # Plugin declaration
-.opencode/package-lock.json         # Plugin lockfile
-.opencode/bun.lock                  # Plugin lockfile (bun)
-.claude/                            # Claude Code (local-only)
-.cursor/                            # Cursor (local-only)
-CLAUDE.md                           # Claude agent context (local-only)
+.specify/
+  memory/
+    constitution.md              # Single source of truth — org-wide governance
+
+docs/
+  AI_TOOLING.md                  # AI tooling documentation (setup, commands, skills)
+
+specs/                           # SpecKit spec output (existing features 001-004)
+openspec/                        # OpenSpec spec output (created when first OpenSpec feature exists)
+
+.gitignore                       # Enforces committed/gitignored boundary
+sync-config.yml                  # Distributes AI tooling files to org repos
+AGENTS.md                        # Agent context file (auto-derived)
 ```
 
-**Structure Decision**: Minimalist flat structure with 5 new files and 1 modified file. The `ai/` directory serves as the documented home for AI tooling information. Skills live in `.agents/skills/` — an agent-agnostic path discovered by OpenCode and other compatible tools. Project-specific commands live in `.opencode/command/` for auto-discovery by OpenCode. The constitution stays at `.specify/memory/constitution.md` (SpecKit standard path), ensuring compatibility with all spec frameworks.
+**Structure Decision**: No traditional `src/` or `tests/` applies to this feature. All deliverables are configuration/documentation files at known paths within the repository root. The project structure above reflects the dual-directory spec model (`specs/` + `openspec/`) with coordinated sequential numbering, as decided in the spec clarifications.
+
+## Key Design Decisions
+
+### D1: Dual Spec Directory Model
+
+SpecKit outputs to `specs/`, OpenSpec outputs to `openspec/`. Both directories are committed. Sequential numbering is coordinated across both directories — the next feature scans both directories to pick the next available number. Collisions (from concurrent branches) are resolved at PR merge by renumbering the later-merged feature.
+
+**Rationale**: Respects each framework's native directory convention. Cross-referencing via shared naming conventions (sequential numbers, descriptive names) bridges history without coupling the frameworks.
+
+### D2: Constitution at `.specify/memory/constitution.md`
+
+The constitution remains at SpecKit's standard path. This is project-specific content (not framework infrastructure) committed to the repository and consumed by all spec frameworks. OpenSpec discovers it at this well-known path by convention. Moving it would break SpecKit's hardcoded references without benefit.
+
+### D3: Spec-Level Portability Only
+
+The spec file (in each framework's output directory) is the shared contract between frameworks. Plans and tasks are framework-specific but human-readable. Mid-feature handoff between frameworks is not a guaranteed workflow — contributors read the existing spec and restart their own framework's planning workflow.
+
+### D4: Framework-Native Templates
+
+Each framework uses its own spec template without custom structural enforcement. Cross-directory readability relies on specs being human-readable as-is, not on mandated structural alignment.
+
+### D5: No Migration of Existing Specs
+
+Existing SpecKit specs (001-004) remain in `specs/`. New OpenSpec features go to `openspec/`. Unified sequential numbering preserves chronological continuity without file moves.
+
+### D6: Selective Gitignore for Commands
+
+Framework commands (prefixed `speckit.*`, `opsx-*`) are excluded via `.gitignore` patterns. Project-specific commands (e.g., `review_pr.md`) are committed. This allows OpenCode auto-discovery while keeping framework-managed commands out of version control.
+
+### D7: Agent Context Derivation
+
+AGENTS.md is committed and auto-derived from the constitution and feature plans via `update-agent-context.sh`. CLAUDE.md is gitignored (local-only). This keeps the committed agent context tool-neutral.
 
 ## File Details
 
-### 1. `constitution.md` (`.specify/memory/`)
+### 1. Constitution (`.specify/memory/constitution.md`) — EXISTS
 
-The constitution remains at `.specify/memory/constitution.md` — SpecKit's standard path. No move is performed. This file is project-specific content (not framework infrastructure) and is committed to the repository. All spec frameworks (OpenSpec, SpecKit) discover it at this well-known location by convention.
+No changes needed. The constitution is already in place at its canonical location (v1.2.0). All frameworks consume it at this path. Synced to org repos via sync-config.yml.
 
-### 2. `ai/README.md`
+### 2. Gitignore (`.gitignore`) — EXISTS
 
-Clear, short, objective documentation covering:
-- What AI tooling is available and why (2-3 sentences)
-- How to get started with OpenCode and a spec framework (step-by-step, <1 min read)
-- How to get started with other tools (Claude Code, Cursor — brief guidance)
-- How to use the `review_pr` command
-- How to create new skills (directory structure, file format, registration)
-- How to create new project-specific commands
-- Link to the constitution for coding standards
+Already created (T002, completed). Enforces boundaries:
+- Framework infrastructure: `.specify/scripts`, `.specify/templates`
+- Framework commands: `.opencode/command/speckit.*`, `.opencode/command/opsx-*`
+- Plugin artifacts: `.opencode/node_modules/`, `.opencode/package.json`, etc.
+- Tool directories: `.claude/`, `.cursor/`
+- Tool agent context: `CLAUDE.md`
 
-Target: a contributor reads this in under 3 minutes and understands the complete AI tooling setup.
+### 3. Skills Directory (`.agents/skills/.gitkeep`) — EXISTS
 
-### 3. `.agents/skills/.gitkeep`
+The skills directory is at `.agents/skills/` (agent-agnostic discovery path). Confirmed present (T001 verified). The old `ai/skills/.gitkeep` has been removed.
 
-Empty file preserving the skills directory at the agent-agnostic discovery path (`.agents/skills/<name>/SKILL.md`). No skills shipped initially. OpenCode and other compatible agents auto-discover skills from this location — no configuration needed. This path is agent-neutral (not tied to `.opencode/` or `.claude/`), aligning with FR-010 (tool-agnostic content).
+### 4. PR Review Command (`.opencode/command/review_pr.md`) — EXISTS
 
-### 4. `.opencode/command/review_pr.md`
+Already created (T005, completed) with full 9-step flow: fetch metadata, CI triage, local tools, scoped diff, spec alignment, AI-only review, structured output, fix-branch for pre-existing failures, in-line PR comments with human confirmation. Remediation tasks T010-T013 (completed) added FR-012 through FR-015 capabilities.
 
-Token-efficient, project-specific command accepting a PR number as argument. Uses a **tools-first** strategy with CI-aware failure triage:
+**Updates needed**:
+- Step 5 currently searches only `specs/` for associated specifications. Must also search `openspec/` (T005).
+- Step 6c references `constitution.md` at repository root instead of `.specify/memory/constitution.md` (T005a — fixed).
 
-1. Fetches PR metadata (minimal — no full diff upfront) via `gh` CLI
-2. **Fetches CI check results** via `gh pr checks` — classifies each failing check as PR-caused or pre-existing by comparing against the base branch CI status
-3. **Runs local deterministic tools** as pre-flight — detects and executes linters, test runners, and coverage tools available in the project (per constitution Coding Standards: `.golangci.yml`, `ruff`, `yamllint`, `make lint`, `go test`, `pytest`, etc.). Skips checks that CI already ran and passed.
-4. Fetches diff (scoped — skips binary/lock/generated files; processes file-by-file for large PRs)
-5. Searches `specs/` for associated specifications (loads only FRs and User Stories, not full spec)
-6. **AI judgment only** — focuses on what tools and CI cannot check:
-   - **Alignment check**: Intent/spec vs code changes (scope, coverage, drift)
-   - **Security review**: Input sanitization, unexpected workflows, privilege escalation, secrets
-   - **Constitution compliance**: Architectural principles, readability, composability (skips lint/style already covered by tools/CI)
-   - **CI failure analysis**: Maps PR-caused failures to specific changes; identifies pre-existing failures
-7. Outputs structured findings with severity (CRITICAL / HIGH / MEDIUM / LOW), CI status table, and local tool results
-8. **Offers fix-branch for pre-existing CI failures** — creates a separate branch with a proposed fix, commits locally using Conventional Commits, and lets the reviewer inspect and file a PR when ready. Never pushes or files PRs automatically.
-9. **Offers in-line PR comments** — for HIGH+ findings, offers to post in-line comments on the PR via `gh` API. All comments are shown to the user and require explicit human confirmation before posting.
+### 5. AI Documentation (`docs/AI_TOOLING.md`) — EXISTS
 
-Inspired by unbound-force's review-council but simplified to a single-pass command. Optimized for token efficiency by delegating deterministic checks to local tools and CI.
+Moved from `ai/README.md` to `docs/AI_TOOLING.md` to align with existing documentation convention (`docs/` already contains `LOCAL_TESTING.md`, `SYNC_REPOSITORIES_SETUP.md`). Covers getting started, commands, creating commands, creating skills, key files, specifications. Dual-directory model and Key Files table already updated.
 
-### 5. `.gitignore` (root)
+### 6. Sync Configuration (`sync-config.yml`) — EXISTS
 
-Based on the established complyctl pattern, enforcing:
-- Framework infrastructure exclusion (`.specify/scripts`, `.specify/templates`)
-- Framework command exclusion (`speckit.*`, `opsx-*`)
-- Tool-specific directory exclusion (`.claude/`, `.cursor/`)
-- Agent-specific file exclusion (`CLAUDE.md`)
-- Plugin artifact exclusion (`node_modules`, `package.json`, lockfiles)
+AI tooling entries updated: `.specify/memory/constitution.md`, `docs/AI_TOOLING.md`, `.agents/skills/.gitkeep`, `.opencode/command/review_pr.md`.
 
-### 6. `sync-config.yml` (modified)
+### 7. Agent Context (`AGENTS.md`) — EXISTS, UPDATE NEEDED
 
-Add entries to sync AI tooling files to organization repositories:
-- `.specify/memory/constitution.md`
-- `ai/README.md`
-- `.agents/skills/.gitkeep`
-- `.opencode/command/review_pr.md`
-- `.gitignore` (appended or merged, not overwritten)
+Currently references the repository structure. Needs update (T010) to:
+- Add `openspec/` to the directory structure listing
+- Add `.agents/skills/` entry
+- Fix stale `ai/` comment ("skills directory" — skills are at `.agents/skills/`)
 
 ## Design Notes
 
-**Agent context derivation (FR-007)**: The agent context file (AGENTS.md) is derived from the constitution and feature plans via the `update-agent-context.sh` script, which runs during the `/speckit.plan` workflow. This is a workflow-triggered derivation, not a continuous process. The agent context stays in sync because it is regenerated each time a new feature is planned. For repositories without spec-driven workflows, the constitution at `.specify/memory/constitution.md` serves as the direct agent context.
+### Dual-Directory Sequential Numbering
+
+When creating a new feature, the framework must scan both directories to determine the next number:
+
+```
+# Pseudocode for next-number determination
+max_specs = max(number_prefix(d) for d in ls("specs/"))      # e.g., 004
+max_openspec = max(number_prefix(d) for d in ls("openspec/")) # e.g., 0 (empty)
+next_number = max(max_specs, max_openspec) + 1                # → 005
+```
+
+If `openspec/` doesn't exist yet, only `specs/` is scanned. The first OpenSpec feature creates the `openspec/` directory.
+
+### Collision Resolution
+
+Concurrent branches may pick the same number. This is detected at PR merge time:
+1. CI or reviewer notices duplicate number across `specs/` and `openspec/`
+2. The later-merged feature is renumbered (directory rename + branch reference update)
+3. No centralized registry needed — Git merge conflict on directory names serves as the detection mechanism
+
+### Review Command Cross-Directory Search
+
+The `review_pr.md` command (Step 5) must search both `specs/` and `openspec/` for associated specifications:
+```
+# Check both directories for branch-name match
+specs/<branch-name>/spec.md
+openspec/<branch-name>/spec.md
+```
+
+### Agent Context Derivation
+
+The `update-agent-context.sh` script generates AGENTS.md (and optionally CLAUDE.md) from the constitution and feature plans. This runs during `/speckit.plan` workflows. The script is tool-managed (gitignored) — it reads committed content and updates agent context files.
 
 ## Complexity Tracking
 
-No constitution violations detected. No complexity justifications needed.
+No constitution violations detected. No complexity justification needed.

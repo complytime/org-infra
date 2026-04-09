@@ -111,12 +111,14 @@ gh pr diff <PR_NUMBER>
 
 ### 5. Locate Associated Specification
 
-Search the `specs/` directory for a specification that matches this PR:
+Search both the `specs/` and `openspec/` directories for a specification that matches this PR:
 
-- Check if the PR branch name matches a spec directory (e.g., branch `003-feature-name` matches `specs/003-feature-name/`)
+- Check if the PR branch name matches a spec directory in either location:
+  - `specs/<branch-name>/spec.md` (SpecKit output)
+  - `openspec/<branch-name>/spec.md` (OpenSpec output)
 - Check if the PR description references a spec
-- If a spec is found, read only the **Functional Requirements** and **User Stories** sections (not the entire spec) to minimize token usage
-- If no spec is found, note this and use the PR title and description as the intent source
+- If a spec is found in either directory, read only the **Functional Requirements** and **User Stories** sections (not the entire spec) to minimize token usage
+- If no spec is found in either directory, note this and use the PR title and description as the intent source
 
 ### 6. AI Review (Judgment-Based Only)
 
@@ -152,7 +154,7 @@ Examine the diff for security vulnerabilities that linters cannot catch:
 
 #### 6c. Constitution Compliance (AI-only items)
 
-Read `constitution.md` at the repository root. **Only check items that local tools and CI did NOT already verify.** Typical AI-only checks:
+Read `.specify/memory/constitution.md`. **Only check items that local tools and CI did NOT already verify.** Typical AI-only checks:
 
 - **Architectural principles**: Does the code follow Single Responsibility and Isolation (Principle II)?
 - **Incremental improvement**: Does the PR stay focused on a single concern (Principle III)?

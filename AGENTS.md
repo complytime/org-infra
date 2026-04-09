@@ -9,8 +9,10 @@ CI/CD infrastructure hub for ComplyTime. Syncs reusable workflows, lint configs,
 scripts/                 # sync-org-repositories.py (Python, GitPython + PyYAML + requests)
 tests/                   # pytest unit tests for sync script
 compliance/              # Ampel policy definitions (branch protection rules)
-specs/                   # Feature specifications (managed by OpenSpec/SpecKit)
-ai/                      # AI tooling documentation and skills directory
+specs/                   # SpecKit feature specifications
+openspec/                # OpenSpec feature specifications
+docs/                    # Project documentation (includes AI_TOOLING.md)
+.agents/skills/          # Agent-agnostic AI skills (auto-discovered by OpenCode)
 .opencode/command/       # Project-specific AI commands (review_pr.md)
 sync-config.yml          # Defines which files sync to org repos — check before modifying any config
 .specify/memory/constitution.md  # All coding standards and governance (single source of truth)
@@ -33,7 +35,7 @@ make clean           # Remove __pycache__ and .pyc
 - **Python**: Lint with `ruff` (`ruff.toml`). No `go.mod` — this repo is Python + YAML, not Go (Go configs are sync templates for other repos).
 - **YAML**: Lint with `yamllint` (`.yamllint.yml`). Line length follows yamllint config, not the 99-char code rule.
 - **Standards**: All coding standards are in `.specify/memory/constitution.md`. Do not duplicate them.
-- **AI tooling**: Setup, commands, and skill creation documented in `ai/README.md`.
+- **AI tooling**: Setup, commands, and skill creation documented in `docs/AI_TOOLING.md`.
 
 ## Commits
 
@@ -51,3 +53,10 @@ Replace `model-name` with the actual model identifier (e.g., `claude-opus-4-6`).
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
+
+## Active Technologies
+- YAML (GitHub Actions syntax), Markdown, Python 3.x (sync scripts only) + OpenCode (agent), OpenSpec/SpecKit (spec frameworks — plugin-managed), `gh` CLI (PR review command), GitPython + PyYAML + requests (sync script — existing) (004-standardize-ai-tooling)
+- N/A (filesystem-only; no database or persistent storage) (004-standardize-ai-tooling)
+
+## Recent Changes
+- 004-standardize-ai-tooling: Added YAML (GitHub Actions syntax), Markdown, Python 3.x (sync scripts only) + OpenCode (agent), OpenSpec/SpecKit (spec frameworks — plugin-managed), `gh` CLI (PR review command), GitPython + PyYAML + requests (sync script — existing)
