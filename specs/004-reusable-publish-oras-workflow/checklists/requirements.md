@@ -42,4 +42,4 @@
 ## Notes
 
 - All items pass. Implementation complete; awaiting PR merge.
-- `reusable_sign_and_verify.yml` integration blocked on issue #173 (`enable_verify_vuln` opt-out).
+- `reusable_sign_and_verify.yml` integration blocked on issue #173 (`verify_vuln` opt-out).

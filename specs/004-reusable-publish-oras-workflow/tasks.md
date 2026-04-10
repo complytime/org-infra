@@ -39,10 +39,10 @@ exits `0`.
 
 ### Task 4 — Document downstream issue: vuln verification ✅
 
-Issue [#173](https://github.com/complytime/org-infra/issues/173) is open. The `enable_verify_vuln`
+Issue [#173](https://github.com/complytime/org-infra/issues/173) is open. The `verify_vuln`
 boolean input pattern was **POC-validated** — added to `reusable_sign_and_verify.yml` in the test org
 ([sonupreetam/org-infra-tests](https://github.com/sonupreetam/org-infra-tests)) and confirmed working
-with `enable_verify_vuln: false` in the caller workflow.
+with `verify_vuln: false` in the caller workflow.
 
 ---
 
@@ -76,4 +76,4 @@ Before opening the PR to `complytime/org-infra`:
 - [x] End-to-end POC green: [run #24032400693](https://github.com/sonupreetam/image-publish-test/actions/runs/24032400693)
 - [x] Issue #172 updated with media type corrections and POC result
 - [ ] PR description references issue #172 with `Closes #172`
-- [ ] PR description notes companion issue #173 (`enable_verify_vuln`) is a separate PR
+- [ ] PR description notes companion issue #173 (`verify_vuln`) is a separate PR
