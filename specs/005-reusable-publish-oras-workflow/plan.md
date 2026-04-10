@@ -1,7 +1,7 @@
 # Implementation Plan: Reusable ORAS OCI Artifact Publish Workflow
 
 **Branch**: `feat/reusable-publish-oras` | **Date**: 2026-04-06 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `/specs/004-reusable-publish-oras-workflow/spec.md`
+**Input**: Feature specification from `/specs/005-reusable-publish-oras-workflow/spec.md`
 **Resolves**: [complytime/org-infra#172](https://github.com/complytime/org-infra/issues/172)
 
 ## Summary
@@ -52,7 +52,7 @@ generates and attaches an SPDX SBOM from a directory scan.
 ## Project Structure
 
 ```text
-specs/004-reusable-publish-oras-workflow/
+specs/005-reusable-publish-oras-workflow/
 ├── spec.md     # Feature specification
 ├── plan.md     # This file
 └── tasks.md    # Actionable task list

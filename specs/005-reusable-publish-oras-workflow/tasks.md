@@ -72,7 +72,7 @@ Before opening the PR to `complytime/org-infra`:
 - [x] SBOM step uses `path:` input (not `image:`)
 - [x] All env vars used in `run:` steps are set via `env:` block (no inline `${{ }}` interpolation)
 - [x] `yamllint` exits `0`; `actionlint` exits `0`
-- [x] Spec and plan files exist under `specs/004-reusable-publish-oras-workflow/`
+- [x] Spec and plan files exist under `specs/005-reusable-publish-oras-workflow/`
 - [x] End-to-end POC green: [run #24032400693](https://github.com/sonupreetam/image-publish-test/actions/runs/24032400693)
 - [x] Issue #172 updated with media type corrections and POC result
 - [ ] PR description references issue #172 with `Closes #172`
