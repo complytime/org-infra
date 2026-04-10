@@ -110,13 +110,13 @@ After the workflow runs on a protected ref:
 ## Downstream: `reusable_sign_and_verify.yml`
 
 **Important**: `reusable_sign_and_verify.yml` requires a vulnerability attestation by default.
-ORAS artifacts have no equivalent vuln scan. Callers must set `enable_verify_vuln: false` until
+ORAS artifacts have no equivalent vuln scan. Callers must set `verify_vuln: false` until
 issue [#173](https://github.com/complytime/org-infra/issues/173) is resolved:
 
 ```yaml
 uses: complytime/org-infra/.github/workflows/reusable_sign_and_verify.yml@main
 with:
-  enable_verify_vuln: false
+  verify_vuln: false
   digest: ${{ needs.publish-bundle.outputs.digest }}
   image: ${{ needs.publish-bundle.outputs.image }}
 ```

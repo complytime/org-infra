@@ -195,7 +195,7 @@ required to match anything in complyctl's source.
 ORAS artifact digest because no `vuln` attestation is attached by `reusable_publish_oras.yml`.
 
 **Resolution**: Issue [#173](https://github.com/complytime/org-infra/issues/173) — add an
-`enable_verify_vuln` boolean input (default `true`) to `reusable_sign_and_verify.yml` so callers
+`verify_vuln` boolean input (default `true`) to `reusable_sign_and_verify.yml` so callers
 publishing ORAS artifacts can opt out. This is a companion change tracked separately.
 
 ## Downstream Impact: `docker/build-push-action` buildx SPDX
