@@ -1,8 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# workflow_dispatch: pick the branch in the "Use workflow from" dropdown (or `gh workflow run --ref <branch>`).
-# That branch supplies the workflow file and, by default, the commit you check out. Optional `checkout_ref`
-# overrides the checkout only (e.g. same workflow on main, code from another ref—rare).
+# --------------------------------------------------------------------------
+# Creates a GitHub Release from a semver tag. If the tag does not exist yet,
+# the workflow creates it on the selected branch before publishing.
+#
+# Usage:
+#   - From the Actions tab: select this workflow, choose the branch, enter the tag.
+#   - From the CLI: gh workflow run release.yaml --ref main -f tag=v1.0.0
+#
+# Consumer guidance:
+#   Downstream repos can pin reusable workflows to a release tag:
+#     uses: complytime/org-infra/.github/workflows/reusable_ci.yml@v1.0.0
+#   Or pin to the exact commit SHA of the release for maximum reproducibility:
+#     uses: complytime/org-infra/.github/workflows/reusable_ci.yml@<sha>
+# --------------------------------------------------------------------------
 
 name: Release
 
@@ -10,53 +21,61 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., v1.0.0); must already exist on the repo'
+        description: 'Semver tag to release (e.g., v1.0.0)'
         required: true
         type: string
-      checkout_ref:
-        description: 'Optional ref to check out (branch name, tag, or refs/heads/…). Leave empty to use the branch you selected when starting the run.'
-        required: false
-        type: string
-        default: ''
 
 permissions: {}
 
 jobs:
   release:
-    name: Release
+    name: Publish Release
     runs-on: ubuntu-latest
-
-    env:
-      CHECKOUT_REF: ${{ github.event.inputs.checkout_ref != '' && github.event.inputs.checkout_ref || github.ref }}
-
-    permissions:
-      contents: write # To push artifacts to the release
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ env.CHECKOUT_REF }}
-          fetch-depth: 0
-
-  release-notes:
-    needs: release
-    runs-on: ubuntu-latest
-
-    env:
-      CHECKOUT_REF: ${{ github.event.inputs.checkout_ref != '' && github.event.inputs.checkout_ref || github.ref }}
 
     permissions:
       contents: write
+
     steps:
-      - name: Check out code
+      - name: Validate tag format
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Tag must match semver format: v<major>.<minor>.<patch> or v<major>.<minor>.<patch>-rc.<n>"
+            exit 1
+          fi
+
+      - name: Verify release is from default branch
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [[ "${REF}" != "refs/heads/main" ]]; then
+            echo "::error::Releases MUST be created from the main branch. Current ref: ${REF}"
+            exit 1
+          fi
+
+      - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ env.CHECKOUT_REF }}
           fetch-depth: 0
+
+      - name: Create tag if it does not exist
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists — skipping creation."
+          else
+            git tag "${TAG}"
+            git push origin "${TAG}"
+            echo "Created and pushed tag ${TAG}."
+          fi
 
       - name: Publish GitHub release
         uses: release-drafter/release-drafter@139054aeaa9adc52ab36ddf67437541f039b88e2 # v7.1.1
         with:
           publish: true
-          tag: ${{ github.event.inputs.tag }}
+          tag: ${{ inputs.tag }}
+          prerelease: ${{ contains(inputs.tag, '-rc.') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
