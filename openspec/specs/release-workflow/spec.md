@@ -8,15 +8,11 @@ that specifies the semver version to release.
 - **WHEN** a maintainer triggers the release workflow with tag `v1.0.0`
 - **THEN** the workflow proceeds to tag creation and release publishing
 
-#### Scenario: Release candidate tag provided
-- **WHEN** a maintainer triggers the release workflow with tag `v1.0.0-rc.1`
-- **THEN** the workflow proceeds and the release is marked as a prerelease
-
 ---
 
 ### Requirement: Tag format validation
 The release workflow SHALL validate that the provided tag matches semver format
-(`v<major>.<minor>.<patch>` or `v<major>.<minor>.<patch>-rc.<n>`) and reject invalid tags.
+(`v<major>.<minor>.<patch>`) and reject invalid tags.
 
 #### Scenario: Invalid tag rejected
 - **WHEN** a maintainer triggers the release workflow with tag `1.0.0` (missing `v` prefix)
@@ -39,20 +35,6 @@ tagging untested code from feature branches.
 #### Scenario: Release from feature branch rejected
 - **WHEN** the release workflow is triggered from a feature branch (e.g., `refs/heads/feat/foo`)
 - **THEN** the workflow fails with an error stating releases MUST be created from main
-
----
-
-### Requirement: Dynamic prerelease detection
-The release workflow SHALL mark releases as prerelease only when the tag contains a release
-candidate suffix (`-rc.<n>`). Stable tags SHALL NOT be marked as prerelease.
-
-#### Scenario: Stable release not marked prerelease
-- **WHEN** the tag is `v1.0.0` (no RC suffix)
-- **THEN** the published GitHub Release is NOT marked as a prerelease
-
-#### Scenario: RC release marked prerelease
-- **WHEN** the tag is `v1.0.0-rc.1`
-- **THEN** the published GitHub Release IS marked as a prerelease
 
 ---
 

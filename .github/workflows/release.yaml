@@ -40,8 +40,8 @@ jobs:
         env:
           TAG: ${{ inputs.tag }}
         run: |
-          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
-            echo "::error::Tag must match semver format: v<major>.<minor>.<patch> or v<major>.<minor>.<patch>-rc.<n>"
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag must match semver format: v<major>.<minor>.<patch>"
             exit 1
           fi
 
@@ -76,6 +76,5 @@ jobs:
         with:
           publish: true
           tag: ${{ inputs.tag }}
-          prerelease: ${{ contains(inputs.tag, '-rc.') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -61,7 +61,7 @@ version is correct.
 - **Tag already exists**: If the tag already exists when the release workflow runs, the tag creation
   step is skipped and the existing tag is used for the release.
 - **Tag format validation**: The workflow rejects tags that do not match semver format
-  (`v<major>.<minor>.<patch>` or `v<major>.<minor>.<patch>-rc.<n>`).
+  (`v<major>.<minor>.<patch>`).
 - **No PRs since last release**: Release drafter produces a "no changes" message rather than an
   empty changelog.
 - **Unlabeled PRs**: PRs without labels are categorized by the autolabeler based on conventional
@@ -74,22 +74,19 @@ version is correct.
 The release process must:
 
 1. **Provide a manual release trigger**: Via `workflow_dispatch` with a required semver tag input.
-2. **Validate tag format**: Reject tags not matching `v<major>.<minor>.<patch>` or
-   `v<major>.<minor>.<patch>-rc.<n>`.
+2. **Validate tag format**: Reject tags not matching `v<major>.<minor>.<patch>`.
 3. **Enforce release from default branch**: Reject triggers from any ref other than `refs/heads/main`.
 4. **Create the tag if absent**: Tag the current branch HEAD and push to origin.
-4. **Publish a GitHub Release**: With auto-generated changelog categorized by PR labels.
-6. **Support prerelease tags**: Release candidates use `-rc.<n>` suffix and are dynamically marked as
-   prerelease based on tag format. Stable tags (e.g., `v1.0.0`) are not marked prerelease.
-7. **Auto-label PRs**: Map conventional commit prefixes and file paths to changelog categories.
-8. **Resolve version from labels**: Major/minor/patch version bumps determined by PR labels, defaulting
+5. **Publish a GitHub Release**: With auto-generated changelog categorized by PR labels.
+6. **Auto-label PRs**: Map conventional commit prefixes and file paths to changelog categories.
+7. **Resolve version from labels**: Major/minor/patch version bumps determined by PR labels, defaulting
    to patch.
-9. **Provide changelog categories**: Breaking changes, Workflows, Compliance, Sync, Features, Fixes,
+8. **Provide changelog categories**: Breaking changes, Workflows, Compliance, Sync, Features, Fixes,
    Performance, Maintenance.
-10. **Exclude bot contributions**: Dependabot and github-actions bot PRs excluded from changelog.
-11. **Support dry-run preview**: A separate workflow previews release notes without creating a release.
-12. **Use pinned action SHAs**: All `uses:` references pinned to full commit SHA with version comment.
-13. **Follow least-privilege permissions**: `contents: write` only on the release job; preview is
+9. **Exclude bot contributions**: Dependabot and github-actions bot PRs excluded from changelog.
+10. **Support dry-run preview**: A separate workflow previews release notes without creating a release.
+11. **Use pinned action SHAs**: All `uses:` references pinned to full commit SHA with version comment.
+12. **Follow least-privilege permissions**: `contents: write` only on the release job; preview is
     read-only.
 
 ## Success Metrics

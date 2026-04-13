@@ -35,7 +35,7 @@ to semver categories.
 | VI. Composability | PASS | Release workflow is independent; does not couple to other workflows |
 | VII. Convention Over Configuration | PASS | Semver convention; conventional commit mapping via autolabeler |
 | YAML Naming Conventions | NOTE | `release.yaml` does not follow `reusable_*` or `ci_*` prefix — intentional, as it is neither reusable nor a CI workflow |
-| YAML Security | PASS | Workflow-level permissions none; job-level minimal grant; all user inputs routed through `env:` blocks (no `${{ }}` interpolation in `run:` blocks); release restricted to `main` branch |
+| YAML Security | PASS | Workflow-level permissions none; job-level minimal grant; all user inputs routed through `env:` blocks; release restricted to `main` branch |
 | YAML Formatting | PASS | Header comment; 2-space indent; yamllint clean |
 
 **Gate result**: PASS — no violations detected.

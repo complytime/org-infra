@@ -19,9 +19,6 @@ Trigger the release workflow with a semver tag:
 ```bash
 # From the CLI
 gh workflow run release.yaml -f tag=v1.0.0
-
-# For a release candidate
-gh workflow run release.yaml -f tag=v1.0.0-rc.1
 ```
 
 Or use the Actions tab: select **Release**, click **Run workflow**, enter the tag.
@@ -87,9 +84,9 @@ Labels are auto-assigned by the release-drafter autolabeler based on:
 
 ### Release workflow fails with "Tag must match semver format"
 
-The tag input must match `v<major>.<minor>.<patch>` or `v<major>.<minor>.<patch>-rc.<n>`.
-Examples: `v1.0.0`, `v2.1.3-rc.1`. Tags like `1.0.0` (missing `v`), `v1.0` (missing patch),
-or `v1.0.0-beta` (unsupported suffix) are rejected.
+The tag input must match `v<major>.<minor>.<patch>`.
+Examples: `v1.0.0`, `v2.1.3`. Tags like `1.0.0` (missing `v`) or `v1.0` (missing patch)
+are rejected.
 
 ### Changelog is empty or missing PRs
 

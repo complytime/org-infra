@@ -40,7 +40,7 @@
 - [x] Consumer guidance in workflow header comments
 - [x] All action SHAs pinned with version comments
 - [ ] `yamllint` verified
-- [ ] Release candidate test run (e.g., `v0.1.0-rc.1`)
+- [ ] First release test run (e.g., `v0.1.0`)
 - [ ] PR opened against `complytime/org-infra`
 
 ## Notes
