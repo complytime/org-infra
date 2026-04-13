@@ -1,9 +1,9 @@
 # Tasks: Robust Dependabot Auto-Approval
 
-**Input**: Design documents from `/specs/005-robust-dependabot-approval/`
+**Input**: Design documents from `/specs/006-robust-dependabot-approval/`
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, quickstart.md
 
-**Tests**: Not requested in the feature specification. Validation is via `make lint` and manual workflow runs.
+**Tests**: Validation is via `make lint`, manual workflow runs, and the structured manual test checklist at [`checklists/manual-tests.md`](checklists/manual-tests.md) (maps acceptance scenarios to manual test procedures).
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing. US4 (extraction robustness) is foundational because it produces outputs consumed by all other stories. US3 (release age) must complete before US1 (auto-approval) since the approval condition depends on `release_age_hours`.
 
@@ -17,7 +17,7 @@
 
 ## Phase 1: Foundational - US4 Robust Dependency Information Extraction (Priority: P1)
 
-**Goal**: Replace the fragile 112-line diff-parsing extraction step with a robust ~30-line metadata-first approach. Produce reliable outputs (`risk_level`, `updates_count`, `dep_name`, `dep_version`, `release_age_hours`) for all downstream jobs.
+**Goal**: Replace the fragile 112-line diff-parsing extraction step with a robust ~30-line metadata-first approach. Produce reliable outputs (`risk_level`, `updates_count`, `dep_name`, `dep_version`) for all downstream jobs. The `release_age_hours` output is wired in this phase (T003) but populated in Phase 2 (T005).
 
 **Independent Test**: Trigger the workflow on a dependabot PR that changes a composite action file (e.g., in `.github/actions/`). Verify that dependency name, version, and risk level are correctly extracted and all downstream jobs execute successfully.
 
@@ -54,7 +54,7 @@
 
 ### Implementation for US1
 
-- [x] T006 [US1] Rewrite the `approve_dependabot_prs` job in .github/workflows/ci_dependencies.yml — replace the step-level `if:` condition (line 71) with direct `needs.*` output references: `needs.call_dependabot_reviewer.outputs.risk_level != 'high' && needs.call_deps_reviewer.outputs.review_conclusion == 'success' && needs.call_dependabot_reviewer.outputs.release_age_hours != '-1' && needs.call_dependabot_reviewer.outputs.release_age_hours >= 24`. Remove the step-level `env:` block (lines 72-75). Update the approval body message to include the rationale (risk level, review conclusion, release age). Note: the 24-hour threshold is used in a single condition; extract to a workflow-level `env:` constant if it is ever referenced in a second location.
+- [x] T006 [US1] Rewrite the `approve_dependabot_prs` job in .github/workflows/ci_dependencies.yml — replace the step-level `if:` condition (line 71) with direct `needs.*` output references: `needs.call_dependabot_reviewer.outputs.risk_level != 'high' && needs.call_deps_reviewer.outputs.review_conclusion == 'success' && needs.call_dependabot_reviewer.outputs.release_age_hours != '-1' && needs.call_dependabot_reviewer.outputs.release_age_hours >= env.MIN_RELEASE_AGE_HOURS`. Remove the step-level `env:` block (lines 72-75). Update the approval body message to include the rationale (risk level, review conclusion, release age). The 24-hour threshold is extracted to a workflow-level `env: MIN_RELEASE_AGE_HOURS: 24` constant and referenced in both the approval condition and the PR comment template.
 
 **Checkpoint**: Auto-approval fires for patch/minor updates with 24h+ release age, passing review, and passing CI. Major updates and recent releases are never auto-approved.
 
@@ -81,6 +81,7 @@
 - [x] T008 Run `make lint` to verify yamllint passes on all modified YAML files in .github/workflows/
 - [x] T009 Run `make sync-dry-run` to confirm ci_dependencies.yml is in the sync list and will propagate to all org repos
 - [x] T010 Review the final reusable_dependabot_reviewer.yml for net complexity reduction — verify the total line count is lower than the original 278 lines and that no `set -e`, nested while loops, or temp file I/O remain
+- [x] T011 Verify CI dependency chain: confirm the `approve_dependabot_prs` job `needs:` includes both `call_deps_reviewer` and `call_dependabot_reviewer`, ensuring CI jobs complete before the approval step runs (FR-004)
 
 ---
 
