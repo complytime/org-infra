@@ -1,11 +1,11 @@
 # Implementation Plan: Robust Dependabot Auto-Approval
 
-**Branch**: `005-robust-dependabot-approval` | **Date**: 2026-04-08 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `/specs/005-robust-dependabot-approval/spec.md`
+**Branch**: `006-robust-dependabot-approval` | **Date**: 2026-04-08 | **Spec**: [spec.md](spec.md)
+**Input**: Feature specification from `/specs/006-robust-dependabot-approval/spec.md`
 
 ## Summary
 
-Replace the fragile dependency-usage-based auto-approval gate with a robust criteria set: non-major version bump + 24h release age + no vulnerabilities + CI passing. Simplify the dependency information extraction by using dependabot commit metadata as the primary source with diff parsing as supplementary enrichment. Keep dependency usage as informational data in PR comments. Structural simplification: elimination of `set -e`, nested while loops, and temp file I/O. Line count increased by ~41 lines due to new release age step and richer PR comment, but logical complexity is significantly reduced.
+Replace the fragile dependency-usage-based auto-approval gate with a robust criteria set: non-major version bump + 24h release age + no vulnerabilities + CI passing. Simplify the dependency information extraction by using dependabot commit metadata as the primary source with diff parsing as supplementary enrichment. Keep dependency usage as informational data in PR comments. Structural simplification: elimination of `set -e`, nested while loops, and temp file I/O. Net reduction of ~51 lines across both files, with significantly reduced logical complexity.
 
 ## Technical Context
 
@@ -25,7 +25,7 @@ Replace the fragile dependency-usage-based auto-approval gate with a robust crit
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
-| I. Single Source of Truth | PASS | Auto-approval criteria centralized in `ci_dependencies.yml` `if:` condition. Release age threshold (24h) could be extracted to a constant if used in multiple places, but currently only used in one condition. |
+| I. Single Source of Truth | PASS | Auto-approval criteria centralized in `ci_dependencies.yml` `if:` condition. Release age threshold extracted to workflow-level `env: MIN_RELEASE_AGE_HOURS: 24` and referenced in both the approval condition and PR comment template. |
 | II. Simplicity & Isolation | PASS | Net reduction of ~51 lines. Extraction step replaces 112 lines of nested loops with ~30 lines of sequential metadata/diff/title parsing. Each step has a single responsibility. |
 | III. Incremental Improvement | PASS | Changes are focused on the approval criteria and extraction robustness. No unrelated changes included. |
 | IV. Readability First | PASS | Commit metadata parsing is explicit (`grep 'dependency-name:'`). Risk classification uses a clear `case` statement. Error handling uses `|| true` instead of `set -e`. |
@@ -44,7 +44,7 @@ Replace the fragile dependency-usage-based auto-approval gate with a robust crit
 ### Documentation (this feature)
 
 ```text
-specs/005-robust-dependabot-approval/
+specs/006-robust-dependabot-approval/
 ├── plan.md              # This file
 ├── spec.md              # Feature specification
 ├── research.md          # Phase 0 research output
@@ -156,7 +156,7 @@ No constitution violations to justify. All changes align with principles, partic
 1. **Replace step-level `if:` condition** (line 71):
    - Remove: `env.RISK_LEVEL != 'high' && env.REVIEW_CONCLUSION == 'success' && env.UPDATES_COUNT > 10`
    - Replace with `needs.*` output references:
-     `needs.call_dependabot_reviewer.outputs.risk_level != 'high' && needs.call_deps_reviewer.outputs.review_conclusion == 'success' && needs.call_dependabot_reviewer.outputs.release_age_hours >= 24`
+     `needs.call_dependabot_reviewer.outputs.risk_level != 'high' && needs.call_deps_reviewer.outputs.review_conclusion == 'success' && needs.call_dependabot_reviewer.outputs.release_age_hours != '-1' && needs.call_dependabot_reviewer.outputs.release_age_hours >= env.MIN_RELEASE_AGE_HOURS`
 
 2. **Remove step-level `env:` block** (lines 72-75) -- no longer needed since `needs.*` is used directly
 

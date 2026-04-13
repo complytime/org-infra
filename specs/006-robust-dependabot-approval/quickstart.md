@@ -1,6 +1,6 @@
 # Quickstart: Robust Dependabot Auto-Approval
 
-**Branch**: `005-robust-dependabot-approval` | **Date**: 2026-04-08
+**Branch**: `006-robust-dependabot-approval` | **Date**: 2026-04-08
 
 ## Files to Modify
 

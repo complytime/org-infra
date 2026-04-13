@@ -1,6 +1,6 @@
 # Feature Specification: Robust Dependabot Auto-Approval
 
-**Feature Branch**: `005-robust-dependabot-approval`
+**Feature Branch**: `006-robust-dependabot-approval`
 **Created**: 2026-04-08
 **Status**: Draft
 **Input**: User description: "Lets review and update the reusable workflows for dependabot reviews to make them more robust. First, it is not automatically approving PR if the dependency usage is not determined. This is frigile since not always the dependency usage can be queried due to the dependency nature or API limits. Lets treat the dependency usage as a supporting information for maintainers and not to decide about automatically approving a PR. The automatic approval should be made if the dependency is at least 24 hours released, there are no vulnerabilities and CI tests are passing."
@@ -86,7 +86,7 @@ As a repository maintainer, I want the dependency information extraction step to
 - What happens when the release date of a dependency version cannot be determined (e.g., private registry, missing metadata)? The system should not auto-approve and should indicate this in the PR comment.
 - What happens when CI tests are still running or have not yet completed? The auto-approval step should depend on CI completion and only proceed when tests have concluded successfully.
 - What happens when the dependency review action itself fails (not "failure" result, but an actual execution error)? The system should treat this as a non-passing review and not auto-approve.
-- What happens when the dependabot PR updates multiple dependencies in a single PR? The extraction processes the first dependency found; the risk level defaults to the highest-risk dependency classification and the release age check applies to the extracted dependency. Grouped updates with mixed risk levels require manual review.
+- What happens when the dependabot PR updates multiple dependencies in a single PR? The extraction processes the first dependency found; the risk level and release age check apply to that dependency's update type and version. Since dependabot typically groups updates by type (e.g., all patch, all minor), this is representative in the common case. If the commit metadata `update-type` is unavailable and risk cannot be determined, it defaults to `high`, which prevents auto-approval and requires manual review.
 - What happens when GitHub's API rate limit is hit during the release age lookup? The system should fail safely by not auto-approving and logging the issue in the PR comment.
 - What happens when the GitHub code search API times out during the dependency usage lookup? The system should produce `updates_count=0` after retries and display "unavailable" in the PR comment. Since usage is informational only (FR-001), this does not affect the auto-approval decision.
 - What happens when the dependency information extraction step encounters an error (e.g., malformed diff, unexpected file format)? The step must never crash; it should produce degraded outputs and allow downstream jobs to proceed with available data.
@@ -115,7 +115,7 @@ As a repository maintainer, I want the dependency information extraction step to
 ### Key Entities
 
 - **Dependency Update**: Represents a single dependency version change in a dependabot PR. Key attributes: dependency name, ecosystem (Go including submodules, Python, GitHub Actions), old version, new version, risk level (low/medium/high), update type (patch/minor/major), release date of new version, extraction source (commit metadata, diff, title).
-- **Approval Decision**: The outcome of evaluating all auto-approval criteria. Key attributes: risk level assessment, release age (hours since release), vulnerability review result, CI test result, final decision (approve/manual review), reason for decision.
+- **Approval Decision**: The outcome of evaluating all auto-approval criteria. Key attributes: risk level assessment, release age (hours since release), dependency review result (`review_conclusion`), CI test result, final decision (approve/manual review), reason for decision.
 - **PR Comment**: The structured summary posted on each dependabot PR. Contains: dependency review conclusion, risk level, dependency usage count (informational), release age, approval decision rationale, maintainer checklist.
 
 ## Success Criteria *(mandatory)*
@@ -140,5 +140,5 @@ As a repository maintainer, I want the dependency information extraction step to
 - The existing semantic version risk classification (patch/minor/major) remains unchanged and continues to be used for the auto-approval gate.
 - This workflow change will be synced to all org repositories via the existing `sync-config.yml` mechanism, so changes to the reusable workflows automatically propagate downstream.
 - Dependabot commit messages typically contain structured metadata (`updated-dependencies` block with `dependency-name`, `dependency-version`, `update-type`) in the commit body, but this is not guaranteed for all dependency ecosystems or configurations. The extraction step must handle its absence gracefully.
-- For PRs that update multiple dependencies (grouped updates), the extraction processes the first dependency found; the risk level and release age checks apply to the highest-risk dependency in the group.
+- For PRs that update multiple dependencies (grouped updates), the extraction processes the first dependency found; the risk level and release age checks apply to that dependency. Dependabot typically groups updates by type (all patch or all minor), so the first dependency is representative. If update type cannot be determined, risk defaults to `high`, preventing auto-approval.
 - GitHub Actions workflow logic lacks a standard unit test framework. Validation relies on YAML linting (`make lint`) and manual workflow runs on dependabot PRs. This is pre-existing across all org-infra workflows and is not introduced by this feature.
