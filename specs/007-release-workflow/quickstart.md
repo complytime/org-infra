@@ -18,13 +18,13 @@ Trigger the release workflow with a semver tag:
 
 ```bash
 # From the CLI
-gh workflow run release.yaml -f tag=v1.0.0
+gh workflow run release.yml -f tag=v1.0.0
 ```
 
 Or use the Actions tab: select **Release**, click **Run workflow**, enter the tag.
 
 The workflow will:
-1. Validate the tag format (`v<major>.<minor>.<patch>` or `v<major>.<minor>.<patch>-rc.<n>`)
+1. Validate the tag format (`v<major>.<minor>.<patch>`)
 2. Create and push the tag if it does not already exist
 3. Publish a GitHub Release with auto-generated changelog
 

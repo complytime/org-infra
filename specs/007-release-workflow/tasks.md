@@ -20,7 +20,7 @@
 
 ### Task 2 — Create release workflow
 
-**File**: `.github/workflows/release.yaml`
+**File**: `.github/workflows/release.yml`
 
 - [x] 2.1 Add `workflow_dispatch` trigger with `tag` input (required, semver format)
 - [x] 2.2 Add tag format validation step (reject non-semver tags)
@@ -62,7 +62,7 @@
 Before opening the PR to `complytime/org-infra`:
 
 - [x] `.github/release-drafter.yml` exists with correct category/label mappings
-- [x] `.github/workflows/release.yaml` validates tag format, enforces main branch, creates tag if absent
+- [x] `.github/workflows/release.yml` validates tag format, enforces main branch, creates tag if absent
 - [x] `.github/workflows/release_notes_preview.yml` runs dry-run preview
 - [x] All `uses:` are pinned to full SHA with `# vX.Y.Z` comment
 - [x] Workflow-level permissions are `{}` or read-only

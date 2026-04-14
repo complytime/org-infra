@@ -8,7 +8,7 @@ org-infra ships no binaries, the process is intentionally minimal: tag creation,
 generation from merged PRs, and a published GitHub Release.
 
 **Key Metadata:**
-- Workflow Files: `.github/workflows/release.yaml`, `.github/workflows/release_notes_preview.yml`
+- Workflow Files: `.github/workflows/release.yml`, `.github/workflows/release_notes_preview.yml`
 - Configuration: `.github/release-drafter.yml`
 - Date: 2026-04-13
 - Current Status: **In Progress** — workflow files drafted, spec under review
@@ -101,7 +101,7 @@ The release process must:
 ## Scope Boundaries
 
 **Included:**
-- `.github/workflows/release.yaml` — manual release workflow
+- `.github/workflows/release.yml` — manual release workflow
 - `.github/workflows/release_notes_preview.yml` — dry-run preview workflow
 - `.github/release-drafter.yml` — changelog and version configuration
 - Consumer pinning documentation

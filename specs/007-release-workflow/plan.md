@@ -34,7 +34,7 @@ to semver categories.
 | V. Do Not Reinvent the Wheel | PASS | Uses release-drafter for changelog generation rather than custom scripting |
 | VI. Composability | PASS | Release workflow is independent; does not couple to other workflows |
 | VII. Convention Over Configuration | PASS | Semver convention; conventional commit mapping via autolabeler |
-| YAML Naming Conventions | NOTE | `release.yaml` does not follow `reusable_*` or `ci_*` prefix — intentional, as it is neither reusable nor a CI workflow |
+| YAML Naming Conventions | NOTE | `release.yml` does not follow `reusable_*` or `ci_*` prefix — intentional, as it is neither reusable nor a CI workflow |
 | YAML Security | PASS | Workflow-level permissions none; job-level minimal grant; all user inputs routed through `env:` blocks; release restricted to `main` branch |
 | YAML Formatting | PASS | Header comment; 2-space indent; yamllint clean |
 
@@ -54,7 +54,7 @@ specs/007-release-workflow/
 .github/
 ├── release-drafter.yml        # Release drafter configuration
 └── workflows/
-    ├── release.yaml           # Manual release workflow
+    ├── release.yml            # Manual release workflow
     └── release_notes_preview.yml  # Dry-run preview workflow
 ```
 
@@ -89,7 +89,6 @@ Maps conventional commit prefixes and file paths to labels automatically:
 | `fix:` title | `fix` |
 | `chore:` / `maintenance:` title | `maintenance` |
 | `docs:` title | `documentation` |
-| `perf:` title | `performance` |
 | `ci:` / `build:` / `refactor:` / `test:` title | `automation` |
 | Files in `.github/workflows/` or `.github/actions/` | `workflows` |
 | Files in `compliance/` | `compliance` |

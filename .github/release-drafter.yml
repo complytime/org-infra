@@ -116,9 +116,6 @@ autolabeler:
       - "sync-config.yml"
       - "complytime.yaml"
       - "scripts/**"
-  - label: "performance"
-    title:
-      - "/^(perf).*/i"
   - label: "automation"
     title:
       - "/^(build|ci|refactor|test).*/i"

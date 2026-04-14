@@ -32,7 +32,7 @@
 ## Implementation Status
 
 - [x] Release drafter configuration: `.github/release-drafter.yml`
-- [x] Release workflow: `.github/workflows/release.yaml`
+- [x] Release workflow: `.github/workflows/release.yml`
 - [x] Release notes preview: `.github/workflows/release_notes_preview.yml`
 - [x] Tag format validation with semver regex
 - [x] Conditional tag creation (create if absent, skip if exists)

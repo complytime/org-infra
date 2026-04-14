@@ -6,7 +6,7 @@
 #
 # Usage:
 #   - From the Actions tab: select this workflow, choose the branch, enter the tag.
-#   - From the CLI: gh workflow run release.yaml --ref main -f tag=v1.0.0
+#   - From the CLI: gh workflow run release.yml --ref main -f tag=v1.0.0
 #
 # Consumer guidance:
 #   Downstream repos can pin reusable workflows to a release tag:
