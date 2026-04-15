@@ -174,7 +174,7 @@ jobs:
 
           # Process current scores
           while IFS=$'\t' read -r key crap gaze_crap; do
-            baseline_line=$(grep "^${key}	" /tmp/baseline-lookup.tsv || true)
+            baseline_line=$(grep -F "${key}	" /tmp/baseline-lookup.tsv || true)
             if [ -z "$baseline_line" ]; then
               # New function
               NEW_COUNT=$((NEW_COUNT + 1))
