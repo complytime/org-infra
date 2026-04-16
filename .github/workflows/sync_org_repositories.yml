@@ -1,4 +1,10 @@
 ---
+# Workflow: Sync Organization Repositories
+#
+# Synchronizes standard files, workflows, and Dependabot configuration
+# from org-infra to all repositories in the organization.
+# Uses direct push with a GitHub App token to create PRs.
+
 name: Sync Organization Repositories
 
 # Only allow manual trigger.
@@ -15,14 +21,15 @@ on:
         type: boolean
         default: false
 
-# Minimal permissions for workflow
-# The GitHub App token will have its own permissions
+# Minimal permissions for the workflow GITHUB_TOKEN.
+# The GitHub App token (generated below) carries its own permissions
+# (contents:write, pull_requests:write) scoped to target repos.
 permissions:
   contents: read
 
 jobs:
   sync-repositories:
-    name: Sync Repositories via Fork
+    name: Sync Repositories
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -36,7 +43,7 @@ jobs:
         id: generate-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         with:
-          app-id: ${{ secrets.SYNC_APP_ID }}
+          client-id: ${{ secrets.SYNC_APP_CLIENT_ID }}
           private-key: ${{ secrets.SYNC_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
@@ -56,17 +63,8 @@ jobs:
           git config --global user.name "complytime-repo-sync[bot]"
           git config --global user.email "complytime-repo-sync[bot]@users.noreply.github.com"
 
-      - name: Run Sync Script (scheduled or push)
-        if: github.event_name != 'workflow_dispatch'
-        env:
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: |
-          python scripts/sync-org-repositories.py \
-            --org ${{ github.repository_owner }} \
-            --config sync-config.yml
-
-      - name: Run sync script (manual - all repos)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.repos == ''
+      - name: Run sync script (all repos)
+        if: github.event.inputs.repos == ''
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
@@ -75,8 +73,8 @@ jobs:
             --config sync-config.yml \
             ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
-      - name: Run sync script (manual - specific repos)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.repos != ''
+      - name: Run sync script (specific repos)
+        if: github.event.inputs.repos != ''
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
@@ -101,11 +99,9 @@ jobs:
               else
                 echo "- **Repositories:** All (from peribolos.yml)"
               fi
-            else
-              echo "- **Repositories:** All (from peribolos.yml)"
             fi
             echo ""
             echo "### Workflow Details"
-            echo "- Uses fork-based workflow (no write access required to target repos)"
-            echo "- PRs created from GitHub App forks to upstream repositories"
+            echo "- Uses direct push to create sync branches in target repos"
+            echo "- PRs created from sync branch to main (requires review)"
           } >> "$GITHUB_STEP_SUMMARY"
