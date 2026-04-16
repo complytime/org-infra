@@ -1,11 +1,12 @@
+# Dependabot configuration for org-infra itself.
+# Target repo configs are generated dynamically by sync-org-repositories.py
+# from the dependabot section in sync-config.yml.
 # See: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
   - package-ecosystem: "github-actions"
-    directories:
-      - "/"
-      - "/.github/actions/setup-complyctl"  # used in complyctl
+    directory: "/"
     schedule:
       interval: "daily"
     commit-message:
@@ -20,12 +21,8 @@ updates:
       prefix: "chore"
       include: "scope"
 
-  - package-ecosystem: "gomod"
-    directories:
-      - "/"
-      - "/compass"      # used in complybeacon
-      - "/proofwatch"   # used in complybeacon
-      - "/truthbeam"    # used in complybeacon
+  - package-ecosystem: "pip"
+    directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10

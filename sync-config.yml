@@ -6,13 +6,10 @@
 # Repositories to exclude from synchronization
 # org-infra is excluded by default as it's the source repository
 exclude_repos:
-  - cac-content                 # Forked repository for testing transformation from CaC to OSCAL
-  - compliance-to-policy-go     # Forked repository for testing features
-  - complytime-collector-distro # Empty repository
-  - creme-brulee                # Template repository for training purposes
   - org-infra                   # This repository itself
-  - oscal-content               # Empty repository
-  - oscal-sdk-go                # Forked repository for testing features
+  - website                     # Managed independently
+  - nunya                       # Internal tooling (Jira migration)
+  - roadmap                     # Internal tooling (roadmap scripts)
 
 # Files and workflows to synchronize
 # Each entry specifies:
@@ -39,29 +36,9 @@ files_to_sync:
       - complyscribe
       - complytime-demos
       - complytime-policies
-      - vagrant-boxes
       - community
 
   # Configuration Files
-  - source: .github/dependabot.yml
-    destination: .github/dependabot.yml
-    exclude_repos:
-      - complyscribe
-      - complytime-demos
-      - complytime-policies
-      - vagrant-boxes
-
-  - source: .github/dependabot_python.yml
-    destination: .github/dependabot.yml
-    exclude_repos:
-      - .github
-      - compliance-to-policy-plugins
-      - complybeacon
-      - complyctl
-      - complytime-collector-components
-      - gemara2oscal
-      - vagrant-boxes
-
   - source: .mega-linter.yml
     destination: .mega-linter.yml
     exclude_repos:
@@ -79,18 +56,16 @@ files_to_sync:
       - complyscribe
       - complytime-demos
       - complytime-policies
-      - vagrant-boxes
 
   - source: ruff.toml
     destination: ruff.toml
     exclude_repos:
       - .github
-      - compliance-to-policy-plugins
-      - complybeacon
       - complyctl
+      - complytime
       - complytime-collector-components
-      - gemara2oscal
-      - vagrant-boxes
+      - complytime-providers
+      - gemara-content-service
 
   # AI Tooling
   - source: .specify/memory/constitution.md
@@ -114,6 +89,136 @@ files_to_sync:
 
   - source: .github/ISSUE_TEMPLATE/feature_request.md
     destination: .github/ISSUE_TEMPLATE/feature_request.md
+
+# Dependabot configuration
+# Common entries are applied to all repos (unless excluded).
+# Overrides add or replace entries for specific repos (keyed by package-ecosystem).
+# Entries in target repos for ecosystems NOT listed here are preserved.
+dependabot:
+  common:
+    - package-ecosystem: "github-actions"
+      directory: "/"
+      schedule:
+        interval: "daily"
+      commit-message:
+        prefix: "ci"
+        include: "scope"
+
+    - package-ecosystem: "pre-commit"
+      directory: "/"
+      schedule:
+        interval: "weekly"
+      commit-message:
+        prefix: "chore"
+        include: "scope"
+
+  overrides:
+    complyctl:
+      - package-ecosystem: "github-actions"
+        directories:
+          - "/"
+          - "/.github/actions/setup-complyctl"
+        schedule:
+          interval: "daily"
+        commit-message:
+          prefix: "ci"
+          include: "scope"
+      - package-ecosystem: "gomod"
+        directories:
+          - "/"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+    complytime-collector-components:
+      - package-ecosystem: "gomod"
+        directories:
+          - "/proofwatch"
+          - "/truthbeam"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+    complytime:
+      - package-ecosystem: "gomod"
+        directory: "/"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+    complytime-providers:
+      - package-ecosystem: "gomod"
+        directory: "/"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+    gemara-content-service:
+      - package-ecosystem: "gomod"
+        directory: "/"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+    complyscribe:
+      - package-ecosystem: "github-actions"
+        directories:
+          - "/"
+          - "/.github/actions/e2e-testing"
+          - "/.github/actions/publish-image"
+          - "/.github/actions/setup-poetry"
+        schedule:
+          interval: "daily"
+        commit-message:
+          prefix: "ci"
+          include: "scope"
+      - package-ecosystem: "pip"
+        directory: "/"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+    complytime-demos:
+      - package-ecosystem: "pip"
+        directory: "/"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+    complytime-policies:
+      - package-ecosystem: "pip"
+        directory: "/"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+  exclude_repos:
+    - .github
+    - community
 
 # Default branch name for creating PRs
 default_base_branch: main
