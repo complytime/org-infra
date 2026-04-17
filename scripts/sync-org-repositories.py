@@ -185,7 +185,7 @@ def validate_branch_name(branch_name: str) -> bool:
     return bool(branch_name) and branch_name.startswith(SYNC_BRANCH_PREFIX)
 
 
-def check_existing_sync_pr(org: str, repo_name: str) -> Optional[str]:
+def check_existing_sync_pr(org: str, repo_name: str) -> Optional[Dict[str, str]]:
     """Check if an open sync PR already exists for the target repository.
 
     Args:
@@ -193,7 +193,8 @@ def check_existing_sync_pr(org: str, repo_name: str) -> Optional[str]:
         repo_name: Repository name
 
     Returns:
-        The PR URL if an open sync PR exists, None otherwise.
+        A dict with ``url`` and ``branch`` keys if an open sync PR exists,
+        None otherwise.
     """
     url = f"{GITHUB_API}/repos/{org}/{repo_name}/pulls"
     status, data = github_api_request(url, method="GET", params={"state": "open"})
@@ -207,7 +208,11 @@ def check_existing_sync_pr(org: str, repo_name: str) -> Optional[str]:
 
     for pr in data:
         if pr.get("title") == SYNC_PR_TITLE:
-            return pr.get("html_url")
+            head = pr.get("head", {})
+            return {
+                "url": pr.get("html_url", ""),
+                "branch": head.get("ref", ""),
+            }
 
     return None
 
@@ -488,11 +493,37 @@ def sync_repository(
             subprocess.check_call(cmd, cwd=tmpdir, stderr=subprocess.DEVNULL)
             repo_path = os.path.join(tmpdir, repo_name)
 
-            # Configure git credentials for push (unless dry run)
+            # Step 2: Setup credentials and check for existing PR
+            # This must happen BEFORE any file changes to keep the
+            # working tree clean for a potential branch checkout.
+            existing_pr: Optional[Dict[str, str]] = None
             if not dry_run:
                 setup_git_credentials(repo_path, org, repo_name)
+                existing_pr = check_existing_sync_pr(org, repo_name)
 
-            # Step 2: Process static files to sync
+                if existing_pr and existing_pr.get("branch"):
+                    pr_branch = existing_pr["branch"]
+                    if not validate_branch_name(pr_branch):
+                        print(
+                            f"Error: Existing PR branch '{pr_branch}' "
+                            f"does not match prefix "
+                            f"'{SYNC_BRANCH_PREFIX}'"
+                        )
+                        return False
+
+                    print(
+                        f"Open sync PR exists: {existing_pr['url']}"
+                        f" — checking out branch '{pr_branch}'"
+                    )
+                    repo = Repo(repo_path)
+                    try:
+                        repo.git.fetch("origin", pr_branch)
+                        repo.git.checkout("-B", pr_branch, f"origin/{pr_branch}")
+                    except GitCommandError as e:
+                        print(f"Failed to checkout PR branch: {e}")
+                        return False
+
+            # Step 3: Process static files to sync
             files_changed: List[str] = []
             for file_config in files_to_sync:
                 source_rel_path = file_config["source"]
@@ -523,7 +554,7 @@ def sync_repository(
                     if sync_file(str(source_path), dest_path, dest_rel_path):
                         files_changed.append(dest_rel_path)
 
-            # Step 3: Generate and sync dependabot.yml
+            # Step 4: Generate and sync dependabot.yml
             managed_entries = generate_dependabot_config(repo_name, config)
             if managed_entries is not None:
                 dependabot_dest = os.path.join(repo_path, ".github", "dependabot.yml")
@@ -556,24 +587,39 @@ def sync_repository(
                 print(f"[DRY RUN] Would create PR with {len(files_changed)} file(s)")
                 return True
 
-            # Step 4: Check for existing open sync PR
-            existing_pr = check_existing_sync_pr(org, repo_name)
-            if existing_pr:
-                print(f"Open sync PR already exists: {existing_pr} — skipping PR creation")
-                return True
-
-            # Step 5: Create branch, commit, and push
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            branch_name = f"{SYNC_BRANCH_PREFIX}{timestamp}"
+            # Step 5: Commit and push
             commit_message = "chore: sync repository standards\n\nUpdated files:\n" + "\n".join(
                 f"- {f}" for f in files_changed
             )
+
+            if existing_pr and existing_pr.get("branch"):
+                # Push updates to the existing PR branch
+                pr_branch = existing_pr["branch"]
+                repo = Repo(repo_path)
+                for fp in files_changed:
+                    repo.git.add(fp)
+
+                if not repo.is_dirty(index=True):
+                    print("PR branch already up to date")
+                    return True
+
+                repo.index.commit(commit_message)
+                try:
+                    repo.git.push("origin", pr_branch)
+                    print(f"Updated PR branch: {pr_branch}")
+                except GitCommandError as e:
+                    print(f"Failed to push to PR branch: {e}")
+                    return False
+                return True
+
+            # Step 6: Create new branch, commit, push, and open PR
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            branch_name = f"{SYNC_BRANCH_PREFIX}{timestamp}"
 
             print("\nCreating branch and committing changes...")
             if not create_branch_and_commit(repo_path, branch_name, files_changed, commit_message):
                 return False
 
-            # Step 6: Create pull request
             pr_body = (
                 "This PR synchronizes repository standards from "
                 "org-infra.\n\n"
