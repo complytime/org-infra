@@ -227,8 +227,8 @@ def fetch_peribolos_file(org: str) -> dict:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
-            cmd = f"git clone --quiet --depth 1 {github_repo_url}"
-            subprocess.check_call(cmd, cwd=tmpdir, shell=True)
+            cmd = ["git", "clone", "--quiet", "--depth", "1", github_repo_url]
+            subprocess.check_call(cmd, cwd=tmpdir)
 
             repo_path = os.path.join(tmpdir, peribolos_repo)
             peribolos_path = os.path.join(repo_path, "peribolos.yaml")
@@ -283,7 +283,15 @@ def sync_file(source_path: str, dest_path: str, relative_path: str) -> bool:
 
 
 def setup_git_credentials(repo_path: str, org: str, repo_name: str) -> None:
-    """Configure git credentials for authenticated pushes to the target repo."""
+    """Configure git credentials for authenticated pushes to the target repo.
+
+    Note: the token is embedded in the remote URL, which is the standard
+    pattern for short-lived GitHub App installation tokens in CI.  The
+    token auto-expires (~1 hour) and is revoked in the workflow post-job
+    step.  A more defensive approach (GIT_ASKPASS / credential helper)
+    could prevent the token from appearing in git error output but is
+    deferred to a future improvement.
+    """
     repo = Repo(repo_path)
     auth_url = f"https://x-access-token:{GITHUB_TOKEN}@github.com/{org}/{repo_name}.git"
     try:
