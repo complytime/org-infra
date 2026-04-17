@@ -70,15 +70,23 @@ files_to_sync:
   # AI Tooling
   - source: .specify/memory/constitution.md
     destination: .specify/memory/constitution.md
+    exclude_repos:
+      - complyscribe
 
   - source: docs/AI_TOOLING.md
     destination: docs/AI_TOOLING.md
+    exclude_repos:
+      - complyscribe
 
   - source: .agents/skills/.gitkeep
     destination: .agents/skills/.gitkeep
+    exclude_repos:
+      - complyscribe
 
   - source: .opencode/command/review_pr.md
     destination: .opencode/command/review_pr.md
+    exclude_repos:
+      - complyscribe
 
   # GitHub Templates
   - source: .github/pull_request_template.md
