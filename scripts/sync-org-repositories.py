@@ -38,6 +38,36 @@ from typing import Dict, List, Optional, Tuple
 
 
 GITHUB_API = "https://api.github.com"
+
+# YAML truthy values that must be quoted to avoid yamllint truthy rule violations
+_YAML_TRUTHY_VALUES = frozenset({"true", "false", "yes", "no", "on", "off"})
+
+
+class _IndentedListDumper(yaml.SafeDumper):
+    """YAML dumper that indents list items under their parent key.
+
+    PyYAML's default SafeDumper produces indentless sequences:
+        updates:
+        - package-ecosystem: ...
+
+    This violates yamllint's ``indentation: spaces: consistent`` rule.
+    Overriding ``increase_indent`` to never use indentless mode produces:
+        updates:
+          - package-ecosystem: ...
+    """
+
+    def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
+        return super().increase_indent(flow, False)
+
+
+def _str_representer(dumper: yaml.SafeDumper, data: str) -> yaml.ScalarNode:
+    """Quote YAML truthy string values to prevent misinterpretation."""
+    if data in _YAML_TRUTHY_VALUES:
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style='"')
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+
+_IndentedListDumper.add_representer(str, _str_representer)
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", os.getenv("GITHUB_PAT"))
 DEFAULT_CONFIG_FILE = "sync-config.yml"
 SYNC_BRANCH_PREFIX = "sync-repo-standards-"
@@ -414,7 +444,16 @@ def merge_dependabot_entries(
         "configuration-options-for-the-dependabot.yml-file\n\n"
     )
 
-    return header + yaml.dump(dependabot_data, default_flow_style=False, sort_keys=False)
+    rendered_yaml = yaml.dump(
+        dependabot_data,
+        Dumper=_IndentedListDumper,
+        default_flow_style=False,
+        sort_keys=False,
+    )
+
+    # yaml.dump appends a trailing newline; strip it to avoid a double
+    # blank line at end-of-file (yamllint empty-lines rule).
+    return header + rendered_yaml.rstrip("\n") + "\n"
 
 
 def sync_repository(
