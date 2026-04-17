@@ -333,11 +333,16 @@ class TestCheckExistingSyncPr:
                 {
                     "title": "chore: sync repository standards",
                     "html_url": "https://github.com/org/repo/pull/42",
+                    "head": {
+                        "ref": "sync-repo-standards-20260416120000",
+                    },
                 },
             ],
         )
         result = sync_module.check_existing_sync_pr("org", "repo")
-        assert result == "https://github.com/org/repo/pull/42"
+        assert result is not None
+        assert result["url"] == "https://github.com/org/repo/pull/42"
+        assert result["branch"] == "sync-repo-standards-20260416120000"
 
     @patch.object(sync_module, "github_api_request")
     def test_non_matching_pr_ignored(self, mock_api):
@@ -347,6 +352,7 @@ class TestCheckExistingSyncPr:
                 {
                     "title": "feat: add new feature",
                     "html_url": "https://github.com/org/repo/pull/1",
+                    "head": {"ref": "feat/something"},
                 },
             ],
         )
