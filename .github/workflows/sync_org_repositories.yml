@@ -24,6 +24,8 @@ on:
 # Minimal permissions for the workflow GITHUB_TOKEN.
 # The GitHub App token (generated below) carries its own permissions
 # (contents:write, pull_requests:write) scoped to target repos.
+# Note: the sync script also clones the org's .github repository
+# (for peribolos.yaml) using the App token, not this GITHUB_TOKEN.
 permissions:
   contents: read
 
