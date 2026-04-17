@@ -193,18 +193,20 @@ def check_existing_sync_pr(org: str, repo_name: str) -> Optional[Dict[str, str]]
         repo_name: Repository name
 
     Returns:
-        A dict with ``url`` and ``branch`` keys if an open sync PR exists,
-        None otherwise.
+        A dict with ``url`` and ``branch`` keys if an open sync PR
+        exists.  A dict with an ``error`` key if the API call failed
+        (callers must treat this as "unknown" and avoid creating
+        duplicates).  ``None`` when no matching PR was found.
     """
     url = f"{GITHUB_API}/repos/{org}/{repo_name}/pulls"
-    status, data = github_api_request(url, method="GET", params={"state": "open"})
+    status, data = github_api_request(url, method="GET", params={"state": "open", "per_page": 100})
 
     if status != 200:
         print(f"Warning: Could not check existing PRs (HTTP {status})")
-        return None
+        return {"error": f"API returned HTTP {status}"}
 
     if not isinstance(data, list):
-        return None
+        return {"error": "Unexpected API response format"}
 
     for pr in data:
         if pr.get("title") == SYNC_PR_TITLE:
@@ -500,6 +502,16 @@ def sync_repository(
             if not dry_run:
                 setup_git_credentials(repo_path, org, repo_name)
                 existing_pr = check_existing_sync_pr(org, repo_name)
+
+                # If the API check failed, abort to avoid creating
+                # duplicate PRs on transient failures.
+                if existing_pr and "error" in existing_pr:
+                    print(
+                        f"Error: Cannot verify existing PRs for "
+                        f"{repo_name}: {existing_pr['error']}. "
+                        f"Skipping to avoid duplicates."
+                    )
+                    return False
 
                 if existing_pr and existing_pr.get("branch"):
                     pr_branch = existing_pr["branch"]

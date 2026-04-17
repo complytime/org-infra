@@ -360,10 +360,18 @@ class TestCheckExistingSyncPr:
         assert result is None
 
     @patch.object(sync_module, "github_api_request")
-    def test_api_failure_returns_none(self, mock_api):
+    def test_api_failure_returns_error(self, mock_api):
         mock_api.return_value = (500, {"error": "internal"})
         result = sync_module.check_existing_sync_pr("org", "repo")
-        assert result is None
+        assert result is not None
+        assert "error" in result
+
+    @patch.object(sync_module, "github_api_request")
+    def test_uses_pagination(self, mock_api):
+        mock_api.return_value = (200, [])
+        sync_module.check_existing_sync_pr("org", "repo")
+        _, kwargs = mock_api.call_args
+        assert kwargs["params"]["per_page"] == 100
 
 
 class TestCompareFiles:
