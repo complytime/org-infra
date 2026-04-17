@@ -102,19 +102,32 @@ config harder to audit centrally. Centralizing all managed-ecosystem config in
 Rejected because Dependabot's YAML is structured by ecosystem entries, making
 ecosystem-level merge a natural and reliable boundary. Markers add fragility.
 
-### D3: Duplicate PR detection before creation
+### D3: Duplicate PR detection and update
 
-Before creating a sync PR for a target repo, the script queries `GET /pulls?state=open`
-and checks for an existing PR with the title `chore: sync repository standards`.
+Before creating a sync PR for a target repo, the script queries
+`GET /pulls?state=open&per_page=100` and checks for an existing PR with the
+title `chore: sync repository standards`.
 
-If found, the script skips PR creation and logs the existing PR URL. This prevents
-accumulation of duplicate PRs when the sync is run multiple times before previous PRs
-are merged.
+If found, the script checks out the existing PR's branch, applies the latest
+file changes on top, commits, and pushes — updating the PR in place. This
+avoids creating duplicate PRs when the sync is run multiple times before
+previous PRs are merged, while ensuring existing PRs always reflect the
+latest org-infra content.
 
-**Alternative considered: Update existing PR by force-pushing to its branch.** This
-would reuse the existing PR and update its contents. Rejected because force-push
-violates the script's security guardrails and could discard review comments on the
-existing PR. Creating a clean new PR after the old one is merged is safer.
+If the API call to check for existing PRs fails (transient error), the script
+aborts processing for that repo rather than risk creating a duplicate.
+
+The existing PR's branch name is validated against the `sync-repo-standards-`
+prefix before checkout, maintaining the branch name security guardrail.
+
+**Alternative considered: Skip PR creation entirely when one exists.** This
+was the initial implementation but left stale PRs unupdated when org-infra
+content changed between runs. Updating the existing branch is preferable.
+
+**Alternative considered: Force-push to the existing PR branch.** Rejected
+because force-push could discard review comments and violates the script's
+no-force-push guardrail. Instead, changes are applied as a new commit on
+the existing branch using a standard push.
 
 ### D4: Repository inventory cleanup
 
