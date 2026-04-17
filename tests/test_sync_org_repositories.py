@@ -218,6 +218,34 @@ class TestMergeDependabotEntries:
         assert len(parsed["updates"]) == 1
         assert parsed["updates"][0]["package-ecosystem"] == "github-actions"
 
+    def test_list_items_indented_under_parent(self, tmp_path):
+        managed = [
+            {
+                "package-ecosystem": "github-actions",
+                "directories": ["/", "/.github/actions/custom"],
+                "schedule": {"interval": "daily"},
+            },
+        ]
+        nonexistent = str(tmp_path / "missing.yml")
+        result = sync_module.merge_dependabot_entries(managed, nonexistent)
+        # Verify list items under 'updates:' are indented (not flush)
+        for line in result.splitlines():
+            if line.strip().startswith("- package-ecosystem"):
+                assert line.startswith("  "), (
+                    f"Sequence entry should be indented under parent: {line!r}"
+                )
+            if line.strip() == "- /":
+                assert line.startswith("      "), f"Nested list item should be indented: {line!r}"
+
+    def test_no_trailing_blank_line(self, tmp_path):
+        managed = [
+            {"package-ecosystem": "github-actions", "directory": "/"},
+        ]
+        nonexistent = str(tmp_path / "missing.yml")
+        result = sync_module.merge_dependabot_entries(managed, nonexistent)
+        assert result.endswith("\n"), "File should end with a newline"
+        assert not result.endswith("\n\n"), "File should not end with a double newline"
+
     def test_unmanaged_entries_preserved(self, tmp_path):
         managed = [
             {"package-ecosystem": "github-actions", "directory": "/"},
