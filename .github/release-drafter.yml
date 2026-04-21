@@ -6,8 +6,6 @@ tag-template: "v$RESOLVED_VERSION"
 category-template: |
   ### $TITLE
 
-  $CHANGES
-
 template: |
   ## org-infra $RESOLVED_VERSION
 
