@@ -282,6 +282,56 @@ def sync_file(source_path: str, dest_path: str, relative_path: str) -> bool:
     return True
 
 
+def resolve_file_vars(file_config: dict, repo_name: str) -> Dict[str, str]:
+    """Resolve per-file variable values for a target repository.
+
+    Each variable in the ``vars`` config has a ``default`` value and an
+    optional ``repos`` map of per-repo overrides.  The resolved value is
+    the repo-specific override when present, otherwise the default.
+
+    Args:
+        file_config: A single entry from ``files_to_sync`` in sync config.
+        repo_name: Target repository name.
+
+    Returns:
+        Dict mapping variable names to their resolved string values.
+        Empty dict when the file entry has no ``vars`` key.
+    """
+    vars_config = file_config.get("vars")
+    if not vars_config:
+        return {}
+
+    resolved: Dict[str, str] = {}
+    for var_name, var_def in vars_config.items():
+        default_value = str(var_def.get("default", ""))
+        repo_overrides = var_def.get("repos", {})
+        resolved[var_name] = str(repo_overrides.get(repo_name, default_value))
+    return resolved
+
+
+def apply_file_vars(content: str, resolved_vars: Dict[str, str]) -> str:
+    """Apply variable substitutions to file content via regex.
+
+    For each variable, finds ``<var_name>: <value>`` in the content and
+    replaces ``<value>`` with the resolved value.  All other content
+    (comments, indentation, SHA references) is preserved.
+
+    Args:
+        content: The source file content as a string.
+        resolved_vars: Dict of ``{var_name: resolved_value}`` pairs.
+
+    Returns:
+        The content with substitutions applied.
+    """
+    for var_name, resolved_value in resolved_vars.items():
+        pattern = rf"({re.escape(var_name)}:\s*)\S+"
+        new_content = re.sub(pattern, rf"\g<1>{resolved_value}", content)
+        if new_content == content:
+            print(f"Warning: var '{var_name}' not found in file content")
+        content = new_content
+    return content
+
+
 def setup_git_credentials(repo_path: str, org: str, repo_name: str) -> None:
     """Configure git credentials for authenticated pushes to the target repo.
 
@@ -561,7 +611,40 @@ def sync_repository(
                         print(f"{source_rel_path} excluded for this repo")
                         continue
 
-                if dry_run:
+                resolved_vars = resolve_file_vars(file_config, repo_name)
+
+                if resolved_vars:
+                    # Var-aware path: read, substitute, compare resolved
+                    # content against destination.
+                    source_content = source_path.read_text()
+                    resolved_content = apply_file_vars(
+                        source_content, resolved_vars,
+                    )
+
+                    if dry_run:
+                        for vn, vv in resolved_vars.items():
+                            print(f"[DRY RUN] var {vn}={vv}")
+
+                    existing_content = ""
+                    if os.path.exists(dest_path):
+                        with open(dest_path, "r") as f:
+                            existing_content = f.read()
+
+                    if resolved_content != existing_content:
+                        if dry_run:
+                            action = "add" if not existing_content else "update"
+                            print(f"[DRY RUN] Would {action}: {dest_rel_path}")
+                        else:
+                            os.makedirs(
+                                os.path.dirname(dest_path), exist_ok=True,
+                            )
+                            with open(dest_path, "w") as f:
+                                f.write(resolved_content)
+                            print(f"{dest_rel_path} updated (vars applied)")
+                        files_changed.append(dest_rel_path)
+                    else:
+                        print(f"{dest_rel_path} is up to date")
+                elif dry_run:
                     if not os.path.exists(dest_path):
                         print(f"[DRY RUN] Would add: {dest_rel_path}")
                         files_changed.append(dest_rel_path)

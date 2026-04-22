@@ -469,3 +469,183 @@ class TestExtractRepositories:
         data = {"orgs": {"other": {"repos": {"repo1": {}}}}}
         repos = sync_module.extract_repositories(data, "testorg")
         assert repos == []
+
+
+class TestResolveFileVars:
+    """Tests for resolve_file_vars."""
+
+    def test_repo_in_overrides_returns_override(self):
+        file_config = {
+            "source": "ci_security.yml",
+            "vars": {
+                "enable_trivy_source": {
+                    "default": "false",
+                    "repos": {"complyctl": "true"},
+                },
+            },
+        }
+        result = sync_module.resolve_file_vars(file_config, "complyctl")
+        assert result == {"enable_trivy_source": "true"}
+
+    def test_repo_not_in_overrides_returns_default(self):
+        file_config = {
+            "source": "ci_security.yml",
+            "vars": {
+                "enable_trivy_source": {
+                    "default": "false",
+                    "repos": {"complyctl": "true"},
+                },
+            },
+        }
+        result = sync_module.resolve_file_vars(file_config, "community")
+        assert result == {"enable_trivy_source": "false"}
+
+    def test_no_vars_key_returns_empty(self):
+        file_config = {"source": "ci_security.yml"}
+        result = sync_module.resolve_file_vars(file_config, "complyctl")
+        assert result == {}
+
+    def test_empty_vars_returns_empty(self):
+        file_config = {"source": "ci_security.yml", "vars": {}}
+        result = sync_module.resolve_file_vars(file_config, "complyctl")
+        assert result == {}
+
+    def test_multiple_vars_resolved(self):
+        file_config = {
+            "source": "workflow.yml",
+            "vars": {
+                "var_a": {"default": "off", "repos": {"repo1": "on"}},
+                "var_b": {"default": "low", "repos": {"repo2": "high"}},
+            },
+        }
+        result = sync_module.resolve_file_vars(file_config, "repo1")
+        assert result == {"var_a": "on", "var_b": "low"}
+
+    def test_no_repos_map_uses_default(self):
+        file_config = {
+            "source": "ci_security.yml",
+            "vars": {
+                "enable_trivy_source": {"default": "false"},
+            },
+        }
+        result = sync_module.resolve_file_vars(file_config, "any-repo")
+        assert result == {"enable_trivy_source": "false"}
+
+
+class TestApplyFileVars:
+    """Tests for apply_file_vars."""
+
+    def test_substitution_replaces_value(self):
+        content = "    with:\n      enable_trivy_source: true\n"
+        result = sync_module.apply_file_vars(
+            content, {"enable_trivy_source": "false"},
+        )
+        assert "enable_trivy_source: false" in result
+
+    def test_preserves_surrounding_content(self):
+        content = (
+            "# Comment line\n"
+            "    uses: org/repo@abc123def456 # v1.0\n"
+            "    with:\n"
+            "      enable_trivy_source: true\n"
+            "  other_job:\n"
+            "    runs-on: ubuntu-latest\n"
+        )
+        result = sync_module.apply_file_vars(
+            content, {"enable_trivy_source": "false"},
+        )
+        assert "# Comment line" in result
+        assert "@abc123def456 # v1.0" in result
+        assert "runs-on: ubuntu-latest" in result
+        assert "enable_trivy_source: false" in result
+
+    def test_no_match_logs_warning(self, capsys):
+        content = "    with:\n      some_other_input: true\n"
+        result = sync_module.apply_file_vars(
+            content, {"enable_trivy_source": "false"},
+        )
+        captured = capsys.readouterr()
+        assert "Warning: var 'enable_trivy_source' not found" in captured.out
+        assert result == content
+
+    def test_multiple_vars_applied(self):
+        content = (
+            "      enable_trivy_source: true\n"
+            "      trivy_severity: HIGH,CRITICAL\n"
+        )
+        resolved = {
+            "enable_trivy_source": "false",
+            "trivy_severity": "CRITICAL",
+        }
+        result = sync_module.apply_file_vars(content, resolved)
+        assert "enable_trivy_source: false" in result
+        assert "trivy_severity: CRITICAL" in result
+        assert "HIGH,CRITICAL" not in result
+
+    def test_preserves_indentation(self):
+        content = "      enable_trivy_source: true\n"
+        result = sync_module.apply_file_vars(
+            content, {"enable_trivy_source": "false"},
+        )
+        assert result == "      enable_trivy_source: false\n"
+
+    def test_empty_vars_returns_unchanged(self):
+        content = "      enable_trivy_source: true\n"
+        result = sync_module.apply_file_vars(content, {})
+        assert result == content
+
+
+class TestVarAwareFileComparison:
+    """Integration tests for var-aware file sync comparison."""
+
+    def test_resolved_matches_dest_no_update(self, tmp_path):
+        """When resolved content matches dest, file is up to date."""
+        source = tmp_path / "source.yml"
+        dest = tmp_path / "dest.yml"
+        # Source has true, but resolved will be false
+        source.write_text("      enable_trivy_source: true\n")
+        dest.write_text("      enable_trivy_source: false\n")
+
+        source_content = source.read_text()
+        resolved_vars = {"enable_trivy_source": "false"}
+        resolved_content = sync_module.apply_file_vars(
+            source_content, resolved_vars,
+        )
+        assert resolved_content == dest.read_text()
+
+    def test_resolved_differs_from_dest_needs_update(self, tmp_path):
+        """When resolved content differs from dest, update is needed."""
+        source = tmp_path / "source.yml"
+        dest = tmp_path / "dest.yml"
+        source.write_text("      enable_trivy_source: true\n")
+        # Dest still has old value
+        dest.write_text("      enable_trivy_source: true\n")
+
+        source_content = source.read_text()
+        resolved_vars = {"enable_trivy_source": "false"}
+        resolved_content = sync_module.apply_file_vars(
+            source_content, resolved_vars,
+        )
+        assert resolved_content != dest.read_text()
+
+    def test_resolved_matches_source_for_override_repo(self, tmp_path):
+        """When repo is in overrides, resolved content keeps source value."""
+        source = tmp_path / "source.yml"
+        source.write_text("      enable_trivy_source: true\n")
+
+        file_config = {
+            "source": "ci_security.yml",
+            "vars": {
+                "enable_trivy_source": {
+                    "default": "false",
+                    "repos": {"complyctl": "true"},
+                },
+            },
+        }
+        resolved_vars = sync_module.resolve_file_vars(
+            file_config, "complyctl",
+        )
+        resolved_content = sync_module.apply_file_vars(
+            source.read_text(), resolved_vars,
+        )
+        assert resolved_content == source.read_text()
