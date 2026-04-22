@@ -29,6 +29,16 @@ files_to_sync:
 
   - source: .github/workflows/ci_security.yml
     destination: .github/workflows/ci_security.yml
+    vars:
+      enable_trivy_source:
+        default: "false"
+        repos:
+          complyctl: "true"
+          complytime: "true"
+          complytime-providers: "true"
+          complytime-collector-components: "true"
+          gemara-content-service: "true"
+          complyscribe: "true"
 
   - source: .github/workflows/ci_crapload.yml
     destination: .github/workflows/ci_crapload.yml
@@ -46,6 +56,8 @@ files_to_sync:
 
   - source: .yamllint.yml
     destination: .yamllint.yml
+    exclude_repos:
+      - complyscribe
 
   - source: commitlint.config.js
     destination: commitlint.config.js
@@ -71,21 +83,25 @@ files_to_sync:
   - source: .specify/memory/constitution.md
     destination: .specify/memory/constitution.md
     exclude_repos:
+      - .github
       - complyscribe
 
   - source: docs/AI_TOOLING.md
     destination: docs/AI_TOOLING.md
     exclude_repos:
+      - .github
       - complyscribe
 
   - source: .agents/skills/.gitkeep
     destination: .agents/skills/.gitkeep
     exclude_repos:
+      - .github
       - complyscribe
 
   - source: .opencode/command/review_pr.md
     destination: .opencode/command/review_pr.md
     exclude_repos:
+      - .github
       - complyscribe
 
   # GitHub Templates
