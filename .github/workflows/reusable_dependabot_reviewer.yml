@@ -57,6 +57,7 @@ jobs:
         shell: bash
         env:
           DEPENDABOT_SHA: "${{ github.event.pull_request.head.sha }}"
+          PR_TITLE: "${{ github.event.pull_request.title }}"
         run: |
           REF="${DEPENDABOT_SHA:-HEAD}"
           COMMIT_BODY="$(git log -1 --format=%B "$REF" 2>/dev/null || echo "")"
@@ -93,6 +94,42 @@ jobs:
           [[ "${#versions[@]}" -ge 2 ]] && from_version="${versions[0]}"
           [[ "${#versions[@]}" -ge 2 && -z "$to_version" ]] && to_version="${versions[1]}"
           [[ "${#versions[@]}" -eq 1 && -z "$to_version" ]] && to_version="${versions[0]}"
+
+          # Source 2b: Commit body fallback for versions (grouped PRs omit
+          # version numbers from the subject line)
+          if [[ "${#versions[@]}" -lt 2 ]]; then
+            mapfile -t versions < <(echo "$COMMIT_BODY" \
+              | grep -Eo 'from v?[0-9]+\.[0-9]+\.[0-9]+ to v?[0-9]+\.[0-9]+\.[0-9]+' \
+              | grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+' | sed 's/^v//' | head -2)
+            [[ "${#versions[@]}" -ge 2 ]] && from_version="${versions[0]}"
+            [[ "${#versions[@]}" -ge 2 && -z "$to_version" ]] && to_version="${versions[1]}"
+            [[ "${#versions[@]}" -ge 2 ]] && echo "Body fallback: from=$from_version to=$to_version"
+          fi
+
+          # Source 2c: PR title fallback for versions
+          if [[ "${#versions[@]}" -lt 2 && -n "$PR_TITLE" ]]; then
+            mapfile -t versions < <(echo "$PR_TITLE" \
+              | grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+' | sed 's/^v//' | head -2)
+            [[ "${#versions[@]}" -ge 2 ]] && from_version="${versions[0]}"
+            [[ "${#versions[@]}" -ge 2 && -z "$to_version" ]] && to_version="${versions[1]}"
+            [[ "${#versions[@]}" -ge 2 ]] && echo "PR title fallback: from=$from_version to=$to_version"
+          fi
+
+          # Derive update_type from versions when metadata is absent
+          if [[ -z "$update_type" && -n "$from_version" && -n "$to_version" ]]; then
+            _from_major=$(echo "$from_version" | cut -d. -f1)
+            _from_minor=$(echo "$from_version" | cut -d. -f2)
+            _to_major=$(echo "$to_version" | cut -d. -f1)
+            _to_minor=$(echo "$to_version" | cut -d. -f2)
+            if [[ "$_from_major" -ne "$_to_major" ]]; then
+              update_type="version-update:semver-major"
+            elif [[ "$_from_minor" -ne "$_to_minor" ]]; then
+              update_type="version-update:semver-minor"
+            else
+              update_type="version-update:semver-patch"
+            fi
+            echo "Derived update_type: $update_type"
+          fi
 
           # Source 3: Diff enrichment (SHA-pinned refs for usage search only)
           DIFF="$(git diff "$REF^..$REF" 2>/dev/null || echo "")"
