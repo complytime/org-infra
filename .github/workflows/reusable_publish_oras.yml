@@ -4,6 +4,8 @@
 # to reusable_publish_ghcr.yml: SLSA provenance + SPDX SBOM attestation.
 # No Containerfile or Docker build required — designed for data-only artifacts (YAML, JSON, etc.).
 #
+# Gemara SDK bundles: use reusable_publish_gemara_oci.yml (pinned composite action + same attestations).
+#
 # Downstream note: reusable_sign_and_verify.yml requires the vuln attestation by default.
 # Callers publishing ORAS artifacts must set verify_vuln: false.
 
