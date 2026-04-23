@@ -4,12 +4,9 @@
 #
 # Prerequisites (attestations must exist before calling this workflow):
 #   - SLSA provenance: from reusable_publish_ghcr.yml, reusable_publish_oras.yml
-#     (publish_mode: oras or gemara)
+#     (Gemara bundle publish—oci-artifact composite)
 #   - SBOM:            from the same (actions/attest)
 #   - Vuln scan:       from reusable_vuln_scan.yml (cosign attest --type vuln) — optional via verify_vuln input
-#
-# If allow_unprotected_ref is true, the job also runs on unprotected refs; match the same
-# allow_unprotected_ref in reusable_publish_oras (including publish_mode: gemara) when used together.
 #
 # Security guarantees:
 #   - All attestations are Sigstore-signed with Rekor transparency log
@@ -44,13 +41,6 @@ on:
         required: false
         type: boolean
         default: true
-      allow_unprotected_ref:
-        description: >-
-          If true, run on unprotected refs (forks, testing). If false, only
-          github.ref_protected. Must match the publish reusable when chaining.
-        required: false
-        type: boolean
-        default: false
     secrets:
       quay_username:
         description: 'Quay.io username (only for quay.io images)'
@@ -76,7 +66,7 @@ concurrency:
 
 jobs:
   sign-and-verify:
-    if: ${{ github.ref_protected || inputs.allow_unprotected_ref }}
+    if: github.ref_protected
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
