@@ -1,55 +1,91 @@
-# Reusable Publish OCI Artifact (ORAS) Workflow
-# ==============================================
-# Pushes arbitrary files as OCI artifacts to GHCR via ORAS CLI with supply-chain security parity
-# to reusable_publish_ghcr.yml: SLSA provenance + SPDX SBOM attestation.
-# No Containerfile or Docker build required — designed for data-only artifacts (YAML, JSON, etc.).
-#
-# Gemara SDK bundles: use reusable_publish_gemara_oci.yml (pinned composite action + same attestations).
-#
-# Downstream note: reusable_sign_and_verify.yml requires the vuln attestation by default.
-# Callers publishing ORAS artifacts must set verify_vuln: false.
+# Reusable Publish OCI Artifact (ORAS) and Gemara policy bundle
+# ============================================================
+# Two modes in one workflow (align with go-gemara bundle + ORAS per-path flows):
+#   - publish_mode: oras  — ORAS CLI push of path:mediatype lines (SLSA + SPDX).
+#   - publish_mode: gemara — Pinned go-gemara pack composite, same attestations.
+# Downstream: reusable_sign_and_verify (set verify_vuln: false for no vuln attestation);
+# resuable_publish_quay for Quay.
 
 name: Reusable Publish OCI Artifact (ORAS)
 
 on:
   workflow_call:
     inputs:
+      publish_mode:
+        description: >-
+          oras = per-path ORAS push; gemara = SDK pack (root bundle + Gemara OCI contract).
+        required: false
+        default: oras
+        type: string
       image_name:
-        description: 'Image name without registry (e.g., org/image-name)'
+        description: 'Image name without registry (e.g., org/image-name), lower case'
         required: true
         type: string
+      # --- ORAS mode (publish_mode: oras) ---------------------------------
       artifact_type:
-        description: 'OCI artifactType annotation (e.g., application/vnd.complytime.gemara.policies.v1)'
-        required: true
+        description: 'OCI artifactType (required when publish_mode=oras).'
+        required: false
         type: string
+        default: ""
       paths:
         description: |
-          Newline-separated list of path:mediatype pairs to push.
-          Use the exact Gemara layer media types from complyctl/internal/complytime/consts.go:
+          Newline-separated path:mediatype pairs (required when publish_mode=oras). Example:
             bundles/nist-catalog.yaml:application/vnd.gemara.catalog.v1+yaml
-            bundles/nist-policy.yaml:application/vnd.gemara.policy.v1+yaml
-            guidance/nist.yaml:application/vnd.gemara.guidance.v1+yaml
-        required: true
+        required: false
         type: string
+        default: ""
+      # --- Gemara mode (publish_mode: gemara) -----------------------------
+      oci_tag:
+        description: "GHCR tag to push (required for gemara), e.g. v0.1.0 or sha-abc. Ignored in oras (tag is commit sha-)."
+        required: false
+        type: string
+        default: ""
+      bundle_file:
+        description: 'Root Gemara bundle YAML, relative to working_directory (required for gemara).'
+        required: false
+        type: string
+        default: ""
+      working_directory:
+        description: 'Base directory to resolve paths (gemara).'
+        required: false
+        type: string
+        default: "."
+      validate:
+        description: 'If true, validate the root document before pack (gemara).'
+        required: false
+        type: string
+        default: "true"
+      # --- Shared ---------------------------------------------------------
+      allow_unprotected_ref:
+        description: >-
+          If true, run on unprotected refs (e.g. fork main). If false, only
+          ref_protected. Must match reusable_sign_and_verify (same input).
+        required: false
+        type: boolean
+        default: false
       image_description:
-        description: 'OCI org.opencontainers.image.description annotation (defaults to image_name)'
+        description: "OCI org.opencontainers.image.description (oras); reserved for future (gemara)."
         required: false
         type: string
+        default: ""
       sbom_scan_path:
-        description: 'Local path to scan for SBOM generation (defaults to repo root)'
+        description: "Path for anchore/sbom-action (both modes)."
         required: false
-        default: '.'
         type: string
+        default: "."
     outputs:
       digest:
-        description: 'Pushed artifact digest (sha256:...)'
+        description: "Pushed artifact digest (sha256:...)"
         value: ${{ jobs.publish.outputs.digest }}
       image:
-        description: 'Full image reference (ghcr.io/org/image-name)'
+        description: "Full image reference (ghcr.io/.../name, no tag)"
         value: ${{ jobs.publish.outputs.image }}
       sha_tag:
-        description: 'Tag used for the push (sha-<40-char-commit-sha>)'
+        description: "Tag for promote source_tag: oras=sha-40hex, gemara=oci_tag"
         value: ${{ jobs.publish.outputs.sha_tag }}
+      oci_tag:
+        description: "Same as sha_tag for a single promote field (compat with gemara callers)"
+        value: ${{ jobs.publish.outputs.oci_tag }}
 
 permissions:
   contents: none
@@ -59,28 +95,66 @@ permissions:
   actions: none
 
 concurrency:
-  group: reusable-oras-${{ inputs.image_name }}-${{ github.ref }}
+  # Gemara: include oci_tag; ORAS: empty oci_tag -> fall back to ref
+  group: >-
+    reusable-oras-${{ inputs.image_name }}-
+    ${{ (inputs.oci_tag != '' && inputs.oci_tag) || github.ref }}
   cancel-in-progress: true
 
 jobs:
   publish:
-    if: ${{ github.ref_protected }}
+    if: ${{ github.ref_protected || inputs.allow_unprotected_ref }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
-      contents: read       # Checkout source for SBOM scan
-      packages: write      # Push artifact and attestations to GHCR
-      id-token: write      # OIDC token for GitHub attestations
-      attestations: write  # Write attestations to GHCR
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     outputs:
-      digest: ${{ steps.digest.outputs.digest }}
-      image: ${{ steps.image_ref.outputs.image }}
-      sha_tag: ${{ steps.image_ref.outputs.sha_tag }}
-
+      digest: ${{ steps.export_digest.outputs.digest }}
+      image: ${{ steps.image_out.outputs.image }}
+      sha_tag: ${{ steps.export_tags.outputs.sha_tag }}
+      oci_tag: ${{ steps.export_tags.outputs.oci_tag }}
     steps:
-      - name: Checkout repository
+      - name: Validate inputs
+        id: check
+        env:
+          PUBLISH_MODE: ${{ inputs.publish_mode }}
+          PATHS: ${{ inputs.paths }}
+          ART_TYPE: ${{ inputs.artifact_type }}
+          OCI_TAG: ${{ inputs.oci_tag }}
+          BUNDLE: ${{ inputs.bundle_file }}
+        run: |
+          set -e
+          if [ -z "$PUBLISH_MODE" ] || { [ "$PUBLISH_MODE" != "oras" ] && [ "$PUBLISH_MODE" != "gemara" ]; }; then
+            echo '::error::publish_mode must be "oras" or "gemara"'
+            exit 1
+          fi
+          if [ "$PUBLISH_MODE" = "oras" ]; then
+            if [ -z "$PATHS" ] || [ -z "$ART_TYPE" ]; then
+              echo '::error::publish_mode=oras requires non-empty paths and artifact_type'
+              exit 1
+            fi
+          else
+            if [ -z "$OCI_TAG" ] || [ -z "$BUNDLE" ]; then
+              echo '::error::publish_mode=gemara requires oci_tag and bundle_file'
+              exit 1
+            fi
+          fi
+
+      - name: Checkout (ORAS — current ref)
+        if: ${{ inputs.publish_mode == 'oras' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
+
+      - name: Checkout (Gemara — default branch)
+        if: ${{ inputs.publish_mode == 'gemara' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Log in to GHCR
@@ -90,26 +164,34 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Image name (ghcr.io/…)
+        id: image_out
+        env:
+          IMAGE_NAME: ${{ inputs.image_name }}
+        run: |
+          echo "image=ghcr.io/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Set ORAS ref + sha tag
+        if: ${{ inputs.publish_mode == 'oras' }}
+        id: oras_ref
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "sha_tag=sha-${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
+
       - name: Install ORAS
+        if: ${{ inputs.publish_mode == 'oras' }}
         uses: oras-project/setup-oras@38de303aac69abb66f3e6255b7198bff35f323e3 # v2.0.0
         with:
           version: 1.3.0
 
-      - name: Set image reference
-        id: image_ref
-        env:
-          IMAGE_NAME: ${{ inputs.image_name }}
-          COMMIT_SHA: ${{ github.sha }}
-        run: |
-          echo "image=ghcr.io/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=sha-${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
-
-      - name: Push OCI artifact
-        id: push
+      - name: Push OCI (ORAS)
+        if: ${{ inputs.publish_mode == 'oras' }}
+        id: push_oras
         env:
           IMAGE_NAME: ${{ inputs.image_name }}
           ARTIFACT_TYPE: ${{ inputs.artifact_type }}
-          IMAGE_DESCRIPTION: ${{ inputs.image_description || inputs.image_name }}
+          IMAGE_DESCRIPTION: ${{ inputs.image_description != '' && inputs.image_description || inputs.image_name }}
           PATHS_INPUT: ${{ inputs.paths }}
           SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
           COMMIT_SHA: ${{ github.sha }}
@@ -118,7 +200,6 @@ jobs:
           while IFS= read -r line; do
             [[ -n "$line" ]] && PUSH_ARGS+=("$line")
           done <<< "$PATHS_INPUT"
-
           oras push "ghcr.io/${IMAGE_NAME}:sha-${COMMIT_SHA}" \
             --artifact-type "${ARTIFACT_TYPE}" \
             --annotation "org.opencontainers.image.source=${SOURCE_URL}" \
@@ -126,8 +207,9 @@ jobs:
             --annotation "org.opencontainers.image.description=${IMAGE_DESCRIPTION}" \
             "${PUSH_ARGS[@]}"
 
-      - name: Fetch digest
-        id: digest
+      - name: Fetch digest (ORAS)
+        if: ${{ inputs.publish_mode == 'oras' }}
+        id: digest_oras
         env:
           IMAGE_NAME: ${{ inputs.image_name }}
           COMMIT_SHA: ${{ github.sha }}
@@ -140,16 +222,71 @@ jobs:
           fi
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
 
+      - name: Pack and push Gemara bundle
+        if: ${{ inputs.publish_mode == 'gemara' }}
+        id: pack_gemara
+        # yamllint disable-line rule:line-length
+        uses: sonupreetam/gemara-publish-oci@7203d6158a16208a0338cc33ea001bb077f4705c
+        with:
+          registry: ghcr.io
+          repository: ${{ inputs.image_name }}
+          tag: ${{ inputs.oci_tag }}
+          file: ${{ inputs.bundle_file }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          validate: ${{ inputs.validate }}
+          working_directory: ${{ inputs.working_directory }}
+
+      - name: Normalize digest (Gemara)
+        if: ${{ inputs.publish_mode == 'gemara' }}
+        id: digest_gemara
+        env:
+          RAW: ${{ steps.pack_gemara.outputs.digest }}
+        run: |
+          D="${RAW}"
+          if [[ ! "$D" == sha256:* ]]; then
+            D="sha256:$D"
+          fi
+          echo "digest=$D" >> "$GITHUB_OUTPUT"
+
+      - name: Export digest
+        id: export_digest
+        if: ${{ (steps.digest_oras.outcome == 'success' || steps.digest_gemara.outcome == 'success') }}
+        env:
+          MODE: ${{ inputs.publish_mode }}
+        run: |
+          if [ "$MODE" = "oras" ]; then
+            echo "digest=${{ steps.digest_oras.outputs.digest }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "digest=${{ steps.digest_gemara.outputs.digest }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Export tags
+        id: export_tags
+        if: ${{ steps.export_digest.outcome == 'success' }}
+        env:
+          MODE: ${{ inputs.publish_mode }}
+          OCI: ${{ inputs.oci_tag }}
+          SHA_TAG: ${{ steps.oras_ref.outputs.sha_tag }}
+        run: |
+          if [ "$MODE" = "oras" ]; then
+            echo "sha_tag=${SHA_TAG}" >> "$GITHUB_OUTPUT"
+            echo "oci_tag=${SHA_TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha_tag=$OCI" >> "$GITHUB_OUTPUT"
+            echo "oci_tag=$OCI" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Attest SLSA provenance
-        if: ${{ github.ref_protected }}
+        if: ${{ (github.ref_protected || inputs.allow_unprotected_ref) && (steps.export_digest.outcome == 'success') }}
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-name: ${{ steps.image_ref.outputs.image }}
-          subject-digest: ${{ steps.digest.outputs.digest }}
+          subject-name: ${{ steps.image_out.outputs.image }}
+          subject-digest: ${{ steps.export_digest.outputs.digest }}
           push-to-registry: true
 
       - name: Generate SBOM
-        if: ${{ github.ref_protected }}
+        if: ${{ (github.ref_protected || inputs.allow_unprotected_ref) && (steps.export_digest.outcome == 'success') }}
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: ${{ inputs.sbom_scan_path }}
@@ -157,10 +294,11 @@ jobs:
           output-file: sbom.spdx.json
 
       - name: Attest SBOM
-        if: ${{ github.ref_protected }}
+        if: ${{ (github.ref_protected || inputs.allow_unprotected_ref) && (steps.export_digest.outcome == 'success') }}
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
-          subject-name: ${{ steps.image_ref.outputs.image }}
-          subject-digest: ${{ steps.digest.outputs.digest }}
+          subject-name: ${{ steps.image_out.outputs.image }}
+          subject-digest: ${{ steps.export_digest.outputs.digest }}
           sbom-path: sbom.spdx.json
           push-to-registry: true
+
