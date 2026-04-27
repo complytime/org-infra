@@ -1,7 +1,7 @@
 # Python dependencies for org-infra scripts
 
 # Git operations
-GitPython>=3.1.40
+GitPython>=3.1.47
 
 # YAML parsing
 PyYAML>=6.0.1
