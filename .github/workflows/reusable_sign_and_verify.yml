@@ -3,8 +3,9 @@
 # Signs container images with Sigstore keyless signing and verifies all attestations.
 #
 # Prerequisites (attestations must exist before calling this workflow):
-#   - SLSA provenance: from reusable_publish_ghcr.yml or reusable_publish_oras.yml (actions/attest-build-provenance)
-#   - SBOM:            from reusable_publish_ghcr.yml or reusable_publish_oras.yml (actions/attest)
+#   - SLSA provenance: from reusable_publish_ghcr.yml, reusable_publish_oras.yml
+#     (Gemara bundle publish—oci-artifact composite)
+#   - SBOM:            from the same (actions/attest)
 #   - Vuln scan:       from reusable_vuln_scan.yml (cosign attest --type vuln) — optional via verify_vuln input
 #
 # Security guarantees:
@@ -65,7 +66,7 @@ concurrency:
 
 jobs:
   sign-and-verify:
-    if: ${{ github.ref_protected }}
+    if: github.ref_protected
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
