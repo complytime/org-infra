@@ -14,6 +14,7 @@ This feature does not introduce a traditional data model. The relevant data stru
 | packages | string | no | `./...` | Go packages to analyze |
 | coverprofile | string | no | `coverage.out` | Path to coverage profile |
 | new-function-threshold | number | no | `30` | CRAP score ceiling for new functions |
+| regression-epsilon | string | no | `0.5` | Minimum score delta to flag a regression |
 | post-comment | boolean | no | `true` | Whether to post/update PR comment |
 
 ## Workflow Outputs
