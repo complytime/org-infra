@@ -70,7 +70,7 @@ The org-infra sync mechanism distributes a consumer workflow template to Go repo
 - **FR-004**: The workflow MUST generate a coverage profile, run CRAP analysis, and compare results against a committed baseline file when available.
 - **FR-005**: The workflow MUST post or update a single PR comment (idempotent) with a summary table including metrics such as average complexity, coverage, CRAP scores, regressions, improvements, and new functions.
 - **FR-006**: The workflow MUST fail the check when regressions or new-function threshold violations are detected.
-- **FR-007**: The workflow MUST support configurable inputs for Go version detection, analysis tool version, baseline file path, target packages, coverage profile path, new-function threshold, and PR comment toggle.
+- **FR-007**: The workflow MUST support configurable inputs for Go version detection, analysis tool version, baseline file path, target packages, coverage profile path, new-function threshold, regression epsilon tolerance, and PR comment toggle.
 - **FR-008**: The consumer workflow template MUST be added to the org-infra sync configuration to distribute it to Go repositories, excluding non-Go repositories.
 - **FR-009**: The workflow MUST upload analysis artifacts for retention.
 - **FR-010**: The workflow MUST follow the Principle of Least Privilege, requesting only the minimum permissions required for reading source code and writing PR comments.

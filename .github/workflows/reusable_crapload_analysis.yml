@@ -36,6 +36,14 @@ on:
         description: 'CRAP score ceiling for new functions with no baseline entry'
         type: number
         default: 30
+      regression-epsilon:
+        description: >-
+          Minimum CRAP/GazeCRAP score delta to flag a regression.
+          Differences within this tolerance are treated as noise
+          from platform, toolchain, or test-ordering variance.
+        required: false
+        type: string
+        default: '0.5'
     outputs:
       status:
         description: 'pass or fail'
@@ -144,6 +152,7 @@ jobs:
           BASELINE="${{ inputs.baseline-file }}"
           CURRENT="/tmp/crapload-current.json"
           NEW_FUNC_THRESHOLD=${{ inputs.new-function-threshold }}
+          EPSILON=${{ inputs.regression-epsilon }}
           REGRESSIONS=""
           IMPROVEMENTS=""
           NEW_FUNCTIONS=""
@@ -192,14 +201,14 @@ jobs:
               has_regression=false
               has_improvement=false
 
-              if [ "$(echo "$crap > $b_crap" | bc -l)" = "1" ]; then
+              if [ "$(echo "$crap - $b_crap > $EPSILON" | bc -l)" = "1" ]; then
                 has_regression=true
-              elif [ "$(echo "$crap < $b_crap" | bc -l)" = "1" ]; then
+              elif [ "$(echo "$b_crap - $crap > $EPSILON" | bc -l)" = "1" ]; then
                 has_improvement=true
               fi
-              if [ "$(echo "$gaze_crap > $b_gaze" | bc -l)" = "1" ]; then
+              if [ "$(echo "$gaze_crap - $b_gaze > $EPSILON" | bc -l)" = "1" ]; then
                 has_regression=true
-              elif [ "$(echo "$gaze_crap < $b_gaze" | bc -l)" = "1" ]; then
+              elif [ "$(echo "$b_gaze - $gaze_crap > $EPSILON" | bc -l)" = "1" ]; then
                 has_improvement=true
               fi
 
