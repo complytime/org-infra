@@ -98,8 +98,8 @@ files_to_sync:
       - .github
       - complyscribe
 
-  - source: .opencode/command/review_pr.md
-    destination: .opencode/command/review_pr.md
+  - source: .opencode/commands/review-pr.md
+    destination: .opencode/commands/review-pr.md
     exclude_repos:
       - .github
       - complyscribe

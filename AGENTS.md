@@ -13,7 +13,7 @@ specs/                   # SpecKit feature specifications
 openspec/                # OpenSpec feature specifications
 docs/                    # Project documentation (includes AI_TOOLING.md)
 .agents/skills/          # Agent-agnostic AI skills (auto-discovered by OpenCode)
-.opencode/command/       # Project-specific AI commands (review_pr.md)
+.opencode/commands/      # Project-specific AI commands (review-pr.md)
 sync-config.yml          # Defines which files sync to org repos — check before modifying any config
 .specify/memory/constitution.md  # All coding standards and governance (single source of truth)
 Makefile                 # Build/test/lint automation
@@ -63,3 +63,15 @@ Replace `model-name` with the actual model identifier (e.g., `claude-opus-4-6`).
 ## Recent Changes
 - 004-standardize-ai-tooling: Added YAML (GitHub Actions syntax), Markdown, Python 3.x (sync scripts only) + OpenCode (agent), OpenSpec/SpecKit (spec frameworks — plugin-managed), `gh` CLI (PR review command), GitPython + PyYAML + requests (sync script — existing)
 - 006-robust-dependabot-approval: Added Bash (shell scripts in GitHub Actions `run:` blocks), YAML (GitHub Actions workflow syntax) + GitHub Actions platform, `gh` CLI (pre-installed on runners), `jq` (pre-installed on runners), `curl` (pre-installed on runners), `actions/dependency-review-action@v4.9.0`, `peter-evans/create-or-update-comment@v5.0.0`, `actions/github-script@v8.0.0`, `actions/checkout@v6.0.2`, `tj-actions/changed-files@v47.0.5`
+
+## Convention Packs
+
+This repository uses convention packs scaffolded by
+unbound-force. Agents MUST read the applicable pack(s)
+before writing or reviewing code.
+
+- `.opencode/uf/packs/default.md`
+- `.opencode/uf/packs/default-custom.md`
+- `.opencode/uf/packs/severity.md`
+- `.opencode/uf/packs/content.md`
+- `.opencode/uf/packs/content-custom.md`
