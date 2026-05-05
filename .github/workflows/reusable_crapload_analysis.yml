@@ -42,8 +42,8 @@ on:
           Differences within this tolerance are treated as noise
           from platform, toolchain, or test-ordering variance.
         required: false
-        type: string
-        default: '0.5'
+        type: number
+        default: 0.5
     outputs:
       status:
         description: 'pass or fail'
@@ -152,7 +152,7 @@ jobs:
           BASELINE="${{ inputs.baseline-file }}"
           CURRENT="/tmp/crapload-current.json"
           NEW_FUNC_THRESHOLD=${{ inputs.new-function-threshold }}
-          EPSILON=${{ inputs.regression-epsilon }}
+          EPSILON="${{ inputs.regression-epsilon }}"
           REGRESSIONS=""
           IMPROVEMENTS=""
           NEW_FUNCTIONS=""
