@@ -1,0 +1,420 @@
+# Reusable Council Review Workflow
+#
+# Runs an automated AI review council on pull requests using 5 Divisor
+# review personas (Guard, Architect, Adversary, Tester, SRE). Each
+# persona reads its committed agent file as prompt context and returns
+# a structured verdict.
+#
+# Features:
+# - Spec vs code review auto-detection based on changed files
+# - Gate checks: skip dependabot, draft, binary-only, and fork PRs
+# - Diff size limit: 1000 lines per persona
+# - Prompt injection resilience via structural delimiters
+# - Graceful failure when Divisor files or API credentials are missing
+# - Single PR comment, updated on each push (edit-mode: replace)
+#
+# The AI provider is configurable via inputs and secrets. The workflow
+# is provider-agnostic — the specific provider is determined during
+# the AI integration phase.
+
+on:
+  workflow_call:
+    inputs:
+      ai_api_endpoint_override:
+        description: >
+          Override for AI API endpoint. If not provided, the workflow
+          reads from the AI_API_ENDPOINT secret.
+        required: false
+        type: string
+        default: ""
+      ai_model:
+        description: "AI model name to use for API calls"
+        required: false
+        type: string
+        default: ""
+      max_diff_lines:
+        description: "Maximum diff lines per persona (default: 1000)"
+        required: false
+        type: number
+        default: 1000
+      generated_file_patterns:
+        description: >
+          Comma-separated glob patterns for generated files to skip
+          (e.g., '*.pb.go,*_generated.go')
+        required: false
+        type: string
+        default: ""
+    secrets:
+      AI_API_KEY:
+        description: "API key for the AI provider"
+        required: false
+      AI_API_ENDPOINT:
+        description: "Base URL for the AI API"
+        required: false
+
+permissions: {}
+
+jobs:
+  gate-checks:
+    name: Gate Checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      should_review: ${{ steps.gate.outputs.should_review }}
+      review_mode: ${{ steps.detect-mode.outputs.review_mode }}
+      skip_reason: ${{ steps.gate.outputs.skip_reason }}
+    steps:
+      - name: Check gate conditions
+        id: gate
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          HAS_API_KEY: ${{ secrets.AI_API_KEY != '' }}
+        run: |
+          # Gate 1: Skip dependabot PRs
+          if [[ "${PR_AUTHOR}" == "dependabot[bot]" ]]; then
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Dependabot PR — skipping council review" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Gate 2: Skip draft PRs
+          if [[ "${PR_DRAFT}" == "true" ]]; then
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Draft PR — skipping council review" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Gate 3: Skip if API credentials are missing (fork PRs)
+          if [[ "${HAS_API_KEY}" != "true" ]]; then
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=AI API credentials not configured — skipping council review" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_review=true" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: steps.gate.outputs.should_review == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed files
+        if: steps.gate.outputs.should_review == 'true'
+        id: changed-files
+        uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96 # v47.0.6
+        with:
+          files: |
+            **/*
+
+      - name: Check for binary/lock-only changes
+        if: steps.gate.outputs.should_review == 'true'
+        id: binary-check
+        env:
+          ALL_CHANGED: ${{ steps.changed-files.outputs.all_changed_files }}
+          GENERATED_PATTERNS: ${{ inputs.generated_file_patterns }}
+        run: |
+          binary_lock_patterns=(
+            '*.png' '*.jpg' '*.jpeg' '*.gif' '*.ico' '*.wasm' '*.exe'
+            '*.bin' '*.zip' '*.tar' '*.gz'
+            'go.sum' 'package-lock.json' 'yarn.lock' 'poetry.lock'
+            'Gemfile.lock' 'bun.lock' 'pnpm-lock.yaml'
+          )
+
+          has_reviewable=false
+          for file in ${ALL_CHANGED}; do
+            is_skip=false
+            for pattern in "${binary_lock_patterns[@]}"; do
+              if [[ "${file}" == ${pattern} ]]; then
+                is_skip=true
+                break
+              fi
+            done
+            if [[ "${is_skip}" == "false" ]]; then
+              has_reviewable=true
+              break
+            fi
+          done
+
+          if [[ "${has_reviewable}" == "false" ]]; then
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Only binary/lock files changed — skipping council review" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_review=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update gate result for binary-only
+        if: >
+          steps.gate.outputs.should_review == 'true' &&
+          steps.binary-check.outputs.should_review == 'false'
+        id: gate-update
+        run: |
+          echo "should_review=false" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=${{ steps.binary-check.outputs.skip_reason }}" >> "$GITHUB_OUTPUT"
+
+      - name: Detect review mode
+        if: steps.gate.outputs.should_review == 'true'
+        id: detect-mode
+        env:
+          ALL_CHANGED: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          has_spec=false
+          has_code=false
+
+          for file in ${ALL_CHANGED}; do
+            case "${file}" in
+              specs/*|openspec/*|.specify/*)
+                has_spec=true
+                ;;
+              *)
+                has_code=true
+                ;;
+            esac
+          done
+
+          if [[ "${has_code}" == "true" ]]; then
+            echo "review_mode=code" >> "$GITHUB_OUTPUT"
+          elif [[ "${has_spec}" == "true" ]]; then
+            echo "review_mode=spec" >> "$GITHUB_OUTPUT"
+          else
+            echo "review_mode=code" >> "$GITHUB_OUTPUT"
+          fi
+
+  council-review:
+    name: Council Review
+    needs: gate-checks
+    if: needs.gate-checks.outputs.should_review == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Check Divisor agent files
+        id: check-agents
+        run: |
+          personas=("guard" "architect" "adversary" "testing" "sre")
+          available=""
+          missing=""
+
+          for persona in "${personas[@]}"; do
+            file=".opencode/agents/divisor-${persona}.md"
+            if [[ -f "${file}" ]]; then
+              available="${available} ${persona}"
+            else
+              missing="${missing} ${persona}"
+            fi
+          done
+
+          available=$(echo "${available}" | xargs)
+          missing=$(echo "${missing}" | xargs)
+
+          if [[ -z "${available}" ]]; then
+            echo "has_agents=false" >> "$GITHUB_OUTPUT"
+            echo "available=" >> "$GITHUB_OUTPUT"
+            echo "missing=${missing}" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_agents=true" >> "$GITHUB_OUTPUT"
+            echo "available=${available}" >> "$GITHUB_OUTPUT"
+            echo "missing=${missing}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post setup-required comment
+        if: steps.check-agents.outputs.has_agents == 'false'
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ## AI Council Review
+
+            **Status**: Setup required
+
+            Council review requires Divisor agent files in `.opencode/agents/`.
+            Run `uf init --divisor` to generate them.
+
+            See `docs/AI.md` for setup instructions.
+
+            ---
+            *Generated by AI Council Review. Findings assist human reviewers
+            and do not replace human judgment.*
+          edit-mode: replace
+
+      - name: Collect governance context
+        if: steps.check-agents.outputs.has_agents == 'true'
+        id: context
+        env:
+          REVIEW_MODE: ${{ needs.gate-checks.outputs.review_mode }}
+        run: |
+          context=""
+
+          # Read constitution
+          if [[ -f ".specify/memory/constitution.md" ]]; then
+            context="${context}
+          <constitution>
+          $(cat .specify/memory/constitution.md)
+          </constitution>"
+          fi
+
+          # Read convention packs
+          if ls .opencode/uf/packs/*.md 1>/dev/null 2>&1; then
+            for pack in .opencode/uf/packs/*.md; do
+              pack_name=$(basename "${pack}")
+              context="${context}
+          <convention-pack name=\"${pack_name}\">
+          $(cat "${pack}")
+          </convention-pack>"
+            done
+          fi
+
+          # Read AGENTS.md
+          if [[ -f "AGENTS.md" ]]; then
+            context="${context}
+          <agents-md>
+          $(cat AGENTS.md)
+          </agents-md>"
+          fi
+
+          # Read spec files for spec review mode
+          if [[ "${REVIEW_MODE}" == "spec" ]]; then
+            for dir in specs openspec; do
+              if [[ -d "${dir}" ]]; then
+                find "${dir}" -name "*.md" -type f | while read -r spec_file; do
+                  context="${context}
+          <spec-file path=\"${spec_file}\">
+          $(cat "${spec_file}")
+          </spec-file>"
+                done
+              fi
+            done
+          fi
+
+          # Write context to file (too large for env var)
+          echo "${context}" > /tmp/governance_context.txt
+
+      - name: Collect PR diff
+        if: steps.check-agents.outputs.has_agents == 'true'
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MAX_LINES: ${{ inputs.max_diff_lines }}
+        run: |
+          diff_output=$(gh pr diff "${PR_NUMBER}" \
+            -- ':(exclude)*.png' ':(exclude)*.jpg' ':(exclude)*.jpeg' \
+            ':(exclude)*.gif' ':(exclude)*.ico' ':(exclude)*.wasm' \
+            ':(exclude)*.exe' ':(exclude)go.sum' \
+            ':(exclude)package-lock.json' ':(exclude)yarn.lock' \
+            ':(exclude)poetry.lock' 2>/dev/null || echo "")
+
+          total_lines=$(echo "${diff_output}" | wc -l)
+
+          if [[ "${total_lines}" -gt "${MAX_LINES}" ]]; then
+            echo "${diff_output}" | head -n "${MAX_LINES}" > /tmp/pr_diff.txt
+            echo "truncated=true" >> "$GITHUB_OUTPUT"
+            echo "total_lines=${total_lines}" >> "$GITHUB_OUTPUT"
+          else
+            echo "${diff_output}" > /tmp/pr_diff.txt
+            echo "truncated=false" >> "$GITHUB_OUTPUT"
+            echo "total_lines=${total_lines}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run council review
+        if: steps.check-agents.outputs.has_agents == 'true'
+        id: review
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_API_ENDPOINT: ${{ secrets.AI_API_ENDPOINT }}
+          AI_MODEL: ${{ inputs.ai_model }}
+          REVIEW_MODE: ${{ needs.gate-checks.outputs.review_mode }}
+          AVAILABLE_PERSONAS: ${{ steps.check-agents.outputs.available }}
+          MISSING_PERSONAS: ${{ steps.check-agents.outputs.missing }}
+          DIFF_TRUNCATED: ${{ steps.diff.outputs.truncated }}
+          DIFF_TOTAL_LINES: ${{ steps.diff.outputs.total_lines }}
+          MAX_DIFF_LINES: ${{ inputs.max_diff_lines }}
+        run: |
+          # This step is a placeholder for the AI API integration.
+          # The specific API call implementation will be added during
+          # the AI integration phase when the provider is selected.
+          #
+          # The implementation will:
+          # 1. For each available persona, read the agent file
+          # 2. Construct a prompt with structural delimiters:
+          #    - System instructions (from agent file)
+          #    - Governance context (from /tmp/governance_context.txt)
+          #    - Untrusted diff content wrapped in <diff> tags
+          # 3. Make parallel API calls to AI_API_ENDPOINT
+          # 4. Parse responses for verdict and findings
+          # 5. Handle partial failures gracefully
+          #
+          # For now, output a placeholder result indicating the
+          # workflow structure is functional but API integration
+          # is pending.
+
+          echo "## AI Council Review" > /tmp/council_comment.md
+          echo "" >> /tmp/council_comment.md
+          echo "**Mode**: ${REVIEW_MODE^} Review" >> /tmp/council_comment.md
+          echo "**Status**: API integration pending" >> /tmp/council_comment.md
+          echo "" >> /tmp/council_comment.md
+
+          if [[ -n "${MISSING_PERSONAS}" ]]; then
+            echo "**Skipped personas** (agent files missing):" \
+              "${MISSING_PERSONAS}" >> /tmp/council_comment.md
+            echo "" >> /tmp/council_comment.md
+          fi
+
+          echo "| Persona | Verdict | Findings |" >> /tmp/council_comment.md
+          echo "|---------|---------|----------|" >> /tmp/council_comment.md
+
+          for persona in ${AVAILABLE_PERSONAS}; do
+            echo "| ${persona^} | PENDING | API not configured |" \
+              >> /tmp/council_comment.md
+          done
+
+          echo "" >> /tmp/council_comment.md
+
+          if [[ "${DIFF_TRUNCATED}" == "true" ]]; then
+            echo "> **Note**: PR diff was truncated from" \
+              "${DIFF_TOTAL_LINES} to ${MAX_DIFF_LINES} lines" \
+              "per persona." >> /tmp/council_comment.md
+            echo "" >> /tmp/council_comment.md
+          fi
+
+          echo "**Council Verdict: PENDING** — AI API integration" \
+            "required. Configure \`AI_API_KEY\` and" \
+            "\`AI_API_ENDPOINT\` organization secrets to enable" \
+            "council review." >> /tmp/council_comment.md
+          echo "" >> /tmp/council_comment.md
+          echo "---" >> /tmp/council_comment.md
+          echo "*Generated by AI Council Review. Findings assist" \
+            "human reviewers and do not replace human judgment.*" \
+            >> /tmp/council_comment.md
+
+      - name: Post review comment
+        if: steps.check-agents.outputs.has_agents == 'true'
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: /tmp/council_comment.md
+          edit-mode: replace
+
+  post-skip:
+    name: Post Skip Notice
+    needs: gate-checks
+    if: >
+      needs.gate-checks.outputs.should_review == 'false' &&
+      needs.gate-checks.outputs.skip_reason != ''
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Log skip reason
+        run: |
+          echo "Council review skipped: ${{ needs.gate-checks.outputs.skip_reason }}"

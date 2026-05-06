@@ -1,0 +1,31 @@
+# CI Council Review
+#
+# Consumer workflow that triggers the reusable council review on every
+# pull request. The council runs 5 Divisor review personas (Guard,
+# Architect, Adversary, Tester, SRE) via an AI API and posts structured
+# findings as a PR comment.
+#
+# Uses `pull_request` event (not `pull_request_target`) to ensure
+# secrets are not exposed to fork PRs. External contributor PRs skip
+# the review automatically.
+
+name: Council Review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+
+permissions: {}
+
+jobs:
+  council:
+    name: AI Council Review
+    # TODO: Pin to release SHA after first tag (e.g., @<sha> # v0.2.0)
+    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@main
+    permissions:
+      contents: read
+      pull-requests: write
+    secrets:
+      AI_API_KEY: ${{ secrets.AI_API_KEY }}
+      AI_API_ENDPOINT: ${{ secrets.AI_API_ENDPOINT }}

@@ -11,7 +11,8 @@ tests/                   # pytest unit tests for sync script
 compliance/              # Ampel policy definitions (branch protection rules)
 specs/                   # SpecKit feature specifications
 openspec/                # OpenSpec feature specifications
-docs/                    # Project documentation (includes AI_TOOLING.md)
+docs/                    # Project documentation (includes AI.md)
+.opencode/agents/        # Divisor review personas (5 synced: guard, architect, adversary, testing, sre)
 .agents/skills/          # Agent-agnostic AI skills (auto-discovered by OpenCode)
 .opencode/commands/      # Project-specific AI commands (review-pr.md)
 sync-config.yml          # Defines which files sync to org repos — check before modifying any config
@@ -35,7 +36,8 @@ make clean           # Remove __pycache__ and .pyc
 - **Python**: Lint with `ruff` (`ruff.toml`). No `go.mod` — this repo is Python + YAML, not Go (Go configs are sync templates for other repos).
 - **YAML**: Lint with `yamllint` (`.yamllint.yml`). Line length follows yamllint config, not the 99-char code rule.
 - **Standards**: All coding standards are in `.specify/memory/constitution.md`. Do not duplicate them.
-- **AI tooling**: Setup, commands, and skill creation documented in `docs/AI_TOOLING.md`.
+- **AI tooling**: Setup, commands, convention packs, and skill creation documented in `docs/AI.md`.
+- **Divisor agents**: 5 review personas in `.opencode/agents/divisor-*.md` (guard, architect, adversary, testing, sre) are synced to all org repos and used by the CI council review workflow. 4 additional content personas (curator, scribe, herald, envoy) are org-infra only.
 
 ## Commits
 
