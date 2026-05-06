@@ -151,7 +151,7 @@ jobs:
         run: |
           BASELINE="${{ inputs.baseline-file }}"
           CURRENT="/tmp/crapload-current.json"
-          NEW_FUNC_THRESHOLD=${{ inputs.new-function-threshold }}
+          NEW_FUNC_THRESHOLD="${{ inputs.new-function-threshold }}"
           EPSILON="${{ inputs.regression-epsilon }}"
           REGRESSIONS=""
           IMPROVEMENTS=""
