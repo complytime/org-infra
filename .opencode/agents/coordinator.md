@@ -1,7 +1,8 @@
 ---
-name: coordinator
 description: Orchestrates forge coordination and supervises worker agents.
+mode: subagent
 ---
+<!-- scaffolded by uf vdev -->
 
 # Forge Coordinator
 
