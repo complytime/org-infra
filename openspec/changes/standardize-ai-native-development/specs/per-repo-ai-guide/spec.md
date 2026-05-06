@@ -64,6 +64,13 @@ the council review consumer workflow to the sync list.
 - **THEN** it syncs `docs/AI.md` (not `docs/AI_TOOLING.md`) to all target
   repositories
 
+#### Scenario: Old AI_TOOLING.md cleaned up in downstream repos
+
+- **WHEN** the sync script runs after the rename
+- **THEN** the old `docs/AI_TOOLING.md` is removed from target repositories, either
+  via a `files_to_remove` mechanism in sync-config or via a documented one-time
+  manual cleanup task per downstream repo
+
 #### Scenario: Divisor agent files added to sync config
 
 - **WHEN** the sync script runs

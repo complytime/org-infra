@@ -1,6 +1,6 @@
 ## Context
 
-The ComplyTime organization has agreed on an AI-native development workflow: a 6-step
+The ComplyTime organization has agreed on an AI-native development workflow: a 5-step
 process (specify → spec review → implement → code review → merge) with convention
 packs, Divisor review council, and spec-driven development. However, this workflow
 lacks formal org-wide documentation, the per-repo AI guide is narrowly scoped, and
@@ -120,11 +120,18 @@ and secrets.
 
 ### D6: Divisor agent files fully aligned with uf standards
 
-The 5 core Divisor persona files follow the exact structure, naming, and location
+The 5 core Divisor review personas follow the exact structure, naming, and location
 used in [unbound-force](https://github.com/unbound-force/unbound-force): `.opencode/agents/divisor-{guard,architect,adversary,
-testing,sre}.md`. Files are initially created by `uf init` (prerequisite), then
-maintained in org-infra and replicated via sync-config. `uf init --divisor` overwrites
-the synced versions locally with potentially enhanced versions for interactive review.
+testing,sre}.md`. These files already exist in org-infra (created by a prior
+`uf init --divisor` run) and will be added to sync-config for org-wide distribution.
+
+Only the 5 review personas are synced. The 4 additional Divisor personas (curator,
+scribe, herald, envoy) are content-focused agents not relevant to PR code/spec
+review. They remain in org-infra only and are not distributed to downstream repos.
+
+`uf init --divisor` overwrites the synced versions locally with potentially enhanced
+versions for interactive review. Contributors who run `uf init` in a synced repo
+should not commit the overwritten files — the org-infra versions are canonical.
 
 **Alternatives considered:**
 - Dedicated CI prompt templates in `.github/council/` — splits maintenance between
@@ -132,6 +139,8 @@ the synced versions locally with potentially enhanced versions for interactive r
 - Embedded prompts in workflow YAML — unmaintainable, unreviewable, hard to customize.
 - Content-only alignment (different location) — breaks the uf standard's expectation
   of where Divisor files live.
+- Sync all 9 Divisor personas — unnecessary; downstream repos only need review
+  personas for CI council review.
 
 ### D7: Review triggers on every push with gate checks
 
@@ -236,9 +245,12 @@ in the prompt alongside the diff, replacing tool-dependent steps.
 After sync delivers baseline files, `uf init --divisor` overwrites them locally.
 A contributor who then runs `git add .` could commit the uf-generated versions,
 diverging from org-infra.
-→ **Mitigation**: Document the expected behavior in `docs/AI.md`. The `.gitignore`
-should be configured to avoid accidental commits of uf-overwritten files in repos
-where sync is the authority.
+→ **Mitigation**: Document the expected behavior in `docs/AI.md`. Contributors
+in synced repos should not commit overwritten Divisor files — the org-infra
+versions are canonical. The `docs/AI.md` guide will include explicit guidance
+on this. A `.gitignore` pattern for the 4 non-review personas (curator, scribe,
+herald, envoy) will prevent accidental commits of content agents that are
+org-infra-specific.
 
 ### [RISK] Sync-excluded repos diverge
 Repos excluded from Divisor file sync maintain their own persona definitions,
@@ -274,8 +286,9 @@ rollback coordination.
 
 - **Q1**: Which repos should be excluded from Divisor agent file sync? Needs input
   from repo maintainers who have custom persona definitions.
-- **Q2**: Should the CI council review have a diff size limit per persona to control
-  cost and prompt quality? If so, what threshold (e.g., 500 lines)?
+- ~~**Q2**: Should the CI council review have a diff size limit per persona to control
+  cost and prompt quality? If so, what threshold?~~ **Resolved**: Yes, 1000 lines
+  per persona. PRs exceeding this limit have their diff truncated with a notice.
 - **Q3**: Which AI API provider will be used? (Vertex AI, Anthropic, etc.) This
-  will be determined during the AI integration phase. The workflow design is
-  provider-agnostic.
+  will be determined during the AI integration phase. The workflow uses
+  `AI_API_KEY` and `AI_API_ENDPOINT` as the provider-agnostic secret interface.

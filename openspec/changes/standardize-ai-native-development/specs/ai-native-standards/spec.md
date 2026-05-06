@@ -14,11 +14,13 @@ disclosure standards, and continuous improvement loop for all ComplyTime reposit
 - **THEN** the per-repo `docs/AI.md` links to `community/AI_NATIVE_DEVELOPMENT.md`
   as the org-wide standard
 
-#### Scenario: Document covers the 6-step workflow
+#### Scenario: Document covers the collaboration workflow
 
 - **WHEN** a contributor reads the AI-native development standard
-- **THEN** the document describes the full workflow: specify → spec review
-  (council + humans) → implement → code review (council + humans) → merge
+- **THEN** the document describes the full workflow with a dedicated section for
+  each step: specify → spec review (council + humans) → implement → code review
+  (council + humans) → merge, including inputs, outputs, and responsibilities
+  for each step
 
 #### Scenario: File classification is documented
 
