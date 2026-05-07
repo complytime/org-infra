@@ -60,10 +60,10 @@ jobs:
           make build
 
       - name: Install snappy
-        uses: carabiner-dev/actions/install/snappy@360ffa1eb909b0105d4eccb6d6ef337911c34952
+        uses: carabiner-dev/actions/install/snappy@e0e3b8149dafed833431095bc148d50e7eade4e8
 
       - name: Install ampel
-        uses: carabiner-dev/actions/install/ampel@360ffa1eb909b0105d4eccb6d6ef337911c34952
+        uses: carabiner-dev/actions/install/ampel@e0e3b8149dafed833431095bc148d50e7eade4e8
 
       - name: Register ampel-plugin provider with complyctl
         run: |
