@@ -143,6 +143,9 @@ files_to_sync:
   # CI Council Review consumer workflow
   - source: .github/workflows/ci_council_review.yml
     destination: .github/workflows/ci_council_review.yml
+    exclude_repos:
+      - .github
+      - complyscribe
 
   # GitHub Templates
   - source: .github/pull_request_template.md

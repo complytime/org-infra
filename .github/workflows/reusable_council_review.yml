@@ -17,6 +17,8 @@
 # is provider-agnostic — the specific provider is determined during
 # the AI integration phase.
 
+name: Reusable Council Review
+
 on:
   workflow_call:
     inputs:
@@ -129,6 +131,7 @@ jobs:
           for file in ${ALL_CHANGED}; do
             is_skip=false
             for pattern in "${binary_lock_patterns[@]}"; do
+              # shellcheck disable=SC2053
               if [[ "${file}" == ${pattern} ]]; then
                 is_skip=true
                 break
@@ -152,9 +155,11 @@ jobs:
           steps.gate.outputs.should_review == 'true' &&
           steps.binary-check.outputs.should_review == 'false'
         id: gate-update
+        env:
+          BINARY_SKIP_REASON: ${{ steps.binary-check.outputs.skip_reason }}
         run: |
           echo "should_review=false" >> "$GITHUB_OUTPUT"
-          echo "skip_reason=${{ steps.binary-check.outputs.skip_reason }}" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=${BINARY_SKIP_REASON}" >> "$GITHUB_OUTPUT"
 
       - name: Detect review mode
         if: steps.gate.outputs.should_review == 'true'
