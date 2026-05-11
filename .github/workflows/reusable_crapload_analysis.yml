@@ -175,6 +175,40 @@ jobs:
               echo "regressions_count=0"
               echo "improvements_count=0"
             } >> "$GITHUB_OUTPUT"
+
+            # Generate comment body with current scores (no baseline comparison)
+            AVG_COMPLEXITY=$(jq -r '(.summary.avg_complexity // 0) * 10 | round / 10' "$CURRENT")
+            AVG_LINE_COV=$(jq -r '(.summary.avg_line_coverage // 0) * 10 | round / 10' "$CURRENT")
+            AVG_CRAP=$(jq -r '(.summary.avg_crap // 0) * 10 | round / 10' "$CURRENT")
+            CRAP_THRESH=$(jq -r '.summary.crap_threshold // 15' "$CURRENT")
+            AVG_CONTRACT_COV=$(jq -r '(.summary.avg_contract_coverage // 0) * 10 | round / 10' "$CURRENT")
+            AVG_GAZE_CRAP=$(jq -r '(.summary.avg_gaze_crap // 0) * 10 | round / 10' "$CURRENT")
+            GAZE_CRAP_THRESH=$(jq -r '.summary.gaze_crap_threshold // 15' "$CURRENT")
+            TOTAL_FUNCS=$(jq -r '.summary.total_functions // 0' "$CURRENT")
+
+            {
+              echo "<!-- crapload-analysis-marker -->"
+              echo "## &#x2705; CRAP Load Analysis: PASS (no baseline)"
+              echo ""
+              echo "No baseline file found. Showing current scores without comparison."
+              echo "Commit a baseline to \`$BASELINE\` to enable regression detection."
+              echo ""
+              echo "### Summary"
+              echo ""
+              echo "| Metric | Value |"
+              echo "|--------|-------|"
+              echo "| Functions analysed | ${TOTAL_FUNCS} |"
+              echo "| Avg complexity | ${AVG_COMPLEXITY} |"
+              echo "| Avg line coverage | ${AVG_LINE_COV}% |"
+              echo "| Avg CRAP score | ${AVG_CRAP} |"
+              echo "| CRAPload (>= ${CRAP_THRESH}) | ${CRAPLOAD} |"
+              echo "| Avg contract coverage | ${AVG_CONTRACT_COV}% |"
+              echo "| Avg GazeCRAP score | ${AVG_GAZE_CRAP} |"
+              echo "| GazeCRAPload (>= ${GAZE_CRAP_THRESH}) | ${GAZE_CRAPLOAD} |"
+              echo ""
+              echo "[View full analysis logs](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+            } > /tmp/crapload-comment-body.md
+
             exit 0
           fi
 
