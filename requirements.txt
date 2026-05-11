@@ -7,7 +7,7 @@ GitPython>=3.1.49
 PyYAML>=6.0.3
 
 # HTTP requests
-requests>=2.33.1
+requests>=2.34.0
 
 # Testing
 pytest>=9.0.3
