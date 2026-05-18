@@ -58,13 +58,54 @@ org-infra/
 │  └── ampel/                               # Policy definitions for branch protection rule compliance checks.
 ├── docs/                                   # More detailed and specific documentation.
 │  ├── LOCAL_TESTING.md                     # Documentation on how to test synchronization locally.
-│  └── SYNC_REPOSITORIES_SETUP.md           # Documentation on how to setup the repository synchronization infrastructure.
+│  └── SYNC_REPOSITORIES_SETUP.md          # Documentation on how to setup the repository synchronization infrastructure.
 ├── scripts/
-│  └── sync-org-repositories.py             # Python script to check and ensure consistence among repositories.
+│  ├── sync-org-repositories.py             # Python script to check and ensure consistence among repositories.
+│  └── resolve-go-packages.sh              # Bash: multi-module Go package auto-discovery
 ├── ...                                     # Multiple technology specific configuration files
 ├── sync-config.yml                         # Configuration file consumed by `sync-org-repositories.py`
 └── README.md                               # This file.
 ```
+
+---
+
+## 🧪 Testing
+
+### Quick Start
+
+```bash
+# Set up Python virtual environment (automatic dependency installation)
+make venv
+
+# Activate the virtual environment (optional for interactive use)
+source .venv/bin/activate
+
+# Run all tests (unit and integration)
+make test
+
+# Run linters
+make lint             # Lint YAML and Python (auto-creates venv if needed)
+```
+
+The `make venv` target automatically creates a `.venv` directory and installs all Python dependencies from `requirements.txt` (including pytest, ruff, yamllint). All make targets that need Python (`make test`, `make lint`, `make sync-dry-run`) automatically use the virtual environment - you don't need to activate it manually for make commands.
+
+### Test Suites
+
+All tests use pytest and are located in the `tests/` directory:
+
+1. **Python Unit Tests** - Test the sync script logic
+2. **Integration Tests** - Test CRAP load package resolution and workflow input validation
+
+Run all tests with:
+```bash
+make test
+# or directly with pytest
+pytest tests/ -v
+```
+
+See [`docs/LOCAL_TESTING.md`](docs/LOCAL_TESTING.md) for detailed setup and troubleshooting.
+
+---
 
 ## Style Guides
 

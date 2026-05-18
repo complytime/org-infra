@@ -89,8 +89,18 @@ jobs:
             exit 1
           fi
 
+      - name: Validate complytime_config_path input
+        env:
+          CONFIG_PATH: ${{ inputs.complytime_config_path }}
+        run: |
+          if [[ ! "${CONFIG_PATH}" =~ ^[a-zA-Z0-9_./-]+$ ]] || [[ "${CONFIG_PATH}" == *".."* ]]; then
+            echo "::error::Invalid complytime_config_path"
+            exit 1
+          fi
+          echo "CONFIG_PATH=${CONFIG_PATH}" >> "$GITHUB_ENV"
+
       - name: Copy workspace configuration
-        run: cp "_caller/${{ inputs.complytime_config_path }}" complytime.yaml
+        run: cp "_caller/${CONFIG_PATH}" complytime.yaml
 
       - name: Copy ampel policy files
         run: |
@@ -100,13 +110,25 @@ jobs:
       - name: Fetch ampel-branch-protection policy from mock registry
         run: ./bin/complyctl get
 
+      - name: Validate policy_id input
+        env:
+          POLICY_ID: ${{ inputs.policy_id }}
+        run: |
+          if [[ ! "${POLICY_ID}" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            echo "::error::Invalid policy_id '${POLICY_ID}': must match ^[a-zA-Z0-9_-]+$"
+            exit 1
+          fi
+          echo "POLICY_ID=${POLICY_ID}" >> "$GITHUB_ENV"
+
       - name: Generate policy graph
-        run: ./bin/complyctl generate --policy-id ${{ inputs.policy_id }}
+        run: |
+          ./bin/complyctl generate --policy-id "${POLICY_ID}"
 
       - name: Scan branch protection rules
         env:
           GITHUB_TOKEN: "${{ secrets.source_token }}"
-        run: ./bin/complyctl scan --policy-id ${{ inputs.policy_id }} --format pretty
+        run: |
+          ./bin/complyctl scan --policy-id "${POLICY_ID}" --format pretty
 
       - name: Publish report to GitHub Step Summary
         run: |
