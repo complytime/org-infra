@@ -205,7 +205,37 @@ org-infra and open a PR. See the workflow file for the test procedure.
   receive OIDC tokens. If it does, the WIF attribute condition
   (`repository_owner_id == '181758273'`) blocks non-ComplyTime repos.
 
-## Cost Estimate
+## Cost Controls
+
+### Workflow-Level Gates (implemented)
+
+These gates prevent unnecessary API calls and are enforced in the
+workflow itself:
+
+- **Fork PRs**: Skipped (no OIDC token or secrets available)
+- **Draft PRs**: Skipped
+- **Dependabot PRs**: Skipped
+- **Concurrency**: Only one review runs per PR at a time; rapid pushes
+  cancel the previous run (`cancel-in-progress: true`)
+- **Diff size limit**: 1000 lines per persona (truncated with notice)
+
+### GCP-Level Controls (requires Billing Admin)
+
+These controls limit spending at the GCP project level:
+
+1. **Budget Alert**: Create a monthly budget (e.g., $50) scoped to the
+   `aiplatform.googleapis.com` service. Set thresholds at 50%, 80%, 100%.
+
+2. **Automated Kill-Switch** (optional): Deploy a Cloud Function
+   triggered by a Pub/Sub budget notification that revokes
+   `roles/aiplatform.user` from the `ci-council-review` service account
+   when spending reaches the budget limit. Note: there is a delay of
+   minutes to hours between actual spend and notification.
+
+3. **Quota Reduction**: Request a lower `rawPredict` request quota for
+   the project (default is 30K/min; reduce to 10-30/min for CI usage).
+
+### Cost Estimate
 
 Per council review run (5 personas, ~1000-line diff):
 - Input: ~5K-25K tokens across 5 calls
