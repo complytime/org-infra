@@ -69,25 +69,32 @@ jobs:
         if: github.event.inputs.repos == ''
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
-          python scripts/sync-org-repositories.py \
-            --org ${{ github.repository_owner }} \
-            --config sync-config.yml \
-            ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+          ARGS=(--org "${{ github.repository_owner }}" --config sync-config.yml)
+          if [ "$DRY_RUN" == "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+          python scripts/sync-org-repositories.py "${ARGS[@]}"
 
       - name: Run sync script (specific repos)
         if: github.event.inputs.repos != ''
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          REPOS: ${{ github.event.inputs.repos }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
-          python scripts/sync-org-repositories.py \
-            --org ${{ github.repository_owner }} \
-            --config sync-config.yml \
-            --repos ${{ github.event.inputs.repos }} \
-            ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+          ARGS=(--org "${{ github.repository_owner }}" --config sync-config.yml --repos "$REPOS")
+          if [ "$DRY_RUN" == "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+          python scripts/sync-org-repositories.py "${ARGS[@]}"
 
       - name: Summary
         if: always()
+        env:
+          REPOS: ${{ github.event.inputs.repos }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
           {
             echo "## Sync Organization Repositories Complete"
@@ -95,9 +102,9 @@ jobs:
             echo "- **Trigger:** ${{ github.event_name }}"
 
             if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-              echo "- **Dry Run:** ${{ github.event.inputs.dry_run }}"
-              if [ -n "${{ github.event.inputs.repos }}" ]; then
-                echo "- **Repositories:** ${{ github.event.inputs.repos }}"
+              echo "- **Dry Run:** $DRY_RUN"
+              if [ -n "$REPOS" ]; then
+                echo "- **Repositories:** $REPOS"
               else
                 echo "- **Repositories:** All (from peribolos.yml)"
               fi

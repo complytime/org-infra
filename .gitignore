@@ -55,3 +55,16 @@
 .unbound-force/
 .muti-mind/
 .mx-f/
+
+# Test output artifacts
+.test-output/
+
+# Python virtual environment
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# MegaLinter reports (generated)
+megalinter-reports/
