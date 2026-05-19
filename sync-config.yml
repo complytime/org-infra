@@ -86,11 +86,15 @@ files_to_sync:
       - .github
       - complyscribe
 
-  - source: docs/AI_TOOLING.md
-    destination: docs/AI_TOOLING.md
+  - source: docs/AI.md
+    destination: docs/AI.md
     exclude_repos:
       - .github
       - complyscribe
+
+  # Old file cleanup: docs/AI_TOOLING.md was renamed to docs/AI.md.
+  # Downstream repos must manually delete the orphaned docs/AI_TOOLING.md
+  # after receiving docs/AI.md via sync.
 
   - source: .agents/skills/.gitkeep
     destination: .agents/skills/.gitkeep
@@ -100,6 +104,45 @@ files_to_sync:
 
   - source: .opencode/commands/review-pr.md
     destination: .opencode/commands/review-pr.md
+    exclude_repos:
+      - .github
+      - complyscribe
+
+  # Divisor review personas (5 core personas for CI council review)
+  # 4 content personas (curator, scribe, herald, envoy) are org-infra only
+  - source: .opencode/agents/divisor-guard.md
+    destination: .opencode/agents/divisor-guard.md
+    exclude_repos:
+      - .github
+      - complyscribe
+
+  - source: .opencode/agents/divisor-architect.md
+    destination: .opencode/agents/divisor-architect.md
+    exclude_repos:
+      - .github
+      - complyscribe
+
+  - source: .opencode/agents/divisor-adversary.md
+    destination: .opencode/agents/divisor-adversary.md
+    exclude_repos:
+      - .github
+      - complyscribe
+
+  - source: .opencode/agents/divisor-testing.md
+    destination: .opencode/agents/divisor-testing.md
+    exclude_repos:
+      - .github
+      - complyscribe
+
+  - source: .opencode/agents/divisor-sre.md
+    destination: .opencode/agents/divisor-sre.md
+    exclude_repos:
+      - .github
+      - complyscribe
+
+  # CI Council Review consumer workflow
+  - source: .github/workflows/ci_council_review.yml
+    destination: .github/workflows/ci_council_review.yml
     exclude_repos:
       - .github
       - complyscribe
