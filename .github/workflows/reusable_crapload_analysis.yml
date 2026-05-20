@@ -110,9 +110,11 @@ jobs:
       - name: Resolve Go version source
         if: steps.no-changes.outputs.skip != 'true'
         id: go-version-source
+        env:
+          GO_VERSION_FILE: ${{ inputs.go-version-file }}
         run: |
-          if [[ -f "${{ inputs.go-version-file }}" ]]; then
-            echo "go-version-file=${{ inputs.go-version-file }}" >> "$GITHUB_OUTPUT"
+          if [[ -f "$GO_VERSION_FILE" ]]; then
+            echo "go-version-file=$GO_VERSION_FILE" >> "$GITHUB_OUTPUT"
             echo "go-version=" >> "$GITHUB_OUTPUT"
           else
             echo "go-version-file=" >> "$GITHUB_OUTPUT"
