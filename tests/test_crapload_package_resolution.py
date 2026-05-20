@@ -271,7 +271,7 @@ class TestWorkflowInputValidation:
 
 
 class TestCompareCrapload:
-    """Tests for .github/scripts/compare-crapload.sh."""
+    """Tests for scripts/compare-crapload.sh."""
 
     _MINIMAL_SUMMARY = {
         "crapload": 0,
@@ -297,7 +297,7 @@ class TestCompareCrapload:
     ):
         """Run compare-crapload.sh from repo root and return CompletedProcess."""
         project_root = Path(__file__).parent.parent
-        script_path = project_root / ".github" / "scripts" / "compare-crapload.sh"
+        script_path = project_root / "scripts" / "compare-crapload.sh"
         result = subprocess.run(
             [
                 "bash",

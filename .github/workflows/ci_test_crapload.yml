@@ -5,20 +5,20 @@ name: Test CRAP Load Workflow
 on:
   pull_request:
     paths:
+      - '.github/workflows/ci_test_crapload.yml'
       - '.github/workflows/reusable_crapload_analysis.yml'
+      - 'scripts/compare-crapload.sh'
       - 'scripts/resolve-go-packages.sh'
       - 'tests/test_crapload_package_resolution.py'
-      - '.github/workflows/ci_test_crapload.yml'
-      - '.github/scripts/compare-crapload.sh'
   push:
     branches:
       - main
     paths:
+      - '.github/workflows/ci_test_crapload.yml'
       - '.github/workflows/reusable_crapload_analysis.yml'
+      - 'scripts/compare-crapload.sh'
       - 'scripts/resolve-go-packages.sh'
       - 'tests/test_crapload_package_resolution.py'
-      - '.github/workflows/ci_test_crapload.yml'
-      - '.github/scripts/compare-crapload.sh'
 
 permissions:
   contents: read
