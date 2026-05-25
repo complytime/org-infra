@@ -2,9 +2,9 @@
 name: Reusable GitHub Branch Protection Scan
 
 # --------------------------------------------------------------------------
-# This workflow builds complyctl from source and uses it with a local
-# mock-oci-registry to scan GitHub branch protection rules via the
-# ampel-branch-protection policy.
+# This workflow builds complyctl from source and uses it to scan GitHub
+# branch protection rules via the ampel-branch-protection policy.
+# Policy bundles are fetched directly from Quay.io (public OCI artifacts).
 # --------------------------------------------------------------------------
 on:
   workflow_call:
@@ -82,25 +82,6 @@ jobs:
           mkdir -p ~/.complytime/providers
           cp _providers/bin/complyctl-provider-ampel ~/.complytime/providers/complyctl-provider-ampel
 
-      - name: Start mock-oci-registry in background
-        run: |
-          ./bin/mock-oci-registry &
-          echo "MOCK_REGISTRY_PID=$!" >> "$GITHUB_ENV"
-
-          # Wait up to 15 seconds for the registry to be ready
-          for _ in $(seq 1 30); do
-            if curl -sf http://localhost:8765/v2/ >/dev/null 2>&1; then
-              echo "Mock registry is ready."
-              break
-            fi
-            sleep 0.5
-          done
-
-          if ! curl -sf http://localhost:8765/v2/ >/dev/null 2>&1; then
-            echo "ERROR: mock-oci-registry did not start in time."
-            exit 1
-          fi
-
       - name: Validate complytime_config_path input
         env:
           CONFIG_PATH: ${{ inputs.complytime_config_path }}
@@ -119,7 +100,7 @@ jobs:
           mkdir -p .complytime/ampel/granular-policies
           cp _providers/cmd/ampel-provider/convert/testdata/policies/* .complytime/ampel/granular-policies/
 
-      - name: Fetch ampel-branch-protection policy from mock registry
+      - name: Fetch policy bundle from OCI registry
         run: ./bin/complyctl get
 
       - name: Validate policy_id input
