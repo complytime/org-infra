@@ -151,17 +151,24 @@ while IFS=$'\t' read -r key crap gaze_crap; do
 
 		crap_regressed=$(echo "$crap - $b_crap > $EPSILON" | bc -l)
 		crap_improved=$(echo "$b_crap - $crap > $EPSILON" | bc -l)
-		gaze_regressed=$(echo "$gaze_crap - $b_gaze > $EPSILON" | bc -l)
-		gaze_improved=$(echo "$b_gaze - $gaze_crap > $EPSILON" | bc -l)
 		if ((crap_regressed)); then
 			has_regression=true
 		elif ((crap_improved)); then
 			has_improvement=true
 		fi
-		if ((gaze_regressed)); then
-			has_regression=true
-		elif ((gaze_improved)); then
-			has_improvement=true
+		# Only evaluate GazeCRAP regression when baseline had contract
+		# coverage (b_gaze > 0). A baseline of 0 means GazeCRAP was not
+		# computable — no contract coverage existed for the function.
+		# Transitioning from 0 to any positive value represents new
+		# measurement (tests were added), not quality degradation.
+		if [[ "$b_gaze" != "0" ]]; then
+			gaze_regressed=$(echo "$gaze_crap - $b_gaze > $EPSILON" | bc -l)
+			gaze_improved=$(echo "$b_gaze - $gaze_crap > $EPSILON" | bc -l)
+			if ((gaze_regressed)); then
+				has_regression=true
+			elif ((gaze_improved)); then
+				has_improvement=true
+			fi
 		fi
 
 		if [[ "$has_regression" = "true" ]]; then
