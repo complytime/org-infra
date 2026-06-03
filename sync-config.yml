@@ -7,7 +7,6 @@
 # org-infra is excluded by default as it's the source repository
 exclude_repos:
   - org-infra                   # This repository itself
-  - website                     # Managed independently
   - nunya                       # Internal tooling (Jira migration)
   - roadmap                     # Internal tooling (roadmap scripts)
   - complyscribe                # Archived
@@ -74,6 +73,7 @@ files_to_sync:
       - complytime-demos
       - complytime-policies
       - community
+      - website
 
   - source: ruff.toml
     destination: ruff.toml
@@ -84,6 +84,7 @@ files_to_sync:
       - complytime-collector-components
       - complytime-providers
       - community
+      - website
 
   # AI Tooling
   - source: .specify/memory/constitution.md
@@ -210,6 +211,23 @@ dependabot:
         schedule:
           interval: "weekly"
         open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+    website:
+      - package-ecosystem: "npm"
+        directory: "/"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+      - package-ecosystem: "docker"
+        directory: "/.devcontainer"
+        schedule:
+          interval: "weekly"
         commit-message:
           prefix: "chore"
           include: "scope"
