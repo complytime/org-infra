@@ -30,6 +30,12 @@ dependency review passes, without requiring a minimum release age.
   review concludes with failure
 - **THEN** the PR SHALL NOT be auto-approved
 
+#### Scenario: Org-owned bump with unknown update type
+
+- **WHEN** a Dependabot PR bumps an org-owned dependency but the update type
+  cannot be determined (risk defaults to high)
+- **THEN** the PR SHALL NOT be auto-approved (safe default preserved)
+
 ### Requirement: Third-party approval unchanged
 
 The approval pipeline SHALL continue to apply the existing approval conditions
@@ -51,8 +57,12 @@ passes, release age known, and release age at least 24 hours.
 ### Requirement: Enable auto-merge for org-owned approvals
 
 After auto-approving an org-owned Dependabot PR, the pipeline SHALL enable
-GitHub auto-merge on the PR. Auto-merge SHALL respect all branch protection
-rules configured on the target repository.
+GitHub auto-merge on the PR. Auto-merge relies on GitHub's built-in enforcement
+of branch protection rules. The implementation SHALL NOT bypass or circumvent
+branch protection through alternative merge mechanisms.
+
+The consumer workflow MUST trigger on `pull_request`, not `pull_request_target`.
+The auto-merge job MUST NOT run in the context of `pull_request_target` events.
 
 #### Scenario: Auto-merge enabled after org-owned approval
 
@@ -74,27 +84,30 @@ rules configured on the target repository.
 
 #### Scenario: Auto-merge unavailable in repo settings
 
-- **WHEN** auto-merge is enabled but the repository does not have "Allow
+- **WHEN** auto-merge is requested but the repository does not have "Allow
   auto-merge" turned on in its settings
 - **THEN** the auto-merge step SHALL fail gracefully without affecting the
-  approval, and the PR comment SHALL indicate that auto-merge is unavailable
+  approval
 
-### Requirement: PR comment reflects ownership and auto-merge status
+### Requirement: PR comment reflects ownership and approval decision
 
 The PR comment posted by the pipeline SHALL include the ownership
-classification and the auto-merge status to give maintainers full visibility
-into the automated decision.
+classification and the approval decision to give maintainers full visibility
+into the automated decision. The comment reports the approval *intent* based
+on conditions evaluated at comment time, not post-facto auto-merge outcomes
+(since the comment and approval jobs execute in parallel).
 
-#### Scenario: Org-owned dependency auto-approved with auto-merge
+#### Scenario: Org-owned dependency auto-approved with auto-merge requested
 
-- **WHEN** an org-owned Dependabot PR is auto-approved and auto-merge is
-  enabled
+- **WHEN** an org-owned Dependabot PR meets the auto-approval conditions
+  (patch/minor, review passes)
 - **THEN** the PR comment SHALL indicate the dependency is org-owned, the PR
-  was auto-approved, and auto-merge is enabled
+  was auto-approved, and auto-merge was requested
 
 #### Scenario: Third-party dependency auto-approved without auto-merge
 
-- **WHEN** a third-party Dependabot PR is auto-approved
+- **WHEN** a third-party Dependabot PR meets the auto-approval conditions
+  (patch/minor, review passes, release age >= 24h)
 - **THEN** the PR comment SHALL indicate the dependency is third-party, the PR
   was auto-approved, and auto-merge is not applicable
 
