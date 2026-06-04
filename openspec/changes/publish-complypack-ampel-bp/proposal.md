@@ -1,3 +1,5 @@
+# Proposal: publish-complypack-ampel-bp
+
 ## Why
 
 The ampel granular policies at `compliance/ampel/branch-protection/` (5 JSON files) are manually staged during compliance scans via a TEMPORARY workaround in `reusable_compliance.yml:106-112`. With complyctl's complypack-pull feature (complytime/complyctl#536 merged), these policies can now be packaged and published as a complypack OCI artifact, enabling automated distribution via `complyctl get`.
@@ -29,10 +31,12 @@ Closes complytime/org-infra#306.
 
 ### Modified Capabilities
 
+- `reusable_publish_quay`: Renamed from misspelled `resuable_publish_quay.yml` to `reusable_publish_quay.yml` (typo fix; SHA-pinned external references unaffected).
+
 ## Impact
 
-- **`.github/workflows/`**: Three workflow files added (`reusable_publish_complypack.yml`, `ci_publish_complypack.yml`) and one renamed (`resuable_publish_quay.yml` to `reusable_publish_quay.yml`).
-- **`README.md`**: Updated to reflect the renamed workflow file.
+- **`.github/workflows/`**: Two workflow files added (`reusable_publish_complypack.yml`, `ci_publish_complypack.yml`) and one renamed (`resuable_publish_quay.yml` to `reusable_publish_quay.yml`).
+- **`README.md`**: Updated to reflect the renamed workflow file and add new workflow entries to the directory structure.
 - **Secrets**: Quay credentials (`QUAY_USERNAME`, `QUAY_PASSWORD`) must be configured in org-infra repository secrets for release promotion.
 - **Downstream**: `complytime-collector-components` references the misspelled workflow filename pinned to a SHA. A follow-up issue is needed for them to update the reference when they next bump their org-infra pin (no breakage until then).
 - **Registry artifacts**: New OCI artifacts published to `ghcr.io/complytime/complypack-ampel-branch-protection` (on push) and `quay.io/complytime/complypack-ampel-branch-protection` (on release).

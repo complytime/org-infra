@@ -1,3 +1,5 @@
+# Design: publish-complypack-ampel-bp
+
 ## Context
 
 The ampel granular policies (5 JSON files in `compliance/ampel/branch-protection/`) are the canonical source for branch protection compliance checks across the ComplyTime org. Currently, `reusable_compliance.yml` manually copies them at runtime via a TEMPORARY `cp` step (lines 106-112).
@@ -52,13 +54,13 @@ The org already has established patterns for OCI artifact publishing:
 - *Checked-in complypack.yaml*: Rejected. The `version` field would need to be maintained manually or overridden at workflow time. Generating it avoids this lifecycle complexity and keeps version derivation in the CI layer where it belongs.
 - *Accept config_path input*: Rejected. Forces callers to manage a config file with a version that must match the publish tag. The generation approach makes the workflow self-contained.
 
-### D4: Go stable default for complypack CLI installation
+### D4: Pinned Go version with stable default for reusable workflow
 
-**Decision**: Use `actions/setup-go` with `go-version: 'stable'` by default, with an optional `go_version` input override. Install the complypack CLI via `go install`.
+**Decision**: The reusable workflow uses `actions/setup-go` with `go-version` defaulting to `stable`, accepting an override input. The consumer workflow pins to a specific minor version (`1.26`) for build reproducibility. Install the complypack CLI via `go install`.
 
 **Alternatives considered**:
-- *Download pre-built binary from GitHub releases*: Considered but the complypack repo only has 2 tags and no published release binaries. `go install` is reliable and the setup-go action caches the toolchain.
-- *Hard-coded Go version*: Rejected. The `stable` keyword in setup-go always resolves to the latest stable release, avoiding version rot.
+- *Download pre-built binary from GitHub releases*: Considered but the complypack repo has no published release binaries. `go install` is reliable and the setup-go action caches the toolchain.
+- *Floating `stable` in consumer workflow*: Rejected. While `stable` is acceptable as the reusable workflow default (callers should pin), the consumer workflow must pin for reproducible builds consistent with the org's supply-chain posture. The pin should be bumped periodically via Dependabot or manual update.
 
 ### D5: ORAS for digest retrieval after pack
 
@@ -68,12 +70,12 @@ The org already has established patterns for OCI artifact publishing:
 - *Parse complypack CLI output*: Rejected. The CLI's output format is not documented and may change. Relying on OCI tooling (ORAS) for digest retrieval is standard and stable.
 - *Use crane*: Viable but ORAS is already used in `reusable_publish_oras.yml`, providing consistency. Both would work.
 
-### D6: Provenance-only attestations (no SBOM)
+### D6: SLSA provenance + trivial SBOM attestations
 
-**Decision**: Generate only SLSA provenance attestation via `actions/attest-build-provenance`. Skip SBOM generation.
+**Decision**: Generate SLSA provenance via `actions/attest-build-provenance` and a trivial SBOM via `anchore/sbom-action` scanning the content directory. The SBOM will be minimal (just the policy JSON files, no software dependencies) but its presence satisfies the `reusable_sign_and_verify.yml` contract, which unconditionally verifies SBOM attestation.
 
 **Alternatives considered**:
-- *Provenance + SBOM*: Rejected for complypacks specifically. SBOM scanning policy JSON files produces a trivial, uninformative SBOM (no dependencies, no software bill). Provenance alone provides the supply-chain traceability needed.
+- *Provenance only (skip SBOM)*: Rejected. The `reusable_sign_and_verify.yml` workflow unconditionally verifies SBOM attestation (no `verify_sbom` toggle exists, unlike `verify_vuln`). Skipping SBOM would cause the sign-and-verify job to fail at runtime. Adding a `verify_sbom` input to sign-and-verify was considered but rejected as unnecessary scope expansion when a trivial SBOM satisfies the contract.
 - *No attestations*: Rejected. Provenance is a core org requirement for published artifacts.
 
 ### D7: Single consumer workflow with conditional jobs
@@ -93,10 +95,16 @@ The org already has established patterns for OCI artifact publishing:
 
 ## Risks / Trade-offs
 
-- **[Risk] complypack CLI interface changes** -- The workflow calls `complypack pack <dir> <ref>` which is the documented CLI interface. If the API changes, the workflow breaks. Mitigation: pin `complypack_cli_ref` to a specific release tag rather than `latest` in the consumer workflow.
+- **[Risk] complypack CLI interface changes** -- The workflow calls `complypack pack <dir> <ref>` which is the documented CLI interface. If the API changes, the workflow breaks. Mitigation: the complypack repo currently has no formal releases (only Git tags `0.0.1`, `0.0.2` without release binaries), so `latest` is used for now. Once a proper release is cut, the consumer workflow should pin `complypack_cli_ref` to that release tag.
 
 - **[Risk] Quay attestation compatibility** -- GitHub's `actions/attest-build-provenance` pushes attestations via OCI referrers API. Quay supports this, but the behavior with `cosign copy` (used by the promote workflow) should be verified. Mitigation: the promote workflow already works for container images with attestations; complypack artifacts use the same OCI manifest structure.
 
 - **[Risk] Release without prior GHCR publish** -- If someone cuts a release tag on a commit that never triggered the push-to-main workflow (e.g., non-policy changes only), the promote job will fail because no GHCR image exists. Mitigation: the consumer workflow includes a `verify-ghcr-source` job that checks GHCR before attempting promotion, with a clear error message.
 
 - **[Trade-off] Go toolchain in reusable workflow** -- Installing Go adds ~15-20s to the workflow. Acceptable for a workflow that runs infrequently (only on policy file changes). If complypack publishes release binaries in the future, this can be swapped for a direct binary download.
+
+- **[Trade-off] Dual OCI tooling (ORAS + crane)** -- The reusable workflow uses ORAS for digest retrieval (matching `reusable_publish_oras.yml`), while the consumer workflow's verify and promote jobs use crane (matching `resuable_publish_quay.yml`). Both are valid OCI tools; the choice follows the precedent set by each layer. If additional OCI publish workflows are created, consider extracting shared digest-retrieval logic into a composite action.
+
+## Open Questions
+
+None. All design decisions are resolved.
