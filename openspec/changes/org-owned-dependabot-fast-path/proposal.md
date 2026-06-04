@@ -1,3 +1,5 @@
+# Proposal: org-owned-dependabot-fast-path
+
 ## Why
 
 Every org-infra release triggers dozens of Dependabot PRs across all consumer

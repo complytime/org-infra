@@ -1,3 +1,5 @@
+# Tasks: org-owned-dependabot-fast-path
+
 ## 1. Org-Ownership Detection (reusable workflow)
 
 - [x] 1.1 Add `is_org_owned` output to the `workflow_call` outputs block in `.github/workflows/reusable_dependabot_reviewer.yml`
@@ -9,7 +11,9 @@
 
 - [x] 2.1 Add `contents: write` permission to the `approve_dependabot_prs` job in `.github/workflows/ci_dependencies.yml` (alongside existing `pull-requests: write`)
 - [x] 2.2 Add the `is_org_owned` output consumption from `call_dependabot_reviewer` in `.github/workflows/ci_dependencies.yml`
-- [x] 2.3 Update the `Auto-approve if Confident` step condition in `.github/workflows/ci_dependencies.yml` to create a compound condition: approve when EITHER (a) the existing third-party criteria are met (risk != high AND review passes AND release age known AND age >= 24h) OR (b) the dependency is org-owned AND risk is not high AND review passes (no release age requirement). If the compound expression is unwieldy in a single `if:`, consider splitting into two separate conditional steps
+- [x] 2.3 Update approval condition in `ci_dependencies.yml` with compound OR:
+  (a) third-party path (risk != high, review passes, age known, age >= 24h) or
+  (b) org-owned path (risk != high, review passes, no age requirement)
 - [x] 2.4 Update the approval review body message in the `actions/github-script` step to include the ownership signal (org-owned vs third-party) and indicate whether release age was checked or bypassed
 - [x] 2.5 Add a new step `Enable Auto-merge for Org-owned` in the `approve_dependabot_prs` job in `.github/workflows/ci_dependencies.yml` that runs `gh pr merge --auto --squash` conditional on the auto-approve step succeeding (`steps.<approve-step-id>.outcome == 'success'`) AND `is_org_owned == 'true'`. Use `continue-on-error: true` and `GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}`
 

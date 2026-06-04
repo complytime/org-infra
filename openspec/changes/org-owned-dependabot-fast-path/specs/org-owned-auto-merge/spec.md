@@ -1,3 +1,5 @@
+# Spec: org-owned-auto-merge
+
 ## ADDED Requirements
 
 ### Requirement: Auto-approve org-owned patch/minor without release age gate

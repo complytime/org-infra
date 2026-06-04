@@ -1,3 +1,5 @@
+# Design: org-owned-dependabot-fast-path
+
 ## Context
 
 The Dependabot auto-approval pipeline (`ci_dependencies.yml` +
@@ -18,7 +20,7 @@ an external, untrusted source.
 
 The current workflow architecture:
 
-```
+```text
 ci_dependencies.yml (synced to all repos)
   ├── call_deps_reviewer       → reusable_deps_reviewer.yml (remote)
   ├── call_dependabot_reviewer → reusable_dependabot_reviewer.yml (remote)
@@ -65,7 +67,7 @@ observe the outcome of the auto-merge step. The PR comment reports approval
 Compare the first path segment of the dependency name against
 `github.repository_owner` (inherited from the caller in `workflow_call`).
 
-```
+```text
 dep_name:  "complytime/org-infra/.github/workflows/reusable_security.yml"
 dep_owner: "complytime"  (cut -d'/' -f1)
 repo_owner: github.repository_owner  ("complytime")
@@ -243,4 +245,4 @@ continue with old behavior. Re-running the sync is safe (idempotent).
 
 ## Open Questions
 
-_(none -- all decisions resolved during exploration)_
+*(none -- all decisions resolved during exploration)*

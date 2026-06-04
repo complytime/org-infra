@@ -35,7 +35,7 @@ jobs:
 
   comment_on_dependabot_prs:
     name: Dependabot Comment
-    if: github.actor == 'dependabot[bot]'
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     needs: [call_deps_reviewer, call_dependabot_reviewer]
     permissions:
@@ -81,7 +81,7 @@ jobs:
 
   approve_dependabot_prs:
     name: Dependabot Auto-approve
-    if: github.actor == 'dependabot[bot]'
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     needs: [call_deps_reviewer, call_dependabot_reviewer]
     permissions:

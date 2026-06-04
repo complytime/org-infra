@@ -1,3 +1,5 @@
+# Spec: org-ownership-detection
+
 ## ADDED Requirements
 
 ### Requirement: Detect org-owned dependencies
