@@ -1,5 +1,5 @@
 policies:
-  - url: quay.io/complytime/policies-ampel-branch-protection:latest
+  - url: quay.io/complytime/policies-ampel-branch-protection@latest
     id: ampel-bp
 
 targets:
