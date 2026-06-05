@@ -85,6 +85,35 @@ jobs:
           sarif_file: 'trivy-source-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
           category: 'trivy-source'
 
+      - name: Publish findings to summary
+        if: ${{ steps.trivy.outcome == 'success' }}
+        env:
+          SARIF_FILE: trivy-source-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif
+          REPO: ${{ github.repository }}
+        run: |
+          jq -r --arg repo "$REPO" '
+            [.runs[] | (.results // [])[] | select(.level == "error")] |
+            if length == 0 then
+              "### Trivy Source Scan -- No Findings\n\nNo HIGH/CRITICAL findings detected.\n"
+            else
+              "### Trivy Source Scan -- \(length) Finding(s)\n\n" +
+              "| # | Rule ID | File | Line | Description |\n" +
+              "|---|---------|------|------|-------------|\n" +
+              (to_entries | map(
+                .value as $f |
+                (($f.locations // [])[0] // {} | .physicalLocation // {}) as $loc |
+                ($loc.artifactLocation.uri // "N/A") as $file |
+                ($loc.region.startLine // "-") as $line |
+                ($f.message.text // ""
+                  | gsub("\n"; " ") | gsub("\\|"; "&#124;")
+                  | if length > 100 then .[0:100] + "..." else . end
+                ) as $desc |
+                "| \(.key + 1) | `\($f.ruleId // "unknown")` | `\($file)` | \($line) | \($desc) |"
+              ) | join("\n")) +
+              "\n\n> Full SARIF details in [Code Scanning alerts](https://github.com/" + $repo + "/security/code-scanning).\n"
+            end
+          ' "$SARIF_FILE" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Fail on findings
         if: ${{ steps.trivy.outcome == 'success' }}
         env:

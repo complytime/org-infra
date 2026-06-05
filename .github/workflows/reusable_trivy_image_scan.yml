@@ -87,6 +87,36 @@ jobs:
           sarif_file: 'trivy-image-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
           category: 'trivy-image'
 
+      - name: Publish findings to summary
+        if: ${{ steps.trivy.outcome == 'success' }}
+        env:
+          SARIF_FILE: trivy-image-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif
+          REPO: ${{ github.repository }}
+          IMAGE_REF: ${{ inputs.image_ref }}
+        run: |
+          jq -r --arg repo "$REPO" --arg image "$IMAGE_REF" '
+            [.runs[] | (.results // [])[] | select(.level == "error")] |
+            if length == 0 then
+              "### Trivy Image Scan -- No Findings\n\nImage: `" + $image + "`\n\nNo HIGH/CRITICAL vulnerabilities detected.\n"
+            else
+              "### Trivy Image Scan -- \(length) Vulnerability(ies)\n\n" +
+              "Image: `" + $image + "`\n\n" +
+              "| # | CVE / Rule | File | Description |\n" +
+              "|---|-----------|------|-------------|\n" +
+              (to_entries | map(
+                .value as $f |
+                (($f.locations // [])[0] // {} | .physicalLocation // {}) as $loc |
+                ($loc.artifactLocation.uri // "N/A") as $file |
+                ($f.message.text // ""
+                  | gsub("\n"; " ") | gsub("\\|"; "&#124;")
+                  | if length > 100 then .[0:100] + "..." else . end
+                ) as $desc |
+                "| \(.key + 1) | `\($f.ruleId // "unknown")` | `\($file)` | \($desc) |"
+              ) | join("\n")) +
+              "\n\n> Full SARIF details in [Code Scanning alerts](https://github.com/" + $repo + "/security/code-scanning).\n"
+            end
+          ' "$SARIF_FILE" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check scan result
         id: scan_result
         if: ${{ steps.trivy.outcome == 'success' }}
