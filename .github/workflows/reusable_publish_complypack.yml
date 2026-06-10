@@ -124,9 +124,8 @@ jobs:
           COMPLYPACK_ID: ${{ inputs.complypack_id }}
           EVALUATOR_ID: ${{ inputs.evaluator_id }}
           COMPLYPACK_VERSION: ${{ inputs.complypack_version }}
-          CONTENT_PATH: ${{ inputs.content_path }}
         run: |
-          cat > "${CONTENT_PATH}/complypack.yaml" <<COMPLYPACK_EOF
+          cat > complypack.yaml <<COMPLYPACK_EOF
           id: ${COMPLYPACK_ID}
           evaluator-id: ${EVALUATOR_ID}
           version: ${COMPLYPACK_VERSION}
@@ -137,7 +136,10 @@ jobs:
           CONTENT_PATH: ${{ inputs.content_path }}
           IMAGE_NAME: ${{ inputs.image_name }}
           TAG: ${{ inputs.tag }}
-        run: complypack pack "${CONTENT_PATH}" "ghcr.io/${IMAGE_NAME}:${TAG}"
+        # --skip-validation: complypack validates against registered evaluators
+        # (currently only OPA/Rego). Non-OPA evaluators like ampel fail with
+        # "evaluator not found". Content is still packed as an opaque layer.
+        run: complypack pack --skip-validation "${CONTENT_PATH}" "ghcr.io/${IMAGE_NAME}:${TAG}"
 
       - name: Set image reference
         id: image_ref
