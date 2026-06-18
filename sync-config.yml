@@ -117,9 +117,6 @@ files_to_sync:
   - source: .github/ISSUE_TEMPLATE/bug_report.md
     destination: .github/ISSUE_TEMPLATE/bug_report.md
 
-  - source: .github/ISSUE_TEMPLATE/feature_request.md
-    destination: .github/ISSUE_TEMPLATE/feature_request.md
-
 # Dependabot configuration
 # Common entries are applied to all repos (unless excluded).
 # Overrides add or replace entries for specific repos (keyed by package-ecosystem).
