@@ -10,7 +10,6 @@ exclude_repos:
   - nunya                       # Internal tooling (Jira migration)
   - roadmap                     # Internal tooling (roadmap scripts)
   - complyscribe                # Archived
-  - gemara-content-service      # Archived
 
 # Files and workflows to synchronize
 # Each entry specifies:
