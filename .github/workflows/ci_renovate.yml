@@ -29,14 +29,16 @@ on:
           - full
           - lookup
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   renovate:
     name: Renovate
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout org-infra
