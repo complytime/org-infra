@@ -25,7 +25,7 @@ on:
         description: Maximum diff lines to send for review
         required: false
         type: string
-        default: "2000"
+        default: "5000"
       max-raw-diff-lines:
         description: >-
           Hard limit on raw diff size. Diffs exceeding this
