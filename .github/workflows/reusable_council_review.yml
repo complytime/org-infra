@@ -26,6 +26,13 @@ on:
         required: false
         type: string
         default: "2000"
+      max-raw-diff-lines:
+        description: >-
+          Hard limit on raw diff size. Diffs exceeding this
+          skip review entirely (token cost / injection guard).
+        required: false
+        type: string
+        default: "10000"
     secrets:
       GCP_WORKLOAD_IDENTITY_PROVIDER:
         required: false
@@ -103,6 +110,7 @@ jobs:
         with:
           model: ${{ inputs.model }}
           max-diff-lines: ${{ inputs.max-diff-lines }}
+          max-raw-diff-lines: ${{ inputs.max-raw-diff-lines }}
           diff-path: pr-diff.patch
           meta-path: pr-meta.json
           github-token: ${{ github.token }}
@@ -136,10 +144,44 @@ jobs:
             fi
           done
 
+      - name: Post diff size warning
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          (steps.review.outputs.diff-skipped == 'true' ||
+           steps.review.outputs.diff-truncated == 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          REPO: ${{ github.repository }}
+          SKIPPED: ${{ steps.review.outputs.diff-skipped }}
+          RAW_LINES: ${{ steps.review.outputs.raw-diff-lines }}
+          FILTERED_LINES: ${{ steps.review.outputs.filtered-diff-lines }}
+          MAX_LINES: ${{ inputs.max-diff-lines }}
+          HARD_LIMIT: ${{ inputs.max-raw-diff-lines }}
+        run: |
+          if [[ "${SKIPPED}" == "true" ]]; then
+            cat > warning_body.txt <<EOF
+          <!-- council-review-bot -->
+          > [!CAUTION]
+          > **AI review skipped** — diff is ${RAW_LINES} lines (hard limit: ${HARD_LIMIT}).
+          > Large diffs risk excessive token consumption and prompt injection.
+          > Please split into smaller PRs for AI review coverage.
+          EOF
+          else
+            cat > warning_body.txt <<EOF
+          <!-- council-review-bot -->
+          > [!WARNING]
+          > **AI review is partial** — diff truncated from ${FILTERED_LINES} to ${MAX_LINES} lines (raw: ${RAW_LINES}).
+          > Files beyond the cutoff were not reviewed. Consider splitting large PRs.
+          EOF
+          fi
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body-file warning_body.txt
+
       - name: Post inline review
         if: >-
           steps.gate.outputs.should_review == 'true' &&
           steps.review.outcome == 'success' &&
+          steps.review.outputs.diff-skipped != 'true' &&
           steps.review.outputs.review-mode == 'inline'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -188,6 +230,7 @@ jobs:
         if: >-
           steps.gate.outputs.should_review == 'true' &&
           steps.review.outcome == 'success' &&
+          steps.review.outputs.diff-skipped != 'true' &&
           steps.review.outputs.review-mode == 'comment'
         env:
           GH_TOKEN: ${{ github.token }}
