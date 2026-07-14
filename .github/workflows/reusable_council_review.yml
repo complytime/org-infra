@@ -156,7 +156,8 @@ jobs:
           SKIPPED: ${{ steps.review.outputs.diff-skipped }}
           RAW_LINES: ${{ steps.review.outputs.raw-diff-lines }}
           FILTERED_LINES: ${{ steps.review.outputs.filtered-diff-lines }}
-          MAX_LINES: ${{ inputs.max-diff-lines }}
+          EFFECTIVE_MAX: ${{ steps.review.outputs.effective-max-lines || inputs.max-diff-lines }}
+          HAS_SPECS: ${{ steps.review.outputs.has-specs }}
           HARD_LIMIT: ${{ inputs.max-raw-diff-lines }}
         run: |
           if [[ "${SKIPPED}" == "true" ]]; then
@@ -168,10 +169,14 @@ jobs:
           > Please split into smaller PRs for AI review coverage.
           EOF
           else
+            SPEC_NOTE=""
+            if [[ "${HAS_SPECS}" == "true" ]]; then
+              SPEC_NOTE=" (includes +2000 spec file allowance)"
+            fi
             cat > warning_body.txt <<EOF
           <!-- council-review-bot -->
           > [!WARNING]
-          > **AI review is partial** — diff truncated from ${FILTERED_LINES} to ${MAX_LINES} lines (raw: ${RAW_LINES}).
+          > **AI review is partial** — diff truncated from ${FILTERED_LINES} to ${EFFECTIVE_MAX} lines${SPEC_NOTE} (raw: ${RAW_LINES}).
           > Files beyond the cutoff were not reviewed. Consider splitting large PRs.
           EOF
           fi
