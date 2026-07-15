@@ -131,11 +131,12 @@ jobs:
           done
 
           gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
-            --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and ((.body | contains("council-review-bot")) or (.body | contains("council-review-bot-inline")))) | .id' | \
-          while read -r review_id; do
+            --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and ((.body | contains("council-review-bot")) or (.body | contains("council-review-bot-inline")))) | {id, node_id}' | \
+          while IFS= read -r review_json; do
+            review_id=$(echo "${review_json}" | jq -r '.id')
+            node_id=$(echo "${review_json}" | jq -r '.node_id')
             if [[ -n "${review_id}" ]]; then
-              gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews/${review_id}" \
-                --method PUT --field body='~~Superseded by updated council review.~~' || true
+              gh api graphql -f query="mutation { minimizeComment(input: {subjectId: \"${node_id}\", classifier: OUTDATED}) { minimizedComment { isMinimized } } }" || true
               gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews/${review_id}/comments" \
                 --paginate --jq '.[].id' | \
               while read -r rc_id; do
