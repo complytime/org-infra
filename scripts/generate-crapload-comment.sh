@@ -28,6 +28,7 @@ set -euo pipefail
 CRAP_JSON="${1:-/tmp/crapload-current.json}"
 REPORT_JSON="${2:-/tmp/gaze-report.json}"
 COMMENT_FILE="/tmp/crapload-comment-body.md"
+MAX_COMMENT_SIZE="${MAX_COMMENT_SIZE:-65536}"
 
 # Extract summary metrics from gaze crap JSON.
 TOTAL_FUNCS=$(jq -r '.summary.total_functions // 0' "$CRAP_JSON")
@@ -196,3 +197,16 @@ fi
 # Add footer.
 printf '\n[View full analysis logs](%s/%s/actions/runs/%s)\n' \
 	"$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >>"$COMMENT_FILE"
+
+# Truncate if comment exceeds GitHub's character limit.
+# Reserve space for the trailer so the final file stays within the limit.
+TRAILER_RESERVE=120
+TRUNCATE_AT=$((MAX_COMMENT_SIZE - TRAILER_RESERVE))
+
+COMMENT_SIZE=$(wc -c < "$COMMENT_FILE")
+if [ "$COMMENT_SIZE" -gt "$MAX_COMMENT_SIZE" ]; then
+	head -c "$TRUNCATE_AT" "$COMMENT_FILE" > "${COMMENT_FILE}.tmp"
+	printf '\n\n---\n_Comment truncated (%s bytes, limit %s). See full logs above._\n' \
+		"$COMMENT_SIZE" "$MAX_COMMENT_SIZE" >> "${COMMENT_FILE}.tmp"
+	mv "${COMMENT_FILE}.tmp" "$COMMENT_FILE"
+fi
