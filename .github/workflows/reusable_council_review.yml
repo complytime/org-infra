@@ -115,7 +115,7 @@ jobs:
           meta-path: pr-meta.json
           github-token: ${{ github.token }}
 
-      - name: Clean up previous bot reviews and comments
+      - name: Clean up previous bot comments
         if: steps.gate.outputs.should_review == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -124,25 +124,20 @@ jobs:
         run: |
           gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
             --paginate --jq '.[] | select(.body | contains("<!-- council-review-bot -->")) | .id' | \
-          while read -r comment_id; do
-            if [[ -n "${comment_id}" ]]; then
-              gh api "repos/${REPO}/issues/comments/${comment_id}" --method DELETE || true
-            fi
+          while read -r cid; do
+            [[ -n "${cid}" ]] && gh api "repos/${REPO}/issues/comments/${cid}" --method DELETE || true
+          done
+
+          gh api "repos/${REPO}/pulls/${PR_NUMBER}/comments" \
+            --paginate --jq '.[] | select(.body | contains("<!-- council-review-bot -->")) | .id' | \
+          while read -r cid; do
+            [[ -n "${cid}" ]] && gh api "repos/${REPO}/pulls/comments/${cid}" --method DELETE || true
           done
 
           gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
-            --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and ((.body | contains("council-review-bot")) or (.body | contains("council-review-bot-inline")))) | {id, node_id}' | \
-          while IFS= read -r review_json; do
-            review_id=$(echo "${review_json}" | jq -r '.id')
-            node_id=$(echo "${review_json}" | jq -r '.node_id')
-            if [[ -n "${review_id}" ]]; then
-              gh api graphql -f query="mutation { minimizeComment(input: {subjectId: \"${node_id}\", classifier: OUTDATED}) { minimizedComment { isMinimized } } }" || true
-              gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews/${review_id}/comments" \
-                --paginate --jq '.[].id' | \
-              while read -r rc_id; do
-                gh api "repos/${REPO}/pulls/comments/${rc_id}" --method DELETE || true
-              done
-            fi
+            --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and ((.body | contains("council-review-bot")) or (.body | contains("council-review-bot-inline")))) | .node_id' | \
+          while read -r nid; do
+            [[ -n "${nid}" ]] && gh api graphql -f query="mutation { minimizeComment(input: {subjectId: \"${nid}\", classifier: OUTDATED}) { minimizedComment { isMinimized } } }" || true
           done
 
       - name: Post diff size warning
@@ -221,7 +216,7 @@ jobs:
           } > review_summary.txt
           gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body-file review_summary.txt
 
-      - name: Post inline comments (review API)
+      - name: Post inline comments (individual PR comments — deletable)
         if: >-
           steps.gate.outputs.should_review == 'true' &&
           steps.review.outcome == 'success' &&
@@ -240,11 +235,23 @@ jobs:
             exit 0
           fi
 
-          jq -n \
-            --arg commit_id "${PR_HEAD_SHA}" \
-            --argjson comments "$(jq '[.inline_comments[] | {path, line, side: "RIGHT", body}]' "${REVIEW_JSON}")" \
-            '{commit_id: $commit_id, body: "<!-- council-review-bot-inline -->", event: "COMMENT", comments: $comments}' | \
-          gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
-            --method POST --input - || {
-            echo "::warning::Inline review post failed — findings are in the summary comment"
-          }
+          POSTED=0
+          FAILED=0
+          jq -c '.inline_comments[]' "${REVIEW_JSON}" | while IFS= read -r comment; do
+            path=$(echo "${comment}" | jq -r '.path')
+            line=$(echo "${comment}" | jq -r '.line')
+            body=$(echo "${comment}" | jq -r '.body')
+            tagged_body="<!-- council-review-bot -->${body}"
+
+            jq -n \
+              --arg commit_id "${PR_HEAD_SHA}" \
+              --arg path "${path}" \
+              --argjson line "${line}" \
+              --arg side "RIGHT" \
+              --arg body "${tagged_body}" \
+              '{commit_id: $commit_id, path: $path, line: $line, side: $side, body: $body}' | \
+            gh api "repos/${REPO}/pulls/${PR_NUMBER}/comments" \
+              --method POST --input - > /dev/null 2>&1 && \
+              POSTED=$((POSTED + 1)) || FAILED=$((FAILED + 1))
+          done
+          echo "::notice::Posted ${POSTED:-0} inline comments (${FAILED:-0} failed)"
