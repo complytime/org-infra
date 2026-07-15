@@ -1,0 +1,44 @@
+---
+name: Council Review
+
+# --------------------------------------------------------------------------
+# Thin consumer workflow for AI council review. Triggered by workflow_run
+# when the collect workflow completes (fork PR support), or manually via
+# workflow_dispatch. Delegates all review logic to reusable_council_review.yml.
+# --------------------------------------------------------------------------
+on:
+  workflow_dispatch:
+    inputs:
+      triggering_run_id:
+        description: >-
+          Run ID of the collect workflow (for artifact download).
+          Required for manual testing.
+        required: true
+        type: number
+  workflow_run:  # zizmor: ignore[dangerous-triggers]
+    workflows: ["Council Review - Collect"]
+    types: [completed]
+
+concurrency:
+  group: council-review-${{ github.event.workflow_run.head_sha || github.run_id }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  council-review:
+    name: AI Council Review
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@feat/council-review-production  # zizmor: ignore[unpinned-uses] — tests PR #428 production code
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+      actions: read
+    with:
+      triggering-run-id: ${{ github.event.inputs.triggering_run_id || github.event.workflow_run.id }}
+    secrets:
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
