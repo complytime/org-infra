@@ -20,7 +20,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      should_collect: ${{ steps.gate.outputs.should_collect }}
+      should_collect: ${{ steps.org-check.outputs.should_collect != '' && steps.org-check.outputs.should_collect || steps.gate.outputs.should_collect }}
     steps:
       - name: Evaluate gate conditions
         id: gate
@@ -39,6 +39,26 @@ jobs:
             exit 0
           fi
           echo "should_collect=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify org membership
+        if: steps.gate.outputs.should_collect == 'true'
+        id: org-check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.event.pull_request.user.login }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          HTTP_STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/orgs/$ORG/members/$ACTOR")
+          if [[ "$HTTP_STATUS" != "204" ]]; then
+            echo "::notice::PR author ${ACTOR} is not a member of ${ORG} (HTTP ${HTTP_STATUS}) — skipping council review"
+            echo "should_collect=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::✓ ${ACTOR} is a member of ${ORG}"
+            echo "should_collect=true" >> "$GITHUB_OUTPUT"
+          fi
 
   collect-diff:
     name: Collect PR Diff
