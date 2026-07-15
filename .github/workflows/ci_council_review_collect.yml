@@ -1,5 +1,5 @@
 ---
-name: Council Review - Collect PR Diff
+name: Council Review - Collect
 
 # --------------------------------------------------------------------------
 # Fork-safe PR diff collection for AI council review. Runs on pull_request
