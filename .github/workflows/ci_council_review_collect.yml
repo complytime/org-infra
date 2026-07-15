@@ -2,9 +2,12 @@
 name: Council Review - Collect
 
 # --------------------------------------------------------------------------
-# Fork-safe PR diff collection for AI council review. Runs on pull_request
-# (no secrets needed), collects the PR diff and metadata, then uploads as
-# an artifact for ci_council_review.yml to pick up via workflow_run.
+# Fork-safe PR diff collection for AI council review. Runs on pull_request,
+# collects the PR diff and metadata, then uploads as an artifact for
+# ci_council_review.yml to pick up via workflow_run.
+#
+# Org membership check uses ORG_CHECK_TOKEN (PAT with org:read scope) if
+# available, falling back to GITHUB_TOKEN (public membership only).
 # --------------------------------------------------------------------------
 on:
   pull_request:
@@ -44,7 +47,7 @@ jobs:
         if: steps.gate.outputs.should_collect == 'true'
         id: org-check
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.ORG_CHECK_TOKEN != '' && secrets.ORG_CHECK_TOKEN || github.token }}
           ACTOR: ${{ github.event.pull_request.user.login }}
           ORG: ${{ github.repository_owner }}
         run: |
