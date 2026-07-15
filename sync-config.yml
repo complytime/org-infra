@@ -62,6 +62,10 @@ files_to_sync:
       - .github
       - community
 
+  # NOTE: reusable_council_review.yml is intentionally NOT synced.
+  # It stays in org-infra and is called cross-repo by downstream
+  # consumers via: complytime/org-infra/.github/workflows/reusable_council_review.yml@SHA
+
   - source: .github/workflows/ci_crapload.yml
     destination: .github/workflows/ci_crapload.yml
     exclude_repos:
