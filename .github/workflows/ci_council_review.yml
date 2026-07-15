@@ -16,7 +16,7 @@ on:
         required: true
         type: number
   workflow_run:  # zizmor: ignore[dangerous-triggers]
-    workflows: ["Council Review - Collect PR Diff"]
+    workflows: ["Council Review - Collect"]
     types: [completed]
 
 concurrency:
