@@ -80,7 +80,7 @@ jobs:
         uses: carabiner-dev/actions/install/snappy@174f1c83779af3d3d7e451b7ead7ba824d0d2aa9
 
       - name: Install ampel
-        uses: carabiner-dev/actions/install/ampel@94f29392187fe5082d1195a7d4cae3a7ddf09d9c
+        uses: carabiner-dev/actions/install/ampel@174f1c83779af3d3d7e451b7ead7ba824d0d2aa9
 
       - name: Register ampel provider with complyctl
         run: |
