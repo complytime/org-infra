@@ -90,7 +90,7 @@ jobs:
         if: steps.gate.outputs.should_review == 'true'
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
 
-      # TODO: remove continue-on-error once council review is stable
+      # TODO(#440): remove continue-on-error once council review is stable
       - name: Run council review
         if: steps.gate.outputs.should_review == 'true'
         id: review
@@ -103,7 +103,9 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Clean up previous bot comments
-        if: steps.gate.outputs.should_review == 'true'
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          steps.review.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
@@ -124,7 +126,9 @@ jobs:
           gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
             --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("council-review-bot"))) | .node_id' | \
           while read -r nid; do
-            [[ -n "${nid}" ]] && gh api graphql -f query="mutation { minimizeComment(input: {subjectId: \"${nid}\", classifier: OUTDATED}) { minimizedComment { isMinimized } } }" || true
+            [[ -n "${nid}" ]] && gh api graphql \
+              -f query='mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: OUTDATED}) { minimizedComment { isMinimized } } }' \
+              -f id="${nid}" || true
           done
 
       - name: Post review summary
@@ -190,6 +194,7 @@ jobs:
             body=$(echo "${comment}" | jq -r '.body')
             tagged_body=$(printf '<!-- council-review-bot -->\n\n%s' "${body}")
 
+            ERROR_FILE=$(mktemp)
             if jq -n \
               --arg commit_id "${PR_HEAD_SHA}" \
               --arg path "${path}" \
@@ -198,10 +203,12 @@ jobs:
               --arg body "${tagged_body}" \
               '{commit_id: $commit_id, path: $path, line: $line, side: $side, body: $body}' | \
             gh api "repos/${REPO}/pulls/${PR_NUMBER}/comments" \
-              --method POST --input - > /dev/null 2>&1; then
+              --method POST --input - > /dev/null 2>"${ERROR_FILE}"; then
               POSTED=$((POSTED + 1))
             else
               FAILED=$((FAILED + 1))
+              echo "::warning::Failed to post comment on ${path}:${line}: $(cat "${ERROR_FILE}")"
             fi
+            rm -f "${ERROR_FILE}"
           done < <(jq -c '.inline_comments[]' "${REVIEW_JSON}")
           echo "::notice::Posted ${POSTED} inline comments (${FAILED} failed)"
