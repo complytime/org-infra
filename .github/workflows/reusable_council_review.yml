@@ -111,7 +111,6 @@ jobs:
           PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
           REPO: ${{ github.repository }}
         run: |
-          # shellcheck disable=SC2016
           gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
             --paginate --jq '.[] | select(.body | contains("<!-- council-review-bot -->")) | .id' | \
           while read -r cid; do
@@ -127,6 +126,7 @@ jobs:
           gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
             --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("council-review-bot"))) | .node_id' | \
           while read -r nid; do
+            # shellcheck disable=SC2016
             [[ -n "${nid}" ]] && gh api graphql \
               -f query='mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: OUTDATED}) { minimizedComment { isMinimized } } }' \
               -f id="${nid}" || true
