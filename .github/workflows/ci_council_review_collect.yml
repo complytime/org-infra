@@ -1,4 +1,9 @@
 ---
+# !! DO NOT EDIT — managed by complytime/org-infra !!
+# Source: .github/workflows/ci_council_review_collect.yml
+# Changes here will be overwritten on the next org-infra sync.
+# To modify, open a PR against complytime/org-infra instead.
+
 name: Council Review - Collect
 
 # --------------------------------------------------------------------------

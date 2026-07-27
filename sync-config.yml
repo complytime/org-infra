@@ -55,12 +55,38 @@ files_to_sync:
     exclude_repos:
       - .github
       - community
+      # Staged rollout: validate on org-infra first, then widen once:
+      #   - composite action SHA points to merged main (unbound-force#336)
+      #   - security hardening (#429) and cost controls (#430) are in place
+      - complyapi
+      - complyctl
+      - complypack
+      - complytime
+      - complytime-collector-components
+      - complytime-demos
+      - complytime-policies
+      - complytime-providers
+      - homebrew-tap
+      - website
 
   - source: .github/workflows/ci_council_review.yml
     destination: .github/workflows/ci_council_review.yml
     exclude_repos:
       - .github
       - community
+      # Staged rollout: validate on org-infra first, then widen once:
+      #   - composite action SHA points to merged main (unbound-force#336)
+      #   - security hardening (#429) and cost controls (#430) are in place
+      - complyapi
+      - complyctl
+      - complypack
+      - complytime
+      - complytime-collector-components
+      - complytime-demos
+      - complytime-policies
+      - complytime-providers
+      - homebrew-tap
+      - website
 
   # NOTE: reusable_council_review.yml is intentionally NOT synced.
   # It stays in org-infra and is called cross-repo by downstream
