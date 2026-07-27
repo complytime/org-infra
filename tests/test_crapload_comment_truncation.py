@@ -66,8 +66,17 @@ def _run_script(
     report_json: str,
     baseline: str,
     max_comment_size: str = "65536",
+    comment_file: str | None = None,
 ) -> tuple[int, str]:
-    """Run generate-crapload-comment.sh and return (returncode, comment_body)."""
+    """Run generate-crapload-comment.sh and return (returncode, comment_body).
+
+    Uses an isolated COMMENT_FILE path per invocation to avoid
+    cross-test interference via the shared /tmp default.
+    """
+    if comment_file is None:
+        fd, comment_file = tempfile.mkstemp(suffix=".md", prefix="crapload-test-")
+        os.close(fd)
+
     env = {
         **os.environ,
         "BASELINE": baseline,
@@ -77,6 +86,7 @@ def _run_script(
         "GITHUB_REPOSITORY": "test/repo",
         "GITHUB_RUN_ID": "12345",
         "MAX_COMMENT_SIZE": max_comment_size,
+        "COMMENT_FILE": comment_file,
     }
     result = subprocess.run(
         ["bash", str(SCRIPT_PATH), crap_json, report_json],
@@ -85,10 +95,10 @@ def _run_script(
         text=True,
     )
     comment = ""
-    comment_file = "/tmp/crapload-comment-body.md"
     if os.path.exists(comment_file):
         with open(comment_file) as f:
             comment = f.read()
+        os.unlink(comment_file)
     return result.returncode, comment
 
 

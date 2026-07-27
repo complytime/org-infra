@@ -27,7 +27,7 @@ set -euo pipefail
 
 CRAP_JSON="${1:-/tmp/crapload-current.json}"
 REPORT_JSON="${2:-/tmp/gaze-report.json}"
-COMMENT_FILE="/tmp/crapload-comment-body.md"
+COMMENT_FILE="${COMMENT_FILE:-/tmp/crapload-comment-body.md}"
 MAX_COMMENT_SIZE="${MAX_COMMENT_SIZE:-65536}"
 
 # Extract summary metrics from gaze crap JSON.
