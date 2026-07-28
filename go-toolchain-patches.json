@@ -28,5 +28,9 @@
       "enabled": false
     }
   ],
-  "postUpdateOptions": ["gomodTidy", "gomodVendor"]
+  "postUpdateOptions": ["gomodTidy", "gomodVendor"],
+  "vulnerabilityAlerts": {
+    "description": "Disabled — vulnerability remediation is handled by Dependabot",
+    "enabled": false
+  }
 }
