@@ -7,11 +7,11 @@ complypacks:
     id: ampel-bp-pack
 
 targets:
-  - id: complytime-org-infra
+  - id: complytime-complyapi
     policies:
       - ampel-bp
     variables:
-      url: https://github.com/complytime/org-infra
+      url: https://github.com/complytime/complyapi
       specs: builtin:github/branch-rules.yaml
 
   - id: complytime-complyctl
@@ -19,4 +19,39 @@ targets:
       - ampel-bp
     variables:
       url: https://github.com/complytime/complyctl
+      specs: builtin:github/branch-rules.yaml
+
+  - id: complytime-complypack
+    policies:
+      - ampel-bp
+    variables:
+      url: https://github.com/complytime/complypack
+      specs: builtin:github/branch-rules.yaml
+
+  - id: complytime-collector-components
+    policies:
+      - ampel-bp
+    variables:
+      url: https://github.com/complytime/complytime-collector-components
+      specs: builtin:github/branch-rules.yaml
+
+  - id: complytime-policies
+    policies:
+      - ampel-bp
+    variables:
+      url: https://github.com/complytime/complytime-policies
+      specs: builtin:github/branch-rules.yaml
+
+  - id: complytime-org-infra
+    policies:
+      - ampel-bp
+    variables:
+      url: https://github.com/complytime/org-infra
+      specs: builtin:github/branch-rules.yaml
+
+  - id: complytime-providers
+    policies:
+      - ampel-bp
+    variables:
+      url: https://github.com/complytime/complytime-providers
       specs: builtin:github/branch-rules.yaml
