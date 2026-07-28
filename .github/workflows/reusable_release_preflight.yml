@@ -47,6 +47,21 @@ on:
         required: false
         type: string
         default: ''
+      skip_semver_check:
+        description: 'Skip semver ordering verification against the latest existing tag'
+        required: false
+        type: boolean
+        default: false
+      skip_ci_checks:
+        description: 'Skip CI check verification on HEAD commit'
+        required: false
+        type: boolean
+        default: false
+      skip_unreleased_check:
+        description: 'Skip verification that unreleased commits exist since the last tag'
+        required: false
+        type: boolean
+        default: false
     outputs:
       tag:
         description: 'Validated tag string'
@@ -153,7 +168,9 @@ jobs:
           fi
 
       - name: Verify semver ordering
-        if: steps.check_tag.outputs.tag_exists_at_head != 'true'
+        if: >-
+          steps.check_tag.outputs.tag_exists_at_head != 'true'
+          && inputs.skip_semver_check != true
         id: verify_ordering
         run: |
           # Get the latest existing semver tag
@@ -193,6 +210,7 @@ jobs:
           echo "::notice::Semver ordering verified: $LATEST_TAG < $RELEASE_TAG"
 
       - name: Discover CI checks
+        if: inputs.skip_ci_checks != true
         id: discover_checks
         env:
           CI_CHECKS_INPUT: ${{ inputs.ci_checks }}
@@ -270,6 +288,7 @@ jobs:
           echo "::notice::Security gate: $SECURITY_GATE"
 
       - name: Verify CI checks passed on HEAD
+        if: inputs.skip_ci_checks != true
         id: verify_ci
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -339,7 +358,9 @@ jobs:
           echo "::notice::All CI checks passed for commit $HEAD_SHA"
 
       - name: Verify unreleased commits
-        if: steps.check_tag.outputs.is_rerun != 'true'
+        if: >-
+          steps.check_tag.outputs.is_rerun != 'true'
+          && inputs.skip_unreleased_check != true
         id: verify_commits
         run: |
           LATEST_TAG=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -1)
