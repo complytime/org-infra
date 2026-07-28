@@ -179,11 +179,12 @@ jobs:
           fi
 
           # Compare versions using semver library (section 11 compliant)
-          # semver==3.0.4
-          pip install -q "semver==3.0.4" \
-            --require-hashes --no-deps \
-            --hash=sha256:9c824d87ba7f7ab4a1890799cec8596f15c1241cb473404ea1cb0c55e4b04746 \
-            >/dev/null 2>&1
+          # semver==3.0.4 — use requirements file for pip 25.x compatibility
+          echo "semver==3.0.4 \
+            --hash=sha256:9c824d87ba7f7ab4a1890799cec8596f15c1241cb473404ea1cb0c55e4b04746" \
+            > /tmp/requirements-semver.txt
+          pip install -q --require-hashes --no-deps \
+            -r /tmp/requirements-semver.txt >/dev/null 2>&1
           python3 -c "import semver, sys; sys.exit(0 if semver.compare(sys.argv[1], sys.argv[2]) < 0 else 1)" \
             "$LATEST_VER" "$NEW_VER" || {
             echo "::error::New tag $RELEASE_TAG is not greater than $LATEST_TAG"
