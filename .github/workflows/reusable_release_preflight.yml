@@ -263,7 +263,7 @@ jobs:
           fi
 
           # Output discovered checks as JSON array
-          CHECKS_JSON=$(printf '%s\n' "${REQUIRED_CHECKS[@]}" | jq -R . | jq -s .)
+          CHECKS_JSON=$(printf '%s\n' "${REQUIRED_CHECKS[@]}" | jq -R . | jq -s -c .)
           echo "required_checks=$CHECKS_JSON" >> "$GITHUB_OUTPUT"
           echo "security_gate=$SECURITY_GATE" >> "$GITHUB_OUTPUT"
           echo "::notice::Required checks: $CHECKS_JSON"
