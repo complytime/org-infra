@@ -28,7 +28,8 @@ org-infra/
 ├── .github/
 │  ├── ISSUE_TEMPLATE/
 │  │  ├── bug_report.yml                    # Issue form to report a Bug.
-│  │  ├── feature_request.yml               # Issue form to request a Feature.
+│  │  ├── feature_request.yml               # Issue form for Features.
+│  │  ├── spike.yml                         # Issue form for time-boxed Spikes.
 │  │  ├── task.yml                          # Issue form for tracked work items.
 │  │  └── user_story.yml                    # Issue form for user stories.
 │  ├── workflows/
