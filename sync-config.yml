@@ -124,11 +124,32 @@ files_to_sync:
   - source: .github/pull_request_template.md
     destination: .github/pull_request_template.md
 
+  # Issue forms — synced to all org repos except roadmap (global exclude)
+  # and complytime/complytime (per-file exclude below).
   - source: .github/ISSUE_TEMPLATE/bug_report.yml
     destination: .github/ISSUE_TEMPLATE/bug_report.yml
+    exclude_repos:
+      - complytime
 
   - source: .github/ISSUE_TEMPLATE/feature_request.yml
     destination: .github/ISSUE_TEMPLATE/feature_request.yml
+    exclude_repos:
+      - complytime
+
+  - source: .github/ISSUE_TEMPLATE/task.yml
+    destination: .github/ISSUE_TEMPLATE/task.yml
+    exclude_repos:
+      - complytime
+
+  - source: .github/ISSUE_TEMPLATE/user_story.yml
+    destination: .github/ISSUE_TEMPLATE/user_story.yml
+    exclude_repos:
+      - complytime
+
+  - source: .github/ISSUE_TEMPLATE/spike.yml
+    destination: .github/ISSUE_TEMPLATE/spike.yml
+    exclude_repos:
+      - complytime
 
 # Dependabot configuration
 # Common entries are applied to all repos (unless excluded).
