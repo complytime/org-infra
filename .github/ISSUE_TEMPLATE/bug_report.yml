@@ -1,69 +1,89 @@
-name: Bug report
-description: Create a report to help us improve
-labels: [bug]
+name: "🐛 Bug Report"
+description: Report something that is currently broken or failing in production.
+title: "[Bug] "
+labels: ["type:bug"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Thanks for filing a bug report!
-        Please search existing issues before submitting to avoid duplicates.
-  - type: checkboxes
-    id: prerequisites
-    attributes:
-      label: Prerequisites
-      options:
-        - label: I have searched for existing issues
-          required: true
-        - label: This is not a security vulnerability (report via the repository's SECURITY.md)
-          required: true
   - type: textarea
-    id: description
+    id: current-behavior
     attributes:
-      label: Describe the bug
-      description: A clear and concise description of what the bug is.
+      label: "🚨 Current Behavior"
+      description: Clear description of what is failing right now.
     validations:
       required: true
+
   - type: textarea
-    id: reproduction
+    id: expected-behavior
     attributes:
-      label: To Reproduce
+      label: "🎯 Expected Behavior"
+      description: What should be happening instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact-if-fixed
+    attributes:
+      label: "💥 End-User Impact — if the bug is fixed"
+      description: What is the impact on the current customer if the bug is fixed?
+      placeholder: |
+        e.g., Blocked from completing checkout, visual styling issue only, data loss risk, minor workaround required
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact-if-not-fixed
+    attributes:
+      label: "💥 End-User Impact — if the bug is NOT fixed"
+      description: What is the impact on the current customer if the bug is NOT fixed?
+      placeholder: |
+        e.g., Customer remains completely blocked from completing checkout, continuous risk of missing compliance audit windows, minor manual workaround remains required daily
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: "👣 Steps to Reproduce"
       description: Steps to reproduce the behavior.
       placeholder: |
         1. Go to '...'
-        2. Click on '...'
-        3. Scroll down to '...'
-        4. See error
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error message: [Paste error log or screenshot here]
     validations:
       required: true
-  - type: textarea
-    id: expected
+
+  - type: input
+    id: project-repo
     attributes:
-      label: Expected behavior
-      description: A clear and concise description of what you expected to happen.
+      label: "💻 Project/Repo"
+      description: Where the bug occurs
+      placeholder: "e.g., Frontend UI / Backend API"
     validations:
       required: true
-  - type: textarea
-    id: screenshots
+
+  - type: input
+    id: release-version
     attributes:
-      label: Screenshots
-      description: If applicable, add screenshots to help explain your problem.
+      label: "Release Version"
+      description: Release version, or commit date if on main
+      placeholder: "[or commit date if in main]"
     validations:
-      required: false
+      required: true
+
   - type: textarea
-    id: environment
+    id: verification-plan
     attributes:
-      label: Environment
-      description: Relevant version and platform information.
+      label: "🧪 Verification & Validation Plan"
+      description: How was this validated?
       placeholder: |
-        Affected workflow/config file:
-        Runner OS (if applicable):
-        GitHub Actions runner version (if applicable):
+        e.g., Checked staging logs, verified with solid testing evidence, reproduced locally with automated test suite
     validations:
-      required: false
-  - type: textarea
-    id: context
+      required: true
+
+  - type: checkboxes
+    id: verification-checklist
     attributes:
-      label: Additional context
-      description: Add any other context about the problem here.
-    validations:
-      required: false
+      label: "🧪 Verification Checklist"
+      options:
+        - label: Bug patch verified successfully in target environment.
+        - label: Regression testing completed to ensure nearby features are unaffected.
