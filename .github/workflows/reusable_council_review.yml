@@ -95,7 +95,7 @@ jobs:
         if: steps.gate.outputs.should_review == 'true'
         id: review
         continue-on-error: true
-        uses: unbound-force/unbound-force/council-review-action@26db3b791cafafa40969e53e22b1a1b0295ef1f0  # feat/council-review-action-v2
+        uses: unbound-force/unbound-force/council-review-action@28b8b438390652909463cacd1a95f189571ac188  # feat/council-review-action-v2
         with:
           model: ${{ inputs.model }}
           diff-path: pr-diff.patch
