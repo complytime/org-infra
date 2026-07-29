@@ -31,7 +31,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@feat/council-review-production  # zizmor: ignore[unpinned-uses] — tests PR #428 production code
+    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@test/council-review-evidence-v2  # zizmor: ignore[unpinned-uses] — tests PR #336 new commits
     permissions:
       contents: read
       id-token: write
