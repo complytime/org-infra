@@ -86,6 +86,7 @@ files_to_sync:
       - complypack
       - complytime
       - complytime-collector-components
+      - complytime-policies
       - complytime-providers
       - community
       - website
@@ -205,16 +206,6 @@ dependabot:
           include: "scope"
 
     complytime-demos:
-      - package-ecosystem: "pip"
-        directory: "/"
-        schedule:
-          interval: "weekly"
-        open-pull-requests-limit: 10
-        commit-message:
-          prefix: "chore"
-          include: "scope"
-
-    complytime-policies:
       - package-ecosystem: "pip"
         directory: "/"
         schedule:
