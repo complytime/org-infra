@@ -53,18 +53,9 @@ body:
       required: true
 
   - type: input
-    id: project-repo
-    attributes:
-      label: "💻 Project/Repo"
-      description: Where the bug occurs
-      placeholder: "e.g., Frontend UI / Backend API"
-    validations:
-      required: true
-
-  - type: input
     id: release-version
     attributes:
-      label: "Release Version"
+      label: "💻 Release Version"
       description: Release version, or commit date if on main
       placeholder: "[or commit date if in main]"
     validations:
