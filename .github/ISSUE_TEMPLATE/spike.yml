@@ -22,20 +22,11 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: branch-sandbox
-    attributes:
-      label: "Branch/Sandbox"
-      description: Branch or sandbox used for this investigation
-      placeholder: "spike/description-here"
-    validations:
-      required: true
-
   - type: checkboxes
     id: required-deliverables
     attributes:
       label: "🏁 Required Deliverables"
       options:
         - label: Written summary of findings added as a comment below or linked markdown file.
-        - label: Proof of Concept (PoC) code pushed to the spike branch (if applicable).
+        - label: Proof of Concept (PoC) code shared when applicable (branch, fork, or local investigation notes).
         - label: Clear "Go / No-Go" technical recommendation for the Architect.
