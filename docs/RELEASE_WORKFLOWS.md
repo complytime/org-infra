@@ -110,6 +110,9 @@ jobs:
     with:
       tag: ${{ inputs.tag }}
       # ci_checks: '["Custom Check / job-name"]'  # Uncomment to override auto-discovery
+    # Uncomment to enable downstream workflow triggering from the tag push:
+    # secrets:
+    #   tag_push_token: ${{ secrets.RELEASE_TOKEN }}
 
   release:
     needs: preflight
@@ -457,6 +460,13 @@ signs:
 | `allow_prerelease` | `boolean` | no | `false` | Accept pre-release suffixes (e.g., `v1.0.0-beta.0`) |
 | `ci_checks` | `string` | no | `''` (empty) | JSON array of CI check names to verify. Empty = auto-discover from workflow files |
 
+**Secrets:**
+
+| Secret | Required | Description |
+|--------|----------|-------------|
+| `tag_push_token` | no | Optional elevated token for tag creation. When provided, the tag event can trigger downstream workflows. Falls back to `GITHUB_TOKEN` when not provided |
+
+> **Warning:** Do not use an elevated token in downstream workflows that re-invoke this preflight workflow, or you will create a recursive loop.
 
 **Outputs:**
 

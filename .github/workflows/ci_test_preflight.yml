@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Test Preflight Token
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ci_test_preflight.yml'
+      - '.github/workflows/reusable_release_preflight.yml'
+      - 'tests/test_preflight_token.sh'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ci_test_preflight.yml'
+      - '.github/workflows/reusable_release_preflight.yml'
+      - 'tests/test_preflight_token.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  test-preflight-token:
+    name: Test Preflight Token Secret
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run preflight token assertions
+        run: bash tests/test_preflight_token.sh

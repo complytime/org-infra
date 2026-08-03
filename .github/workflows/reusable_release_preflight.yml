@@ -17,6 +17,9 @@
 #   - tag:         The validated tag string
 #   - tag_created: Whether a new tag was created (true/false)
 #
+# Secrets (optional):
+#   - tag_push_token: Elevated token for tag creation (enables downstream tag-triggered workflows)
+#
 # Usage:
 #   jobs:
 #     preflight:
@@ -69,6 +72,14 @@ on:
       tag_created:
         description: 'Whether a new tag was created (true/false)'
         value: ${{ jobs.preflight.outputs.tag_created }}
+    secrets:
+      tag_push_token:
+        description: >-
+          Optional elevated token for tag creation. When provided, the tag
+          event can trigger downstream workflows. WARNING: Do not use an
+          elevated token in downstream workflows that re-invoke this
+          preflight workflow, or you will create a recursive loop.
+        required: false
 
 permissions: {}
 
@@ -383,7 +394,7 @@ jobs:
         id: create_tag
         if: steps.check_tag.outputs.tag_exists_at_head != 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.tag_push_token != '' && secrets.tag_push_token || secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           # Configure git identity for annotated tag

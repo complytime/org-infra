@@ -82,6 +82,8 @@ The preflight runs automatically as the first phase and performs these checks:
 | Unreleased commits | Counts commits since last tag | Fails if nothing to release |
 | Tag creation | Annotated tag on HEAD, pushed to remote | Skipped on re-runs |
 
+The preflight accepts an optional `tag_push_token` secret. When provided, the tag is pushed with the elevated token so the tag event can trigger downstream workflows (e.g., a container build on tag push). When omitted, the tag is pushed with `GITHUB_TOKEN`, which does not trigger further workflow runs. See the [adoption guide](https://github.com/complytime/org-infra/blob/main/docs/RELEASE_WORKFLOWS.md#workflow-inputs-reference) for details.
+
 CI check discovery reads workflow files from the repository checkout. Repos that use non-standard test workflow names can provide an explicit `ci_checks` input override (JSON array of check names) instead of relying on auto-discovery. See the [adoption guide](https://github.com/complytime/org-infra/blob/main/docs/RELEASE_WORKFLOWS.md) for details on the three-file discovery convention.
 
 ## Supply Chain Expectations
