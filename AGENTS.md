@@ -28,6 +28,60 @@ make sync-dry-run    # Preview file sync to org repos
 make clean           # Remove __pycache__ and .pyc
 ```
 
+## Council Review (AI-assisted PR review)
+
+Three-workflow chain for automated AI code review using OpenCode on Vertex AI,
+with Divisor persona discovery from the reviewed repo.
+
+### Workflow chain
+
+```text
+ci_council_review_collect.yml  (pull_request)  [synced to downstream repos]
+  ├── Gate: skip drafts, dependabot, non-org-members
+  ├── Collect diff: gh pr diff → pr-diff.patch
+  ├── Build metadata: pr-meta.json
+  └── Upload artifact (1-day retention)
+         │
+         ▼  workflow_run / workflow_dispatch
+ci_council_review.yml  (consumer)  [synced to downstream repos]
+  └── Calls reusable_council_review.yml@main (org-infra only)
+         │
+         ▼  workflow_call
+reusable_council_review.yml  [NOT synced — org-infra only]
+  ├── WIF auth → Vertex AI
+  ├── council-review-action (composite, SHA-pinned, from unbound-force)
+  ├── Clean up previous bot comments
+  ├── Post review summary
+  └── Post inline comments on diff lines
+```
+
+### Required secrets
+
+| Secret | Scope | Purpose |
+|--------|-------|---------|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Org-level | WIF provider for Vertex AI auth |
+| `GCP_PROJECT_ID` | Org-level | GCP project containing Vertex AI |
+| `ORG_CHECK_TOKEN` | Optional | PAT with `org:read` for private membership checks (falls back to `GITHUB_TOKEN` for public-only) |
+
+### Sync and rollout
+
+Consumer workflows (`ci_council_review_collect.yml`, `ci_council_review.yml`) sync
+to downstream repos via `sync-config.yml`. The reusable workflow stays in org-infra
+and is called cross-repo. See `sync-config.yml` for current `exclude_repos` list.
+
+Rollout is staged: all downstream repos are excluded until the composite action SHA
+points to a merged `main` commit and security hardening (#429) / cost controls (#430)
+are in place.
+
+### Related issues
+
+- Security hardening: #429
+- Token consumption controls: #430
+- `continue-on-error` removal: #440
+- Composite action: `unbound-force/unbound-force` → `council-review-action/`
+
+See `docs/COUNCIL_REVIEW.md` for the full operational guide.
+
 ## Constraints
 
 - **Sync impact**: Config files (`.golangci.yml`, `.yamllint.yml`, `ruff.toml`, `.mega-linter.yml`, `commitlint.config.js`) and workflows (`ci_*`, `reusable_*`) sync to all org repos. Check `sync-config.yml` before modifying to understand downstream impact.
