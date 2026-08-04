@@ -18,6 +18,7 @@ Specifically, this repository includes:
 * Templates for PRs and Issues creation
 * Configuration files for lint checks
 * Synchronization script integrated with [peribolos](https://github.com/complytime/.github/blob/main/peribolos.yaml) to periodically check consistence among repositories
+* Label standardization workflow to create, rename, and clean up repository labels from a shared policy
 
 ---
 
@@ -56,6 +57,7 @@ org-infra/
 │  │  ├── reusable_sign_and_verify.yml      # Sigstore keyless signing and attestation verification for container images.
 │  │  ├── reusable_sonarqube.yml            # SonarCloud static analysis for code quality and security.
 │  │  ├── reusable_vuln_scan.yml            # Vulnerability scanning via OSV-Scanner and Trivy.
+│  │  ├── sync_labels.yml                   # Manual workflow to reconcile repository labels from policy.
 │  │  └── sync_org_repositories.yml         # Manual, scheduled, and event-based workflow to synchronize files.
 │  ├── dependabot.yml                       # Dependabot settings for GitHub Actions and Go modules.
 │  ├── dependabot_python.yml                # Dependabot settings for GitHub Actions (Python repos) and pip.
@@ -63,12 +65,15 @@ org-infra/
 ├── compliance/
 │  └── ampel/                               # Policy definitions for branch protection rule compliance checks.
 ├── docs/                                   # More detailed and specific documentation.
+│  ├── LABEL_SYNC.md                        # Documentation for cross-repo label standardization.
 │  ├── LOCAL_TESTING.md                     # Documentation on how to test synchronization locally.
 │  └── SYNC_REPOSITORIES_SETUP.md          # Documentation on how to setup the repository synchronization infrastructure.
 ├── scripts/
+│  ├── sync-labels.py                       # Python script to reconcile labels from labels-policy.json.
 │  ├── sync-org-repositories.py             # Python script to check and ensure consistence among repositories.
 │  └── resolve-go-packages.sh              # Bash: multi-module Go package auto-discovery
 ├── ...                                     # Multiple technology specific configuration files
+├── labels-policy.json                      # Label create/rename/preserve/delete policy for sync-labels.py
 ├── sync-config.yml                         # Configuration file consumed by `sync-org-repositories.py`
 └── README.md                               # This file.
 ```

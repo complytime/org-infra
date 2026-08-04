@@ -1,0 +1,199 @@
+{
+  "org": "complytime",
+  "exclude_repos": [
+    "complytime",
+    "roadmap"
+  ],
+  "preserve_local_only_labels": [
+    "60 day implementation",
+    "Fedora",
+    "ISO 42001 audit",
+    "RHEL Sec Compliance",
+    "automated",
+    "branch protection rules",
+    "ci",
+    "go",
+    "javascript",
+    "newsletter",
+    "peribolos-drift",
+    "post 60 day implementation",
+    "pre_commit",
+    "python",
+    "private-sprint-sub-issue"
+  ],
+  "rename_only_labels": [
+    {
+      "from": [
+        "60 days"
+      ],
+      "to": {
+        "name": "60 day implementation",
+        "color": "d4c5f9",
+        "description": "Tracking work scheduled for the 60 day implementation window."
+      }
+    },
+    {
+      "from": [
+        "clean up"
+      ],
+      "to": {
+        "name": "Clean up",
+        "color": "fbca04",
+        "description": "Maintenance work that cleans up existing code, config, or process."
+      }
+    },
+    {
+      "from": [
+        "test"
+      ],
+      "to": {
+        "name": "Test",
+        "color": "0e8a16",
+        "description": "Changes or work focused on testing."
+      }
+    },
+    {
+      "from": [
+        "uat"
+      ],
+      "to": {
+        "name": "UAT",
+        "color": "1d76db",
+        "description": "User acceptance testing and validation work."
+      }
+    },
+    {
+      "from": [
+        "docker"
+      ],
+      "to": {
+        "name": "container",
+        "color": "5319e7",
+        "description": "Container image, container runtime, or container packaging work."
+      }
+    },
+    {
+      "from": [
+        "llm_assisted"
+      ],
+      "to": {
+        "name": "AI assisted",
+        "color": "bfd4f2",
+        "description": "Work created or updated with AI assistance."
+      }
+    },
+    {
+      "from": [
+        "post 60 days"
+      ],
+      "to": {
+        "name": "post 60 day implementation",
+        "color": "f9d0c4",
+        "description": "Tracking work scheduled after the 60 day implementation window."
+      }
+    },
+    {
+      "from": [
+        "question",
+        "to validate",
+        "to validade"
+      ],
+      "to": {
+        "name": "validate",
+        "color": "fbca04",
+        "description": "Work that still needs validation before it is complete."
+      }
+    }
+  ],
+  "delete_labels": [
+    "Risk",
+    "Unbound force",
+    "autorelease: pending",
+    "autorelease: tagged",
+    "baklava sprint 8",
+    "breaking_change",
+    "complyctl-import",
+    "complyctl-plugins",
+    "complyscribe-imported",
+    "private",
+    "proposal",
+    "research"
+  ],
+  "standard_labels": [
+    {
+      "name": "Bug",
+      "color": "d73a4a",
+      "description": "Something is broken and needs to be fixed."
+    },
+    {
+      "name": "Dependencies",
+      "color": "0366d6",
+      "description": "Dependency updates or dependency management work."
+    },
+    {
+      "name": "documentation",
+      "color": "0075ca",
+      "description": "Improvements or additions to documentation."
+    },
+    {
+      "name": "Duplicate",
+      "color": "cfd3d7",
+      "description": "This issue or pull request already exists elsewhere."
+    },
+    {
+      "name": "Enhancement",
+      "color": "a2eeef",
+      "description": "New functionality, optimization, or an improvement to existing behavior."
+    },
+    {
+      "name": "Github_actions",
+      "color": "5319e7",
+      "description": "Changes related to GitHub Actions workflows or automation."
+    },
+    {
+      "name": "good first issue",
+      "color": "7057ff",
+      "description": "A good entry point for first-time contributors."
+    },
+    {
+      "name": "help wanted",
+      "color": "008672",
+      "description": "Extra attention is needed from contributors or maintainers."
+    },
+    {
+      "name": "Invalid",
+      "color": "e4e669",
+      "description": "This issue or pull request is not valid as filed."
+    },
+    {
+      "name": "Maintenance",
+      "color": "fbca04",
+      "description": "Routine maintenance or upkeep work."
+    },
+    {
+      "name": "Security",
+      "color": "b60205",
+      "description": "Security-related work, fixes, or hardening."
+    },
+    {
+      "name": "Ux",
+      "color": "1d76db",
+      "description": "User experience, usability, or interaction design work."
+    },
+    {
+      "name": "Wontfix",
+      "color": "ffffff",
+      "description": "This will not be worked on or accepted."
+    },
+    {
+      "name": "stakeholder",
+      "color": "0e8a16",
+      "description": "Requires input from or coordination with project stakeholders."
+    },
+    {
+      "name": "needs-adr",
+      "color": "5319e7",
+      "description": "An architecture decision record is needed before proceeding."
+    }
+  ]
+}
