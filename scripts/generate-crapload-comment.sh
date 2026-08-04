@@ -46,7 +46,13 @@ IMP_COUNT=$(jq -r '.comparison.improvements // 0' "$CRAP_JSON")
 NEW_COUNT=$(jq -r '(.comparison.new_functions // 0) + (.comparison.new_violations // 0)' "$CRAP_JSON")
 
 # No-baseline path: generate quickstart comment.
-if [ ! -f "$BASELINE" ] || [ ! -s "$BASELINE" ]; then
+# BASELINE is a required environment variable (see header); with `set -u` an
+# unset value aborts the script, so it is always assigned externally at runtime.
+# shellcheck disable=SC2154
+if [[ ! -f "$BASELINE" ]] || [[ ! -s "$BASELINE" ]]; then
+	# Heredoc expands environment-provided variables: GAZE_VERSION (required),
+	# GITHUB_SERVER_URL/GITHUB_REPOSITORY/GITHUB_RUN_ID (optional footer link).
+	# shellcheck disable=SC2154
 	cat >"$COMMENT_FILE" <<EOF
 <!-- crapload-analysis-marker -->
 ## &#x2705; CRAP Load Analysis: PASS (no baseline)
@@ -96,7 +102,9 @@ fi
 # Baseline path: generate full comparison comment.
 STATUS_BADGE="&#x2705;"
 STATUS_TEXT="PASS"
-if [ "$STATUS" = "fail" ]; then
+# STATUS is a required environment variable (see header): "pass" or "fail".
+# shellcheck disable=SC2154
+if [[ "$STATUS" = "fail" ]]; then
 	STATUS_BADGE="&#x274C;"
 	STATUS_TEXT="FAIL"
 fi
@@ -124,7 +132,7 @@ EOF
 
 # Add quality metrics from gaze report if available.
 QUALITY_COV=$(jq -r '(.quality.summary.average_contract_coverage // empty) * 10 | round / 10' "$REPORT_JSON" 2>/dev/null || true)
-if [ -n "$QUALITY_COV" ]; then
+if [[ -n "$QUALITY_COV" ]]; then
 	QUALITY_OVERSPEC=$(jq -r '(.quality.summary.average_over_specification // 0) * 10 | round / 10' "$REPORT_JSON" 2>/dev/null || echo "0")
 	printf '| Avg contract coverage (quality) | %s%% |\n' "$QUALITY_COV" >>"$COMMENT_FILE"
 	printf '| Avg over-specification | %s%% |\n' "$QUALITY_OVERSPEC" >>"$COMMENT_FILE"
@@ -132,7 +140,7 @@ fi
 
 # Add quadrant distribution from gaze report if available.
 Q1=$(jq -r '.crap.summary.quadrant_counts.Q1_Safe // empty' "$REPORT_JSON" 2>/dev/null || true)
-if [ -n "$Q1" ]; then
+if [[ -n "$Q1" ]]; then
 	Q2=$(jq -r '.crap.summary.quadrant_counts.Q2_ComplexButTested // 0' "$REPORT_JSON" 2>/dev/null || echo "0")
 	Q3=$(jq -r '.crap.summary.quadrant_counts.Q3_SimpleButUnderspecified // 0' "$REPORT_JSON" 2>/dev/null || echo "0")
 	Q4=$(jq -r '.crap.summary.quadrant_counts.Q4_Dangerous // 0' "$REPORT_JSON" 2>/dev/null || echo "0")
@@ -157,7 +165,7 @@ REGRESSIONS_TABLE=$(jq -r '
     (map("| `\(.file):\(.function)` | \(.baseline_crap // "N/A") | \(.crap) | \(.crap_delta // "N/A") | \(.baseline_gaze_crap // "N/A") | \(.gaze_crap // "N/A") | \(.gaze_crap_delta // "N/A") |") | join("\n"))
   else empty end
 ' "$CRAP_JSON" 2>/dev/null || true)
-if [ -n "$REGRESSIONS_TABLE" ]; then
+if [[ -n "$REGRESSIONS_TABLE" ]]; then
 	printf '%s\n' "$REGRESSIONS_TABLE" >>"$COMMENT_FILE"
 fi
 
@@ -169,7 +177,7 @@ IMPROVEMENTS_TABLE=$(jq -r '
     (map("| `\(.file):\(.function)` | \(.baseline_crap // "N/A") | \(.crap) | \(.crap_delta // "N/A") | \(.baseline_gaze_crap // "N/A") | \(.gaze_crap // "N/A") | \(.gaze_crap_delta // "N/A") |") | join("\n"))
   else empty end
 ' "$CRAP_JSON" 2>/dev/null || true)
-if [ -n "$IMPROVEMENTS_TABLE" ]; then
+if [[ -n "$IMPROVEMENTS_TABLE" ]]; then
 	printf '%s\n' "$IMPROVEMENTS_TABLE" >>"$COMMENT_FILE"
 fi
 
@@ -184,17 +192,20 @@ NEW_FUNCS_TABLE=$(jq -r '
     ) | join("\n"))
   else empty end
 ' "$CRAP_JSON" 2>/dev/null || true)
-if [ -n "$NEW_FUNCS_TABLE" ]; then
+if [[ -n "$NEW_FUNCS_TABLE" ]]; then
 	printf '%s\n' "$NEW_FUNCS_TABLE" >>"$COMMENT_FILE"
 fi
 
 # Add analysis warnings from gaze report if any.
 FAILED_STEPS=$(jq -r '.errors | to_entries[] | select(.value != null) | "- **\(.key)**: \(.value)"' "$REPORT_JSON" 2>/dev/null || true)
-if [ -n "$FAILED_STEPS" ]; then
+if [[ -n "$FAILED_STEPS" ]]; then
 	printf '\n### Analysis Warnings\n\n%s\n' "$FAILED_STEPS" >>"$COMMENT_FILE"
 fi
 
 # Add footer.
+# GITHUB_SERVER_URL/GITHUB_REPOSITORY/GITHUB_RUN_ID are provided by the GitHub
+# Actions runner environment (see header).
+# shellcheck disable=SC2154
 printf '\n[View full analysis logs](%s/%s/actions/runs/%s)\n' \
 	"$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >>"$COMMENT_FILE"
 
@@ -204,7 +215,7 @@ TRAILER_RESERVE=120
 TRUNCATE_AT=$((MAX_COMMENT_SIZE - TRAILER_RESERVE))
 
 COMMENT_SIZE=$(wc -c <"$COMMENT_FILE")
-if [ "$COMMENT_SIZE" -gt "$MAX_COMMENT_SIZE" ]; then
+if [[ "$COMMENT_SIZE" -gt "$MAX_COMMENT_SIZE" ]]; then
 	head -c "$TRUNCATE_AT" "$COMMENT_FILE" >"${COMMENT_FILE}.tmp"
 	printf '\n\n---\n_Comment truncated (%s bytes, limit %s). See full logs above._\n' \
 		"$COMMENT_SIZE" "$MAX_COMMENT_SIZE" >>"${COMMENT_FILE}.tmp"
