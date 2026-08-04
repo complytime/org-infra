@@ -31,7 +31,7 @@ the `gaze-test-generator` agent.
 ### Options
 
 | Option | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `[pattern]` | Go package pattern (default: `./...`) |
 | `--strategy=X` | Filter to one strategy: `add_tests`, `add_assertions`, `add_docs`, `decompose_and_test` |
 | `--top=N` | Process only the top N functions by CRAP score |

@@ -128,7 +128,7 @@ class TestCraploadCommentTruncation:
 
             # Use a very small limit to force truncation
             rc, comment = _run_script(
-                crap, report, baseline, max_comment_size="200"
+                crap, report, baseline, max_comment_size="200",
             )
 
             assert rc == 0
@@ -143,7 +143,7 @@ class TestCraploadCommentTruncation:
 
             limit = 300
             rc, comment = _run_script(
-                crap, report, baseline, max_comment_size=str(limit)
+                crap, report, baseline, max_comment_size=str(limit),
             )
 
             assert rc == 0
@@ -161,7 +161,7 @@ class TestCraploadCommentTruncation:
             baseline = _make_baseline(tmp)
 
             rc, comment = _run_script(
-                crap, report, baseline, max_comment_size="200"
+                crap, report, baseline, max_comment_size="200",
             )
 
             assert rc == 0

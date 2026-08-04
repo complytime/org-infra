@@ -41,11 +41,11 @@ Renovate fills this gap, scoped to Go version patch updates only.
 
 ### Files
 
-| File | Purpose |
-|------|---------|
-| `ci_renovate.yml` | Workflow: daily schedule + manual dispatch with dry-run |
-| `go-toolchain-patches.json` | Preset: three-rule pattern restricting to Go version patches |
-| `renovate-config.js` | Global config: target repos, `globalExtends`, `onboarding: false` |
+| File                        | Purpose                                                           |
+|-----------------------------|-------------------------------------------------------------------|
+| `ci_renovate.yml`           | Workflow: daily schedule + manual dispatch with dry-run           |
+| `go-toolchain-patches.json` | Preset: three-rule pattern restricting to Go version patches      |
+| `renovate-config.js`        | Global config: target repos, `globalExtends`, `onboarding: false` |
 
 ### Preset rules (`go-toolchain-patches.json`)
 
@@ -70,9 +70,9 @@ only run for enabled deps.
 
 ### Secrets
 
-| Secret | Location | Purpose |
-|--------|----------|---------|
-| `RENOVATE_APP_CLIENT_ID` | org-infra repo secrets | GitHub App client ID |
+| Secret                     | Location               | Purpose                |
+|----------------------------|------------------------|------------------------|
+| `RENOVATE_APP_CLIENT_ID`   | org-infra repo secrets | GitHub App client ID   |
 | `RENOVATE_APP_PRIVATE_KEY` | org-infra repo secrets | GitHub App private key |
 
 ## Manual dispatch

@@ -111,7 +111,7 @@ Enforce threshold (exit 1 if fail)
 ## Step Mapping (Before -> After)
 
 | Before | After |
-|--------|-------|
+| -------- | ------- |
 | Step 10: Run Gaze analysis (gaze report) | Kept: gaze report for quality/quadrant data |
 | Step 11: Compare against baseline (compare-crapload.sh) | Replaced: gaze crap --baseline + inline jq/heredoc |
 | Step 12: Write step summary | Kept unchanged |

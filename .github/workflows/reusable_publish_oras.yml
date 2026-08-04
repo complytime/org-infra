@@ -13,11 +13,11 @@ on:
   workflow_call:
     inputs:
       image_name:
-        description: 'Image name without registry (e.g., org/image-name)'
+        description: "Image name without registry (e.g., org/image-name)"
         required: true
         type: string
       artifact_type:
-        description: 'OCI artifactType annotation (e.g., application/vnd.complytime.gemara.policies.v1)'
+        description: "OCI artifactType annotation (e.g., application/vnd.complytime.gemara.policies.v1)"
         required: true
         type: string
       paths:
@@ -30,23 +30,23 @@ on:
         required: true
         type: string
       image_description:
-        description: 'OCI org.opencontainers.image.description annotation (defaults to image_name)'
+        description: "OCI org.opencontainers.image.description annotation (defaults to image_name)"
         required: false
         type: string
       sbom_scan_path:
-        description: 'Local path to scan for SBOM generation (defaults to repo root)'
+        description: "Local path to scan for SBOM generation (defaults to repo root)"
         required: false
-        default: '.'
+        default: "."
         type: string
     outputs:
       digest:
-        description: 'Pushed artifact digest (sha256:...)'
+        description: "Pushed artifact digest (sha256:...)"
         value: ${{ jobs.publish.outputs.digest }}
       image:
-        description: 'Full image reference (ghcr.io/org/image-name)'
+        description: "Full image reference (ghcr.io/org/image-name)"
         value: ${{ jobs.publish.outputs.image }}
       sha_tag:
-        description: 'Tag used for the push (sha-<40-char-commit-sha>)'
+        description: "Tag used for the push (sha-<40-char-commit-sha>)"
         value: ${{ jobs.publish.outputs.sha_tag }}
 
 permissions:
@@ -66,10 +66,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read       # Checkout source for SBOM scan
-      packages: write      # Push artifact and attestations to GHCR
-      id-token: write      # OIDC token for GitHub attestations
-      attestations: write  # Write attestations to GHCR
+      contents: read # Checkout source for SBOM scan
+      packages: write # Push artifact and attestations to GHCR
+      id-token: write # OIDC token for GitHub attestations
+      attestations: write # Write attestations to GHCR
     outputs:
       digest: ${{ steps.digest.outputs.digest }}
       image: ${{ steps.image_ref.outputs.image }}

@@ -24,7 +24,7 @@ scanning, signing/verification, and registry promotion. The release pipeline (pr
 ### Current State Across Repos
 
 | Repository | Trigger | Preflight | Supply Chain | CI Discovery |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | complyctl | dispatch | Yes (buggy) | cosign + syft | Hardcoded 3 checks |
 | complytime-providers | dispatch | Yes (smart re-run) | cosign + syft | Hardcoded 2 checks |
 | uf-unbound-force | dispatch | Yes (+ security gate) | cosign + syft | Hardcoded 2+2 checks |
@@ -83,7 +83,7 @@ override provides an escape hatch.
 The auto-discovery reads exactly three workflow files:
 
 | File | Source | Check name construction |
-|---|---|---|
+| --- | --- | --- |
 | `ci_checks.yml` | Synced from org-infra | Known by convention: `CI / Standardized CI / Run linters` |
 | `ci_security.yml` | Synced from org-infra | Pattern match: at least one `Security Checks / OSV-Scanner / *` must pass |
 | `ci_local.yml` | Repo-specific | Parsed with `yq`: `<workflow name> / <job name>` for each job |

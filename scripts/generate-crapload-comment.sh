@@ -203,10 +203,10 @@ printf '\n[View full analysis logs](%s/%s/actions/runs/%s)\n' \
 TRAILER_RESERVE=120
 TRUNCATE_AT=$((MAX_COMMENT_SIZE - TRAILER_RESERVE))
 
-COMMENT_SIZE=$(wc -c < "$COMMENT_FILE")
+COMMENT_SIZE=$(wc -c <"$COMMENT_FILE")
 if [ "$COMMENT_SIZE" -gt "$MAX_COMMENT_SIZE" ]; then
-	head -c "$TRUNCATE_AT" "$COMMENT_FILE" > "${COMMENT_FILE}.tmp"
+	head -c "$TRUNCATE_AT" "$COMMENT_FILE" >"${COMMENT_FILE}.tmp"
 	printf '\n\n---\n_Comment truncated (%s bytes, limit %s). See full logs above._\n' \
-		"$COMMENT_SIZE" "$MAX_COMMENT_SIZE" >> "${COMMENT_FILE}.tmp"
+		"$COMMENT_SIZE" "$MAX_COMMENT_SIZE" >>"${COMMENT_FILE}.tmp"
 	mv "${COMMENT_FILE}.tmp" "$COMMENT_FILE"
 fi

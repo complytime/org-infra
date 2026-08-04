@@ -21,7 +21,7 @@ constitutional violation. The change MUST NOT be merged.
 risk — actual breakage or exposure.
 
 | Persona | Examples |
-|---------|---------|
+| --------- | --------- |
 | Adversary | Hardcoded production secret, SQL injection vector, panic in library code |
 | Tester | Missing coverage strategy in spec/plan (Constitution IV violation), test that masks a real failure |
 | Guard | Constitution principle violated without justification, implementation contradicts spec acceptance criteria |
@@ -38,7 +38,7 @@ before merge. Blocks the review.
 Requires action but not an emergency.
 
 | Persona | Examples |
-|---------|---------|
+| --------- | --------- |
 | Adversary | Credentials logged at INFO level, unpinned CI action on mutable tag, unchecked type assertion |
 | Tester | Vague acceptance criteria ("works correctly"), shallow assertions (err == nil only), missing regression test for known bug |
 | Guard | Scope creep beyond spec, acceptance criterion with no corresponding task, undocumented constitution trade-off |
@@ -55,7 +55,7 @@ Mode, auto-fixable.
 but could be better.
 
 | Persona | Examples |
-|---------|---------|
+| --------- | --------- |
 | Adversary | Overly broad file permissions (0o755 → 0o644), missing context in error wrap, redundant file read |
 | Tester | Missing fixture specification, test isolation concern (shared state but no observed failure), convention deviation |
 | Guard | Minor scope addition beyond spec (gold plating), stale cross-reference, metadata inconsistency |
@@ -71,7 +71,7 @@ Non-blocking. In Spec Review Mode, auto-fixable.
 impact.
 
 | Persona | Examples |
-|---------|---------|
+| --------- | --------- |
 | Adversary | Comment suggesting security review for future feature, minor naming inconsistency in error variable |
 | Tester | Minor test naming convention issue, optional observability enhancement in test output |
 | Guard | Minor documentation wording improvement, optional cross-reference addition |
@@ -81,7 +81,7 @@ impact.
 ## Auto-Fix Policy (Spec Review Mode)
 
 | Severity | Action | Rationale |
-|----------|--------|-----------|
+| ---------- | -------- | ----------- |
 | LOW | Auto-fix | Cosmetic; safe to fix without human judgment |
 | MEDIUM | Auto-fix | Quality improvement; deterministic fix |
 | HIGH | Report only | Requires human judgment on intent/scope |

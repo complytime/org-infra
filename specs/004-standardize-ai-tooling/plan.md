@@ -24,7 +24,7 @@ Standardize AI tooling in org-infra so contributors can clone the repository and
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
 | # | Principle | Status | Assessment |
-|---|-----------|--------|------------|
+| --- | ----------- | -------- | ------------ |
 | I | Single Source of Truth | PASS | Constitution at `.specify/memory/constitution.md` — single canonical copy consumed by all tools. No duplication. Synced to org repos. |
 | II | Simplicity & Isolation | PASS | Each file has a single responsibility: constitution (standards), gitignore (boundaries), docs/AI_TOOLING.md (AI docs), review_pr.md (PR review), skills/.gitkeep (extensibility placeholder). Documentation lives in `docs/` alongside existing project docs. |
 | III | Incremental Improvement | PASS | Feature is focused on AI tooling standardization. No unrelated changes. |

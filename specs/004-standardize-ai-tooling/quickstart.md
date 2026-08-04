@@ -40,7 +40,7 @@ If your tool does not support plugin-based commands, reference `.opencode/comman
 ## Key Files
 
 | File | Purpose |
-|------|---------|
+| ------ | --------- |
 | `.specify/memory/constitution.md` | Organizational governance and coding standards |
 | `docs/AI_TOOLING.md` | AI tooling setup, commands, skills documentation |
 | `.agents/skills/` | Directory for AI skills — agent-agnostic, auto-discovered by OpenCode |

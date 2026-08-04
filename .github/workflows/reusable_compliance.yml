@@ -12,18 +12,18 @@ on:
   workflow_call:
     inputs:
       complytime_config_path:
-        description: 'Relative path of the complytime configuration file in the calling repository'
+        description: "Relative path of the complytime configuration file in the calling repository"
         required: false
         type: string
-        default: '.complytime/complytime.yaml'
+        default: ".complytime/complytime.yaml"
       policy_id:
-        description: 'Policy ID to use for complyctl generate and scan commands'
+        description: "Policy ID to use for complyctl generate and scan commands"
         required: false
         type: string
-        default: 'ampel-bp'
+        default: "ampel-bp"
     secrets:
       source_token:
-        description: 'GitHub token used by snappy to read branch protection rules via the GitHub API'
+        description: "GitHub token used by snappy to read branch protection rules via the GitHub API"
         required: true
 
 permissions:
@@ -68,7 +68,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: './go.mod'
+          go-version-file: "./go.mod"
 
       - name: Build complyctl
         run: |

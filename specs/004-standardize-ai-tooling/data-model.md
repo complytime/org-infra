@@ -52,7 +52,7 @@ All files fall into one of two categories:
 ### Constitution (`.specify/memory/constitution.md`)
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Location | `.specify/memory/constitution.md` |
 | Format | Markdown with RFC 2119 language |
 | Ownership | Org-infra maintainers (canonical); other repos reference or increment |
@@ -69,7 +69,7 @@ All files fall into one of two categories:
 ### Project-Specific Command (`review_pr.md`)
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Location | `.opencode/command/review_pr.md` |
 | Format | Markdown with YAML frontmatter (`description` field) |
 | Ownership | Org-infra maintainers |
@@ -85,7 +85,7 @@ All files fall into one of two categories:
 ### Skills Directory (`.agents/skills/`)
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Location | `.agents/skills/` (agent-agnostic discovery path) |
 | Format | Directory with `.gitkeep` (empty initially) |
 | Ownership | Contributors (create skills), maintainers (review) |
@@ -105,7 +105,7 @@ All files fall into one of two categories:
 ### Documentation (`docs/AI_TOOLING.md`)
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Location | `docs/AI_TOOLING.md` |
 | Format | Markdown |
 | Ownership | Org-infra maintainers |
@@ -121,7 +121,7 @@ All files fall into one of two categories:
 ### Spec Directories (`specs/` and `openspec/`)
 
 | Attribute | `specs/` | `openspec/` |
-|-----------|----------|-------------|
+| ----------- | ---------- | ------------- |
 | Framework | SpecKit | OpenSpec |
 | Status | Exists (features 001-004) | Created when first OpenSpec feature is made |
 | Format | Framework-native template | Framework-native template |
@@ -141,7 +141,7 @@ All files fall into one of two categories:
 ### Gitignore (`.gitignore`)
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Location | Repository root |
 | Format | Gitignore pattern syntax |
 | Ownership | Org-infra maintainers |
@@ -155,7 +155,7 @@ All files fall into one of two categories:
 ### Agent Context (`AGENTS.md`)
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Location | Repository root |
 | Format | Markdown |
 | Ownership | Auto-derived via `update-agent-context.sh` |
