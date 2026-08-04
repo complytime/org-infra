@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
+# ruff: noqa: T201
+# This is a CLI script whose stdout is its user-facing interface (progress
+# output, dry-run reports, and step summaries); print() is intentional.
 
 """
 Script to synchronize standard files and workflows across all repositories
@@ -27,7 +30,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from datetime import datetime
+import traceback
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -36,6 +41,10 @@ from git import GitCommandError
 from git.repo import Repo
 
 GITHUB_API = "https://api.github.com"
+
+# HTTP status codes used when interpreting GitHub API responses.
+HTTP_OK = 200
+HTTP_CREATED = 201
 
 # YAML truthy values that must be quoted to avoid yamllint truthy rule violations
 _YAML_TRUTHY_VALUES = frozenset({"true", "false", "yes", "no", "on", "off"})
@@ -54,7 +63,11 @@ class _IndentedListDumper(yaml.SafeDumper):
           - package-ecosystem: ...
     """
 
-    def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
+    def increase_indent(
+        self,
+        flow: bool = False,
+        indentless: bool = False,  # noqa: ARG002 - required by PyYAML API; always force indented sequences
+    ) -> None:
         return super().increase_indent(flow, False)
 
 
@@ -113,8 +126,8 @@ def parse_args() -> argparse.Namespace:
 def load_sync_config(config_path: str) -> dict:
     """Load the sync configuration file."""
     script_dir = Path(__file__).parent.parent
-    full_path = f"{script_dir}/{config_path}"
-    with open(full_path) as f:
+    full_path = script_dir / config_path
+    with full_path.open() as f:
         return yaml.safe_load(f)
 
 
@@ -136,7 +149,10 @@ def validate_github_api_request(endpoint: str, method: str) -> bool:
         # Tag-to-SHA resolution
         (r"^" + re.escape(GITHUB_API) + r"/repos/[^/]+/[^/]+/git/ref/tags/.+$", "GET"),
         # Annotated tag dereferencing
-        (r"^" + re.escape(GITHUB_API) + r"/repos/[^/]+/[^/]+/git/tags/[a-f0-9]+$", "GET"),
+        (
+            r"^" + re.escape(GITHUB_API) + r"/repos/[^/]+/[^/]+/git/tags/[a-f0-9]+$",
+            "GET",
+        ),
     ]
     return any(
         re.match(pattern, endpoint) and method == allowed_method
@@ -184,10 +200,11 @@ def github_api_request(
             response_data = response.json()
         except json.JSONDecodeError:
             response_data = {"raw": response.text}
-        return response.status_code, response_data
     except requests.RequestException as e:
         print(f"API request failed: {e}")
         return 500, {"error": str(e)}
+    else:
+        return response.status_code, response_data
 
 
 def validate_branch_name(branch_name: str) -> bool:
@@ -213,9 +230,11 @@ def check_existing_sync_pr(org: str, repo_name: str) -> dict[str, str] | None:
         duplicates).  ``None`` when no matching PR was found.
     """
     url = f"{GITHUB_API}/repos/{org}/{repo_name}/pulls"
-    status, data = github_api_request(url, method="GET", params={"state": "open", "per_page": 100})
+    status, data = github_api_request(
+        url, method="GET", params={"state": "open", "per_page": 100},
+    )
 
-    if status != 200:
+    if status != HTTP_OK:
         print(f"Warning: Could not check existing PRs (HTTP {status})")
         return {"error": f"API returned HTTP {status}"}
 
@@ -244,10 +263,10 @@ def fetch_peribolos_file(org: str) -> dict:
             cmd = ["git", "clone", "--quiet", "--depth", "1", github_repo_url]
             subprocess.check_call(cmd, cwd=tmpdir)
 
-            repo_path = os.path.join(tmpdir, peribolos_repo)
-            peribolos_path = os.path.join(repo_path, "peribolos.yaml")
-            if os.path.exists(peribolos_path):
-                with open(peribolos_path) as f:
+            repo_path = Path(tmpdir) / peribolos_repo
+            peribolos_path = repo_path / "peribolos.yaml"
+            if peribolos_path.exists():
+                with peribolos_path.open() as f:
                     return yaml.safe_load(f)
             print(f"Error: peribolos.yaml not found in {peribolos_repo} repository")
             sys.exit(1)
@@ -271,7 +290,7 @@ def extract_repositories(peribolos_data: dict, org: str) -> list:
 
 def compare_files(source_file: str, dest_file: str) -> bool:
     """Compare two files and return True if they are identical."""
-    if not os.path.exists(dest_file):
+    if not Path(dest_file).exists():
         return False
     return filecmp.cmp(source_file, dest_file, shallow=False)
 
@@ -281,9 +300,10 @@ def sync_file(source_path: str, dest_path: str, relative_path: str) -> bool:
 
     Returns True if file was copied/updated, False if identical.
     """
-    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+    dest = Path(dest_path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
 
-    if os.path.exists(dest_path):
+    if dest.exists():
         if compare_files(source_path, dest_path):
             print(f"{relative_path} is up to date")
             return False
@@ -371,7 +391,7 @@ def get_latest_release(
         f"/releases/latest"
     )
     status, data = github_api_request(release_url)
-    if status != 200:
+    if status != HTTP_OK:
         print(
             f"No release found for {org}/{repo_name}. "
             f"Use --release-ref <tag> to specify a "
@@ -386,7 +406,7 @@ def get_latest_release(
         f"/git/ref/tags/{tag_name}"
     )
     ref_status, ref_data = github_api_request(ref_url)
-    if ref_status != 200:
+    if ref_status != HTTP_OK:
         print(
             f"Error: Could not resolve tag '{tag_name}' "
             f"for {org}/{repo_name}.",
@@ -401,7 +421,7 @@ def get_latest_release(
             f"/git/tags/{obj['sha']}"
         )
         tag_status, tag_data = github_api_request(tag_url)
-        if tag_status != 200:
+        if tag_status != HTTP_OK:
             print(
                 f"Error: Could not dereference tag object "
                 f"for {org}/{repo_name}.",
@@ -447,7 +467,8 @@ def transform_workflow_refs(
         ValueError: If ``sha`` is not a valid 40-character hex string.
     """
     if not re.fullmatch(r"[0-9a-f]{40}", sha):
-        raise ValueError(f"Invalid SHA format: {sha!r}")
+        msg = f"Invalid SHA format: {sha!r}"
+        raise ValueError(msg)
 
     pattern = (
         r"(uses:\s*)"
@@ -471,10 +492,15 @@ def setup_git_credentials(repo_path: str, org: str, repo_name: str) -> None:
     deferred to a future improvement.
     """
     repo = Repo(repo_path)
-    auth_url = f"https://x-access-token:{GITHUB_TOKEN}@github.com/{org}/{repo_name}.git"
+    auth_url = (
+        f"https://x-access-token:{GITHUB_TOKEN}"
+        f"@github.com/{org}/{repo_name}.git"
+    )
     try:
         repo.remote("origin").set_url(auth_url)
-    except Exception:
+    except (ValueError, GitCommandError):
+        # No existing "origin" remote (ValueError) or git refused the
+        # update (GitCommandError) — create the remote instead.
         repo.create_remote("origin", auth_url)
 
 
@@ -507,45 +533,46 @@ def create_branch_and_commit(
 
         # Push without --force (standard push only)
         repo.git.push("--set-upstream", "origin", branch_name)
-        print(f"Pushed branch: {branch_name}")
-        return True
     except GitCommandError as e:
         print(f"Git operation failed: {e}")
         return False
+    else:
+        print(f"Pushed branch: {branch_name}")
+        return True
 
 
-def create_pull_request(
-    org: str,
-    repo_name: str,
-    branch_name: str,
-    title: str,
-    body: str,
-    base_branch: str = "main",
-) -> str | None:
+@dataclass
+class PullRequest:
+    """Content describing a pull request to create."""
+
+    branch_name: str
+    title: str
+    body: str
+    base_branch: str = "main"
+
+
+def create_pull_request(org: str, repo_name: str, pr: PullRequest) -> str | None:
     """Create a pull request from a branch in the target repository.
 
     Args:
         org: Organization name
         repo_name: Repository name
-        branch_name: Source branch name
-        title: PR title
-        body: PR body/description
-        base_branch: Target branch (default: main)
+        pr: Pull request content (branch, title, body, base branch)
 
     Returns:
         The PR URL on success, or None on failure.
     """
     data = {
-        "title": title,
-        "body": body,
-        "base": base_branch,
-        "head": branch_name,
+        "title": pr.title,
+        "body": pr.body,
+        "base": pr.base_branch,
+        "head": pr.branch_name,
     }
 
     url = f"{GITHUB_API}/repos/{org}/{repo_name}/pulls"
     status, response_data = github_api_request(url, method="POST", data=data)
 
-    if status == 201:
+    if status == HTTP_CREATED:
         pr_url = response_data.get("html_url", "")
         print(f"Pull request created successfully: {pr_url}")
         return pr_url
@@ -614,13 +641,16 @@ def merge_dependabot_entries(
     managed_ecosystems = {entry["package-ecosystem"] for entry in managed_entries}
 
     unmanaged_entries: list[dict] = []
-    if os.path.exists(existing_path):
-        with open(existing_path) as f:
+    existing = Path(existing_path)
+    if existing.exists():
+        with existing.open() as f:
             existing_data = yaml.safe_load(f)
         if existing_data and "updates" in existing_data:
-            for entry in existing_data["updates"]:
-                if entry.get("package-ecosystem") not in managed_ecosystems:
-                    unmanaged_entries.append(entry)
+            unmanaged_entries.extend(
+                entry
+                for entry in existing_data["updates"]
+                if entry.get("package-ecosystem") not in managed_ecosystems
+            )
 
     all_entries = managed_entries + unmanaged_entries
 
@@ -651,7 +681,7 @@ def merge_dependabot_entries(
     return header + rendered_yaml.rstrip("\n") + "\n"
 
 
-def sync_repository(
+def sync_repository(  # noqa: PLR0913, PLR0911, PLR0912, PLR0915 - end-to-end per-repo sync orchestrator; splitting obscures the linear workflow
     org: str,
     repo_name: str,
     config: dict,
@@ -691,7 +721,7 @@ def sync_repository(
             print(f"Cloning {repo_url}...")
             cmd = ["git", "clone", "--quiet", repo_url]
             subprocess.check_call(cmd, cwd=tmpdir, stderr=subprocess.DEVNULL)
-            repo_path = os.path.join(tmpdir, repo_name)
+            repo_path = Path(tmpdir) / repo_name
 
             # Step 2: Setup credentials and check for existing PR
             # This must happen BEFORE any file changes to keep the
@@ -743,16 +773,18 @@ def sync_repository(
                 dest_rel_path = file_config.get("destination", source_rel_path)
 
                 source_path = source_root / source_rel_path
-                dest_path = os.path.join(repo_path, dest_rel_path)
+                dest_path = repo_path / dest_rel_path
 
                 if not source_path.exists():
                     print(f"Source file not found: {source_rel_path}")
                     continue
 
-                if "exclude_repos" in file_config:
-                    if repo_name in file_config["exclude_repos"]:
-                        print(f"{source_rel_path} excluded for this repo")
-                        continue
+                if (
+                    "exclude_repos" in file_config
+                    and repo_name in file_config["exclude_repos"]
+                ):
+                    print(f"{source_rel_path} excluded for this repo")
+                    continue
 
                 resolved_vars = resolve_file_vars(
                     file_config, repo_name,
@@ -807,9 +839,8 @@ def sync_repository(
                     resolved_content = source_content
 
                     existing_content = ""
-                    if os.path.exists(dest_path):
-                        with open(dest_path) as f:
-                            existing_content = f.read()
+                    if dest_path.exists():
+                        existing_content = dest_path.read_text()
 
                     if resolved_content != existing_content:
                         if dry_run:
@@ -823,12 +854,11 @@ def sync_repository(
                                 f"{dest_rel_path}",
                             )
                         else:
-                            os.makedirs(
-                                os.path.dirname(dest_path),
+                            dest_path.parent.mkdir(
+                                parents=True,
                                 exist_ok=True,
                             )
-                            with open(dest_path, "w") as f:
-                                f.write(resolved_content)
+                            dest_path.write_text(resolved_content)
                             print(
                                 f"{dest_rel_path} updated "
                                 f"(content transformed)",
@@ -837,7 +867,7 @@ def sync_repository(
                     else:
                         print(f"{dest_rel_path} is up to date")
                 elif dry_run:
-                    if not os.path.exists(dest_path):
+                    if not dest_path.exists():
                         print(
                             f"[DRY RUN] Would add: "
                             f"{dest_rel_path}",
@@ -863,23 +893,26 @@ def sync_repository(
             # Step 4: Generate and sync dependabot.yml
             managed_entries = generate_dependabot_config(repo_name, config)
             if managed_entries is not None:
-                dependabot_dest = os.path.join(repo_path, ".github", "dependabot.yml")
-                rendered = merge_dependabot_entries(managed_entries, dependabot_dest)
+                dependabot_dest = repo_path / ".github" / "dependabot.yml"
+                rendered = merge_dependabot_entries(
+                    managed_entries, str(dependabot_dest),
+                )
                 dependabot_rel = ".github/dependabot.yml"
 
-                os.makedirs(os.path.dirname(dependabot_dest), exist_ok=True)
+                dependabot_dest.parent.mkdir(parents=True, exist_ok=True)
 
                 existing_content = ""
-                if os.path.exists(dependabot_dest):
-                    with open(dependabot_dest) as f:
-                        existing_content = f.read()
+                if dependabot_dest.exists():
+                    existing_content = dependabot_dest.read_text()
 
                 if rendered != existing_content:
                     if dry_run:
-                        print(f"[DRY RUN] Would update: {dependabot_rel} (generated)")
+                        print(
+                            f"[DRY RUN] Would update: "
+                            f"{dependabot_rel} (generated)",
+                        )
                     else:
-                        with open(dependabot_dest, "w") as f:
-                            f.write(rendered)
+                        dependabot_dest.write_text(rendered)
                         print(f"{dependabot_rel} updated (generated)")
                     files_changed.append(dependabot_rel)
                 else:
@@ -894,8 +927,9 @@ def sync_repository(
                 return {"status": "dry_run", "pr_url": None, "error": None}
 
             # Step 5: Commit and push
-            commit_message = "chore: sync repository standards\n\nUpdated files:\n" + "\n".join(
-                f"- {f}" for f in files_changed
+            commit_message = (
+                "chore: sync repository standards\n\nUpdated files:\n"
+                + "\n".join(f"- {f}" for f in files_changed)
             )
 
             if existing_pr and existing_pr.get("branch"):
@@ -928,11 +962,13 @@ def sync_repository(
                 }
 
             # Step 6: Create new branch, commit, push, and open PR
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d%H%M%S")
             branch_name = f"{SYNC_BRANCH_PREFIX}{timestamp}"
 
             print("\nCreating branch and committing changes...")
-            if not create_branch_and_commit(repo_path, branch_name, files_changed, commit_message):
+            if not create_branch_and_commit(
+                repo_path, branch_name, files_changed, commit_message,
+            ):
                 return {
                     "status": "failed",
                     "pr_url": None,
@@ -942,7 +978,9 @@ def sync_repository(
             pr_body = (
                 "This PR synchronizes repository standards from "
                 "org-infra.\n\n"
-                "## Files Updated\n" + "\n".join(f"- `{f}`" for f in files_changed) + "\n\n"
+                "## Files Updated\n"
+                + "\n".join(f"- `{f}`" for f in files_changed)
+                + "\n\n"
                 "## Description\n"
                 "This is an automated PR to ensure repository settings "
                 "are consistent across the organization.\n\n"
@@ -955,14 +993,16 @@ def sync_repository(
             pr_url = create_pull_request(
                 org,
                 repo_name,
-                branch_name,
-                SYNC_PR_TITLE,
-                pr_body,
-                base_branch,
+                PullRequest(
+                    branch_name=branch_name,
+                    title=SYNC_PR_TITLE,
+                    body=pr_body,
+                    base_branch=base_branch,
+                ),
             )
             if pr_url:
                 return {"status": "created", "pr_url": pr_url, "error": None}
-            return {
+            return {  # noqa: TRY300 - terminal result of the try-wrapped sync workflow
                 "status": "failed",
                 "pr_url": None,
                 "error": "Failed to create pull request",
@@ -971,11 +1011,9 @@ def sync_repository(
             err = f"Error processing {repo_name}: {e}"
             print(err)
             return {"status": "failed", "pr_url": None, "error": err}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - per-repo guard: record failure and continue the sync run
             err = f"Unexpected error processing {repo_name}: {e}"
             print(err)
-            import traceback
-
             traceback.print_exc()
             return {"status": "failed", "pr_url": None, "error": err}
 
@@ -1065,11 +1103,11 @@ def write_step_summary(
             lines.append(f"| {r['repo']} | {error} |")
         lines.append("")
 
-    with open(summary_path, "a") as f:
+    with Path(summary_path).open("a") as f:
         f.write("\n".join(lines) + "\n")
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0912, PLR0915 - linear CLI entrypoint: arg parsing, release resolution, and repo iteration
     """Entry point for the sync script."""
     args = parse_args()
 
@@ -1092,7 +1130,7 @@ def main() -> None:
             f"/git/ref/tags/{release_tag}"
         )
         status, data = github_api_request(ref_endpoint)
-        if status != 200:
+        if status != HTTP_OK:
             print(
                 f"Error: Tag '{release_tag}' not found "
                 f"for {args.org}/{SOURCE_REPO}.",
@@ -1108,7 +1146,7 @@ def main() -> None:
             tag_status, tag_data = github_api_request(
                 tag_endpoint,
             )
-            if tag_status != 200:
+            if tag_status != HTTP_OK:
                 print(
                     f"Error: Could not dereference "
                     f"tag object for "
@@ -1156,7 +1194,10 @@ def main() -> None:
         print("=" * 60)
 
     excluded_list = "\n- ".join(excluded_repos)
-    print(f"{len(excluded_repos)} repositories were excluded in this sync:\n- {excluded_list}")
+    print(
+        f"{len(excluded_repos)} repositories were excluded in this sync:"
+        f"\n- {excluded_list}",
+    )
     print(f"\nWill process {len(repositories)} repository(ies)")
 
     results: list[dict[str, str | None]] = []
@@ -1169,10 +1210,8 @@ def main() -> None:
             )
             result["repo"] = repo_name
             results.append(result)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001, PERF203 - per-repo guard: isolate failures so one repo cannot abort the batch
             print(f"Failed to process {repo_name}: {e}")
-            import traceback
-
             traceback.print_exc()
             results.append({
                 "repo": repo_name,

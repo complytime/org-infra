@@ -19,7 +19,7 @@ SCRIPT_PATH = PROJECT_ROOT / "scripts" / "generate-crapload-comment.sh"
 
 def _make_crap_json(tmp: str, total_functions: int = 5) -> str:
     """Write a minimal gaze crap JSON fixture and return its path."""
-    path = os.path.join(tmp, "crapload-current.json")
+    path = Path(tmp) / "crapload-current.json"
     data = {
         "summary": {
             "total_functions": total_functions,
@@ -40,25 +40,25 @@ def _make_crap_json(tmp: str, total_functions: int = 5) -> str:
         },
         "scores": [],
     }
-    with open(path, "w") as f:
+    with path.open("w") as f:
         json.dump(data, f)
-    return path
+    return str(path)
 
 
 def _make_report_json(tmp: str) -> str:
     """Write a minimal gaze report JSON fixture and return its path."""
-    path = os.path.join(tmp, "gaze-report.json")
-    with open(path, "w") as f:
+    path = Path(tmp) / "gaze-report.json"
+    with path.open("w") as f:
         json.dump({"errors": {}}, f)
-    return path
+    return str(path)
 
 
 def _make_baseline(tmp: str) -> str:
     """Write a minimal baseline file and return its path."""
-    path = os.path.join(tmp, "baseline.json")
-    with open(path, "w") as f:
+    path = Path(tmp) / "baseline.json"
+    with path.open("w") as f:
         json.dump({"summary": {"crapload": 0}, "scores": []}, f)
-    return path
+    return str(path)
 
 
 def _run_script(
@@ -93,12 +93,13 @@ def _run_script(
         env=env,
         capture_output=True,
         text=True,
+        check=False,
     )
     comment = ""
-    if os.path.exists(comment_file):
-        with open(comment_file) as f:
-            comment = f.read()
-        os.unlink(comment_file)
+    comment_path = Path(comment_file)
+    if comment_path.exists():
+        comment = comment_path.read_text()
+        comment_path.unlink()
     return result.returncode, comment
 
 

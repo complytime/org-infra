@@ -3,6 +3,7 @@
 """Integration tests for CRAP load workflow package resolution."""
 
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -18,20 +19,24 @@ class TestCrapLoadPackageResolution:
         script_path = project_root / "scripts" / "resolve-go-packages.sh"
 
         cmd = f"bash {script_path} {args}"
-        result = subprocess.run(
+        return subprocess.run(
             cmd,
             shell=True,
             cwd=fixture_dir,
             capture_output=True,
             text=True,
+            check=False,
         )
-        return result
 
     def test_single_module_repo(self):
         """Single module repo (go.mod at root with packages)."""
         with tempfile.TemporaryDirectory() as fixture:
             # Setup single-module fixture
-            subprocess.run(["go", "mod", "init", "example.com/single"], cwd=fixture, check=True)
+            subprocess.run(
+                ["go", "mod", "init", "example.com/single"],
+                cwd=fixture,
+                check=True,
+            )
             cmd_app = Path(fixture) / "cmd" / "app"
             cmd_app.mkdir(parents=True)
             (cmd_app / "main.go").write_text("package main\nfunc main() {}\n")
@@ -49,13 +54,23 @@ class TestCrapLoadPackageResolution:
             # Setup multi-module fixture
             cmd_app = Path(fixture) / "cmd" / "app"
             cmd_app.mkdir(parents=True)
-            subprocess.run(["go", "mod", "init", "example.com/app"], cwd=cmd_app, check=True)
+            subprocess.run(
+                ["go", "mod", "init", "example.com/app"],
+                cwd=cmd_app,
+                check=True,
+            )
             (cmd_app / "main.go").write_text("package main\nfunc main() {}\n")
 
             pkg_lib = Path(fixture) / "pkg" / "lib"
             pkg_lib.mkdir(parents=True)
-            subprocess.run(["go", "mod", "init", "example.com/lib"], cwd=pkg_lib, check=True)
-            (pkg_lib / "lib.go").write_text('package lib\nfunc Hello() string { return "hello" }\n')
+            subprocess.run(
+                ["go", "mod", "init", "example.com/lib"],
+                cwd=pkg_lib,
+                check=True,
+            )
+            (pkg_lib / "lib.go").write_text(
+                'package lib\nfunc Hello() string { return "hello" }\n',
+            )
 
             # Run the script
             result = self._run_script(fixture)
@@ -75,14 +90,22 @@ class TestCrapLoadPackageResolution:
             # Create tools module
             tools = Path(fixture) / "tools"
             tools.mkdir()
-            subprocess.run(["go", "mod", "init", "example.com/tools"], cwd=tools, check=True)
+            subprocess.run(
+                ["go", "mod", "init", "example.com/tools"],
+                cwd=tools,
+                check=True,
+            )
             (tools / "tools.go").write_text("package tools\n")
             subprocess.run(["go", "work", "use", "."], cwd=tools, check=True)
 
             # Create app module
             app = Path(fixture) / "app"
             app.mkdir()
-            subprocess.run(["go", "mod", "init", "example.com/app"], cwd=app, check=True)
+            subprocess.run(
+                ["go", "mod", "init", "example.com/app"],
+                cwd=app,
+                check=True,
+            )
             (app / "main.go").write_text("package main\nfunc main() {}\n")
             subprocess.run(["go", "work", "use", "."], cwd=app, check=True)
 
@@ -101,18 +124,32 @@ class TestCrapLoadPackageResolution:
             # Setup multi-module fixture
             cmd_app = Path(fixture) / "cmd" / "app"
             cmd_app.mkdir(parents=True)
-            subprocess.run(["go", "mod", "init", "example.com/app"], cwd=cmd_app, check=True)
+            subprocess.run(
+                ["go", "mod", "init", "example.com/app"],
+                cwd=cmd_app,
+                check=True,
+            )
             (cmd_app / "main.go").write_text("package main\nfunc main() {}\n")
 
             cmd_exp = Path(fixture) / "cmd" / "experimental"
             cmd_exp.mkdir(parents=True)
-            subprocess.run(["go", "mod", "init", "example.com/experimental"], cwd=cmd_exp, check=True)
+            subprocess.run(
+                ["go", "mod", "init", "example.com/experimental"],
+                cwd=cmd_exp,
+                check=True,
+            )
             (cmd_exp / "main.go").write_text("package main\nfunc main() {}\n")
 
             pkg_lib = Path(fixture) / "pkg" / "lib"
             pkg_lib.mkdir(parents=True)
-            subprocess.run(["go", "mod", "init", "example.com/lib"], cwd=pkg_lib, check=True)
-            (pkg_lib / "lib.go").write_text('package lib\nfunc Hello() string { return "hello" }\n')
+            subprocess.run(
+                ["go", "mod", "init", "example.com/lib"],
+                cwd=pkg_lib,
+                check=True,
+            )
+            (pkg_lib / "lib.go").write_text(
+                'package lib\nfunc Hello() string { return "hello" }\n',
+            )
 
             # Run with explicit packages
             result = self._run_script(fixture, args="./cmd/app/... ./pkg/lib/...")
@@ -121,7 +158,8 @@ class TestCrapLoadPackageResolution:
             assert result.returncode == 0
             # Script outputs each package on its own line
             assert "./cmd/app/..." in result.stdout
-            assert "experimental" not in result.stdout and "experimental" not in result.stderr
+            assert "experimental" not in result.stdout
+            assert "experimental" not in result.stderr
 
     def test_empty_repo(self):
         """Empty repo (should fail gracefully)."""
@@ -137,7 +175,11 @@ class TestCrapLoadPackageResolution:
         """Single module with vendor (vendor auto-excluded)."""
         with tempfile.TemporaryDirectory() as fixture:
             # Setup single module
-            subprocess.run(["go", "mod", "init", "example.com/test"], cwd=fixture, check=True)
+            subprocess.run(
+                ["go", "mod", "init", "example.com/test"],
+                cwd=fixture,
+                check=True,
+            )
             cmd_app = Path(fixture) / "cmd" / "app"
             cmd_app.mkdir(parents=True)
             (cmd_app / "main.go").write_text("package main\nfunc main() {}\n")
@@ -164,7 +206,8 @@ class TestCrapLoadPackageResolution:
             # Run the script
             result = self._run_script(fixture)
 
-            # Verify - script discovers the go.mod file (validation happens in 'go list' later)
+            # Verify - script discovers the go.mod file
+            # (validation happens in 'go list' later)
             assert result.returncode == 0
             assert "Found 1 module" in result.stderr
             assert result.stdout.strip() == "./..."
@@ -173,7 +216,11 @@ class TestCrapLoadPackageResolution:
         """Empty module (no packages under ./...)."""
         with tempfile.TemporaryDirectory() as fixture:
             # Create valid go.mod but no Go files
-            subprocess.run(["go", "mod", "init", "example.com/empty"], cwd=fixture, check=True)
+            subprocess.run(
+                ["go", "mod", "init", "example.com/empty"],
+                cwd=fixture,
+                check=True,
+            )
 
             # Run the script
             result = self._run_script(fixture)
@@ -186,25 +233,21 @@ class TestCrapLoadPackageResolution:
 class TestWorkflowInputValidation:
     """Tests for GitHub Actions workflow input validation patterns."""
 
-    # Mirrors: reusable_compliance.yml "Validate policy_id input" step (lines ~103-111)
+    # Mirrors: reusable_compliance.yml "Validate policy_id input" step
+    # (lines ~103-111)
     @staticmethod
     def _validate_policy_id(policy_id):
         """Validate policy_id using workflow regex."""
-        import re
-        if not re.match(r"^[a-zA-Z0-9_-]+$", policy_id):
-            return False
-        return True
+        return bool(re.match(r"^[a-zA-Z0-9_-]+$", policy_id))
 
-    # Mirrors: reusable_compliance.yml "Validate complytime_config_path input" step (added by this PR)
+    # Mirrors: reusable_compliance.yml "Validate complytime_config_path input"
+    # step (added by this PR)
     @staticmethod
     def _validate_path(path):
         """Validate complytime_config_path using workflow rules."""
-        import re
         if not re.match(r"^[a-zA-Z0-9_./-]+$", path):
             return False
-        if ".." in path:
-            return False
-        return True
+        return ".." not in path
 
     def test_policy_id_valid_values(self):
         """Test valid policy_id patterns."""
@@ -256,14 +299,16 @@ class TestWorkflowInputValidation:
             (config_dir / "complytime.yaml").touch()
 
             # Valid paths within caller
-            original_dir = os.getcwd()
+            original_dir = Path.cwd()
             try:
                 os.chdir(fixture)
-                real = os.path.realpath(os.path.join("_caller", "complytime.yaml"))
+                real = os.path.realpath(Path("_caller") / "complytime.yaml")
                 caller_root = os.path.realpath("_caller")
                 assert real.startswith(caller_root + "/")
 
-                real = os.path.realpath(os.path.join("_caller", "config/complytime.yaml"))
+                real = os.path.realpath(
+                    Path("_caller") / "config/complytime.yaml",
+                )
                 assert real.startswith(caller_root + "/")
             finally:
                 os.chdir(original_dir)
