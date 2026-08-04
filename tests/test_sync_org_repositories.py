@@ -20,24 +20,41 @@ GITHUB_API = sync_module.GITHUB_API
 # Valid 40-character hex SHA for use in transform_workflow_refs tests.
 TEST_SHA = "a" * 40
 
+# Dependabot config schema version emitted by the sync script.
+DEPENDABOT_CONFIG_VERSION = 2
+
+# GitHub API page size the sync script requests when listing PRs.
+EXPECTED_PER_PAGE = 100
+
+# Expected Dependabot entry counts for specific merge/generation scenarios.
+TWO_ENTRIES = 2
+THREE_ENTRIES = 3
+
 
 class TestValidateGithubApiRequest:
     """Tests for validate_github_api_request."""
 
     def test_allowed_get_repo(self):
         assert (
-            sync_module.validate_github_api_request(f"{GITHUB_API}/repos/org/repo", "GET") is True
+            sync_module.validate_github_api_request(
+                f"{GITHUB_API}/repos/org/repo", "GET",
+            )
+            is True
         )
 
     def test_allowed_get_pulls(self):
         assert (
-            sync_module.validate_github_api_request(f"{GITHUB_API}/repos/org/repo/pulls", "GET")
+            sync_module.validate_github_api_request(
+                f"{GITHUB_API}/repos/org/repo/pulls", "GET",
+            )
             is True
         )
 
     def test_allowed_post_pulls(self):
         assert (
-            sync_module.validate_github_api_request(f"{GITHUB_API}/repos/org/repo/pulls", "POST")
+            sync_module.validate_github_api_request(
+                f"{GITHUB_API}/repos/org/repo/pulls", "POST",
+            )
             is True
         )
 
@@ -59,7 +76,9 @@ class TestValidateGithubApiRequest:
         )
 
     def test_disallowed_delete_repo(self):
-        result = sync_module.validate_github_api_request(f"{GITHUB_API}/repos/org/repo", "DELETE")
+        result = sync_module.validate_github_api_request(
+            f"{GITHUB_API}/repos/org/repo", "DELETE",
+        )
         assert not result
 
     def test_disallowed_post_forks(self):
@@ -69,11 +88,15 @@ class TestValidateGithubApiRequest:
         assert not result
 
     def test_disallowed_arbitrary_endpoint(self):
-        result = sync_module.validate_github_api_request(f"{GITHUB_API}/orgs/org/members", "GET")
+        result = sync_module.validate_github_api_request(
+            f"{GITHUB_API}/orgs/org/members", "GET",
+        )
         assert not result
 
     def test_disallowed_post_to_get_only_endpoint(self):
-        result = sync_module.validate_github_api_request(f"{GITHUB_API}/repos/org/repo", "POST")
+        result = sync_module.validate_github_api_request(
+            f"{GITHUB_API}/repos/org/repo", "POST",
+        )
         assert not result
 
     def test_disallowed_delete_branch_ref(self):
@@ -122,7 +145,10 @@ class TestValidateBranchName:
     """Tests for validate_branch_name."""
 
     def test_valid_prefix(self):
-        assert sync_module.validate_branch_name("sync-repo-standards-20260416120000") is True
+        assert (
+            sync_module.validate_branch_name("sync-repo-standards-20260416120000")
+            is True
+        )
 
     def test_valid_prefix_minimal(self):
         assert sync_module.validate_branch_name("sync-repo-standards-x") is True
@@ -161,7 +187,7 @@ class TestGenerateDependabotConfig:
         ]
         config = self._make_config(common=common)
         result = sync_module.generate_dependabot_config("my-repo", config)
-        assert len(result) == 2
+        assert len(result) == TWO_ENTRIES
         ecosystems = [e["package-ecosystem"] for e in result]
         assert "github-actions" in ecosystems
         assert "pre-commit" in ecosystems
@@ -177,7 +203,7 @@ class TestGenerateDependabotConfig:
         }
         config = self._make_config(common=common, overrides=overrides)
         result = sync_module.generate_dependabot_config("my-repo", config)
-        assert len(result) == 2
+        assert len(result) == TWO_ENTRIES
         ecosystems = [e["package-ecosystem"] for e in result]
         assert "github-actions" in ecosystems
         assert "gomod" in ecosystems
@@ -245,7 +271,7 @@ class TestMergeDependabotEntries:
         nonexistent = str(tmp_path / "missing.yml")
         result = sync_module.merge_dependabot_entries(managed, nonexistent)
         parsed = yaml.safe_load(result)
-        assert parsed["version"] == 2
+        assert parsed["version"] == DEPENDABOT_CONFIG_VERSION
         assert len(parsed["updates"]) == 1
         assert parsed["updates"][0]["package-ecosystem"] == "github-actions"
 
@@ -266,7 +292,9 @@ class TestMergeDependabotEntries:
                     f"Sequence entry should be indented under parent: {line!r}"
                 )
             if line.strip() == "- /":
-                assert line.startswith("      "), f"Nested list item should be indented: {line!r}"
+                assert line.startswith("      "), (
+                    f"Nested list item should be indented: {line!r}"
+                )
 
     def test_no_trailing_blank_line(self, tmp_path):
         managed = [
@@ -293,7 +321,7 @@ class TestMergeDependabotEntries:
 
         result = sync_module.merge_dependabot_entries(managed, str(existing_path))
         parsed = yaml.safe_load(result)
-        assert len(parsed["updates"]) == 2
+        assert len(parsed["updates"]) == TWO_ENTRIES
         ecosystems = [e["package-ecosystem"] for e in parsed["updates"]]
         assert "github-actions" in ecosystems
         assert "docker" in ecosystems
@@ -342,7 +370,7 @@ class TestMergeDependabotEntries:
 
         result = sync_module.merge_dependabot_entries(managed, str(existing_path))
         parsed = yaml.safe_load(result)
-        assert len(parsed["updates"]) == 3
+        assert len(parsed["updates"]) == THREE_ENTRIES
         ecosystems = [e["package-ecosystem"] for e in parsed["updates"]]
         assert ecosystems == ["github-actions", "docker", "npm"]
 
@@ -402,7 +430,7 @@ class TestCheckExistingSyncPr:
         mock_api.return_value = (200, [])
         sync_module.check_existing_sync_pr("org", "repo")
         _, kwargs = mock_api.call_args
-        assert kwargs["params"]["per_page"] == 100
+        assert kwargs["params"]["per_page"] == EXPECTED_PER_PAGE
 
 
 class TestCompareFiles:
@@ -425,7 +453,10 @@ class TestCompareFiles:
     def test_missing_dest_file(self, tmp_path):
         f1 = tmp_path / "a.txt"
         f1.write_text("hello")
-        assert sync_module.compare_files(str(f1), str(tmp_path / "missing.txt")) is False
+        assert (
+            sync_module.compare_files(str(f1), str(tmp_path / "missing.txt"))
+            is False
+        )
 
 
 class TestSyncFile:
@@ -1066,7 +1097,7 @@ class TestWriteStepSummary:
         assert "`target-repo`" in content
         assert "Would create PRs" in content
 
-    def test_skips_when_env_not_set(self, tmp_path):
+    def test_skips_when_env_not_set(self):
         results = [
             {
                 "repo": "some-repo",
