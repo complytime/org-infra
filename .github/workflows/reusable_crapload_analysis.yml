@@ -13,27 +13,27 @@ on:
   workflow_call:
     inputs:
       go-version-file:
-        description: 'Path to go.mod for Go version detection'
+        description: "Path to go.mod for Go version detection"
         type: string
-        default: './go.mod'
+        default: "./go.mod"
       gaze-version:
-        description: 'Gaze version tag to install via go install'
+        description: "Gaze version tag to install via go install"
         type: string
-        default: 'latest'
+        default: "latest"
       baseline-file:
-        description: 'Path to committed baseline thresholds file'
+        description: "Path to committed baseline thresholds file"
         type: string
-        default: '.gaze/baseline.json'
+        default: ".gaze/baseline.json"
       packages:
-        description: 'Go packages to analyse'
+        description: "Go packages to analyse"
         type: string
-        default: './...'
+        default: "./..."
       coverprofile:
-        description: 'Path to coverage profile'
+        description: "Path to coverage profile"
         type: string
-        default: 'coverage.out'
+        default: "coverage.out"
       new-function-threshold:
-        description: 'CRAP score ceiling for new functions with no baseline entry'
+        description: "CRAP score ceiling for new functions with no baseline entry"
         type: number
         default: 30
       regression-epsilon:
@@ -46,19 +46,19 @@ on:
         default: 0.5
     outputs:
       status:
-        description: 'pass or fail'
+        description: "pass or fail"
         value: ${{ jobs.crapload-analysis.outputs.status }}
       crapload-count:
-        description: 'Number of functions at or above CRAP threshold'
+        description: "Number of functions at or above CRAP threshold"
         value: ${{ jobs.crapload-analysis.outputs.crapload-count }}
       gaze-crapload-count:
-        description: 'Number of functions at or above GazeCRAP threshold'
+        description: "Number of functions at or above GazeCRAP threshold"
         value: ${{ jobs.crapload-analysis.outputs.gaze-crapload-count }}
       regressions-count:
-        description: 'Number of functions that regressed vs baseline'
+        description: "Number of functions that regressed vs baseline"
         value: ${{ jobs.crapload-analysis.outputs.regressions-count }}
       improvements-count:
-        description: 'Number of functions that improved vs baseline'
+        description: "Number of functions that improved vs baseline"
         value: ${{ jobs.crapload-analysis.outputs.improvements-count }}
 
 permissions:

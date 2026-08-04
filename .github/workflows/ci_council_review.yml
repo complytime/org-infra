@@ -24,7 +24,7 @@ on:
           Required for manual testing.
         required: true
         type: number
-  workflow_run:  # zizmor: ignore[dangerous-triggers]
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: ["Council Review - Collect"]
     types: [completed]
 
@@ -40,7 +40,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@main  # zizmor: ignore[unpinned-uses] — internal org workflow, @main is intentional
+    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@main # zizmor: ignore[unpinned-uses] — internal org workflow, @main is intentional
     permissions:
       contents: read
       id-token: write

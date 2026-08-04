@@ -83,7 +83,8 @@ jobs:
 
   verify-scan-results:
     name: Verify Scan Results
-    needs: [build-test-image, test-scan-no-attestation, test-scan-with-attestation]
+    needs:
+      [build-test-image, test-scan-no-attestation, test-scan-with-attestation]
     runs-on: ubuntu-latest
     permissions:
       contents: read

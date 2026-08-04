@@ -72,15 +72,15 @@ The preflight validates the tag and creates it automatically. There is no need t
 
 The preflight runs automatically as the first phase and performs these checks:
 
-| Check | What it does | On failure |
-|-------|-------------|------------|
-| Tag format | Validates strict semver (`vX.Y.Z`) | Rejects with expected pattern |
-| Tag uniqueness | Re-run safe (tag at HEAD) vs. conflict | Fails if tag at different commit |
-| Semver ordering | New version > latest existing tag | Fails if version goes backwards |
-| CI gates | Auto-discovers from workflow files | Fails if checks not passed on HEAD |
-| Security scan | At least one scan passed on HEAD | Fails if no scan passed |
-| Unreleased commits | Counts commits since last tag | Fails if nothing to release |
-| Tag creation | Annotated tag on HEAD, pushed to remote | Skipped on re-runs |
+| Check              | What it does                            | On failure                         |
+|--------------------|-----------------------------------------|------------------------------------|
+| Tag format         | Validates strict semver (`vX.Y.Z`)      | Rejects with expected pattern      |
+| Tag uniqueness     | Re-run safe (tag at HEAD) vs. conflict  | Fails if tag at different commit   |
+| Semver ordering    | New version > latest existing tag       | Fails if version goes backwards    |
+| CI gates           | Auto-discovers from workflow files      | Fails if checks not passed on HEAD |
+| Security scan      | At least one scan passed on HEAD        | Fails if no scan passed            |
+| Unreleased commits | Counts commits since last tag           | Fails if nothing to release        |
+| Tag creation       | Annotated tag on HEAD, pushed to remote | Skipped on re-runs                 |
 
 The preflight accepts an optional `tag_push_token` secret. When provided, the tag is pushed with the elevated token so the tag event can trigger downstream workflows (e.g., a container build on tag push). When omitted, the tag is pushed with `GITHUB_TOKEN`, which does not trigger further workflow runs. See the [adoption guide](https://github.com/complytime/org-infra/blob/main/docs/RELEASE_WORKFLOWS.md#workflow-inputs-reference) for details.
 
@@ -90,12 +90,12 @@ CI check discovery reads workflow files from the repository checkout. Repos that
 
 Every release produces supply chain artifacts that allow consumers to verify the integrity and provenance of downloaded binaries.
 
-| Artifact | Format | Description |
-|----------|--------|-------------|
-| `checksums.txt` | SHA-256 digests | Covers all binary archives in the release |
-| `checksums.txt.sigstore.json` | Sigstore bundle | Cosign keyless signature over checksums |
-| `<archive>.sbom.json` | SPDX JSON | SBOM for each binary archive (via syft) |
-| `<repo>-<version>-source.sbom.json` | SPDX JSON | SBOM for the source tree |
+| Artifact                            | Format          | Description                               |
+|-------------------------------------|-----------------|-------------------------------------------|
+| `checksums.txt`                     | SHA-256 digests | Covers all binary archives in the release |
+| `checksums.txt.sigstore.json`       | Sigstore bundle | Cosign keyless signature over checksums   |
+| `<archive>.sbom.json`               | SPDX JSON       | SBOM for each binary archive (via syft)   |
+| `<repo>-<version>-source.sbom.json` | SPDX JSON       | SBOM for the source tree                  |
 
 Cosign signatures use Sigstore keyless signing backed by GitHub Actions OIDC. No private keys are managed or rotated. The signing identity is the GitHub Actions workflow that produced the release.
 
@@ -166,13 +166,13 @@ gh workflow run release.yml \
 
 Common preflight failures and their fixes:
 
-| Failure | Cause | Fix |
-|---------|-------|-----|
-| Tag format invalid | Missing `v` prefix or incomplete version | Use correct format: `v1.2.3` |
-| CI checks not passed | Tests or linters failed on HEAD | Fix checks, wait for CI, re-trigger |
-| Security scan not passed | Scan failed or did not run | Address findings, re-trigger |
-| Semver ordering violation | Version lower than latest tag | Use a higher version number |
-| No unreleased commits | HEAD same as latest tag | Merge new commits, then release |
+| Failure                   | Cause                                    | Fix                                 |
+|---------------------------|------------------------------------------|-------------------------------------|
+| Tag format invalid        | Missing `v` prefix or incomplete version | Use correct format: `v1.2.3`        |
+| CI checks not passed      | Tests or linters failed on HEAD          | Fix checks, wait for CI, re-trigger |
+| Security scan not passed  | Scan failed or did not run               | Address findings, re-trigger        |
+| Semver ordering violation | Version lower than latest tag            | Use a higher version number         |
+| No unreleased commits     | HEAD same as latest tag                  | Merge new commits, then release     |
 
 After fixing the issue, re-trigger the workflow with the same tag input.
 
@@ -252,11 +252,11 @@ GoReleaser automatically detects pre-release tags and marks the GitHub Release a
 
 ## Roles and Responsibilities
 
-| Role | Responsibility | Permissions |
-|------|---------------|-------------|
-| Project maintainer | Triggers releases | `contents: write`, `checks: read` |
-| Project maintainer | Verifies release artifacts | Repository read access |
-| Org-infra maintainer | Maintains reusable workflows | Write access to org-infra |
+| Role                 | Responsibility               | Permissions                       |
+|----------------------|------------------------------|-----------------------------------|
+| Project maintainer   | Triggers releases            | `contents: write`, `checks: read` |
+| Project maintainer   | Verifies release artifacts   | Repository read access            |
+| Org-infra maintainer | Maintains reusable workflows | Write access to org-infra         |
 
 Release triggering is restricted to project maintainers who have write access to the repository. The workflows require the following GitHub Actions permissions, declared at the job level:
 
@@ -269,13 +269,13 @@ This document covers the standard release flow common to all repositories. Indiv
 
 ### Common Extensions
 
-| Extension | Applicable repos | Description |
-|-----------|-----------------|-------------|
-| Fedora packaging | Go CLI tools | Packit automation for RPM builds, Koji, and Bodhi updates |
-| Container promotion | Container services | Promote images from GHCR to Quay.io after release |
-| Homebrew tap | CLI tools | Update the Homebrew formula in the tap repository |
-| RPM packaging | Go CLI tools | Build and publish RPM packages to Copr or Fedora |
-| Registry mirroring | OCI artifacts | Mirror artifacts to secondary registries |
+| Extension           | Applicable repos   | Description                                               |
+|---------------------|--------------------|-----------------------------------------------------------|
+| Fedora packaging    | Go CLI tools       | Packit automation for RPM builds, Koji, and Bodhi updates |
+| Container promotion | Container services | Promote images from GHCR to Quay.io after release         |
+| Homebrew tap        | CLI tools          | Update the Homebrew formula in the tap repository         |
+| RPM packaging       | Go CLI tools       | Build and publish RPM packages to Copr or Fedora          |
+| Registry mirroring  | OCI artifacts      | Mirror artifacts to secondary registries                  |
 
 ### Structuring a Repo-Level Release Process
 

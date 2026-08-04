@@ -70,7 +70,7 @@ uses: complytime/org-infra/.github/workflows/reusable_ci.yml@<sha>
 Version numbers are resolved automatically from PR labels:
 
 | Label(s) | Version bump | Example |
-|----------|-------------|---------|
+| ---------- | ------------- | --------- |
 | `breaking`, `major` | Major | v1.0.0 → v2.0.0 |
 | `feature`, `enhancement`, `minor` | Minor | v1.0.0 → v1.1.0 |
 | `fix`, `workflows`, `compliance`, `maintenance`, etc. | Patch | v1.0.0 → v1.0.1 |

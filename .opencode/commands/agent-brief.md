@@ -328,7 +328,7 @@ section is "found" if any of its patterns match a `##` header
 line (case-insensitive):
 
 | # | Section | Detection Patterns | Conditional |
-|---|---------|--------------------|-|
+| --- | --------- | -------------------- | - |
 | 1 | Project Overview | `overview`, `about` | No |
 | 2 | Build & Test Commands | `build`, `development` | No |
 | 3 | Project Structure | `structure`, `layout`, `directory` | No |
@@ -393,7 +393,7 @@ only when their triggers are detected. Section 9 (Convention
 Packs) and 10 (Architecture) are recommended.
 
 | Label | Criteria |
-|-------|----------|
+| ------- | ---------- |
 | Excellent | All essential + all triggered conditional + all recommended |
 | Strong | All essential + all triggered conditional |
 | Adequate | 4-5/5 essential |

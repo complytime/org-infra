@@ -34,10 +34,10 @@ pull these artifacts via the `complypacks:` section in their `complytime.yaml`.
 
 ## Dual-Registry Strategy
 
-| Registry | Purpose | Tag format | Trigger |
-|----------|---------|------------|---------|
-| `ghcr.io/complytime/complypack-ampel-branch-protection` | Dev / test | `sha-<commit>` | Push to `main` (policy file changes) |
-| `quay.io/complytime/complypack-ampel-branch-protection` | Production | `vX.Y.Z` (semver) | GitHub Release published |
+| Registry                                                | Purpose    | Tag format        | Trigger                                |
+|---------------------------------------------------------|------------|-------------------|----------------------------------------|
+| `ghcr.io/complytime/complypack-ampel-branch-protection` | Dev / test | `sha-<commit>`    | Push to `main` (policy file changes)   |
+| `quay.io/complytime/complypack-ampel-branch-protection` | Production | `vX.Y.Z` (semver) | GitHub Release published               |
 | `quay.io/complytime/complypack-ampel-branch-protection` | Production | `vX.Y.Z` (semver) | `workflow_dispatch` (manual promotion) |
 
 GHCR is the staging area. Every push to `main` that modifies files under
@@ -80,17 +80,17 @@ for any evaluator.
 
 **Key inputs:**
 
-| Input | Required | Description |
-|-------|----------|-------------|
-| `content_path` | yes | Directory containing policy files |
-| `image_name` | yes | Image name without registry |
-| `tag` | yes | Image tag |
-| `evaluator_id` | yes | Evaluator ID (e.g., `ampel`, `opa`) |
-| `complypack_id` | yes | Globally unique pack identifier |
-| `complypack_version` | yes | Version to embed in config |
-| `go_version` | no | Go version for CLI install (default: `stable`) |
-| `complypack_cli_ref` | no | CLI install ref (default: `latest`) |
-| `generate_attestations` | no | `auto` or `true` (default: `auto`) |
+| Input                   | Required | Description                                    |
+|-------------------------|----------|------------------------------------------------|
+| `content_path`          | yes      | Directory containing policy files              |
+| `image_name`            | yes      | Image name without registry                    |
+| `tag`                   | yes      | Image tag                                      |
+| `evaluator_id`          | yes      | Evaluator ID (e.g., `ampel`, `opa`)            |
+| `complypack_id`         | yes      | Globally unique pack identifier                |
+| `complypack_version`    | yes      | Version to embed in config                     |
+| `go_version`            | no       | Go version for CLI install (default: `stable`) |
+| `complypack_cli_ref`    | no       | CLI install ref (default: `latest`)            |
+| `generate_attestations` | no       | `auto` or `true` (default: `auto`)             |
 
 ### `ci_publish_complypack.yml`
 
@@ -102,12 +102,12 @@ Consumer workflow specific to org-infra's ampel branch-protection policies.
 - `release` published (any semver tag)
 - `workflow_dispatch` with the following inputs:
 
-| Input | Required | Description |
-|-------|----------|-------------|
-| `tag_override` | no | Custom GHCR tag (leave empty for default `sha-<commit>`) |
-| `promote_quay` | no | Set `true` to skip GHCR publish and promote an existing GHCR artifact to Quay |
-| `release_tag` | when `promote_quay=true` | Quay destination tag (e.g., `v0.5.0`) |
-| `source_sha` | no | Source commit SHA to promote (defaults to current HEAD) |
+| Input          | Required                 | Description                                                                   |
+|----------------|--------------------------|-------------------------------------------------------------------------------|
+| `tag_override` | no                       | Custom GHCR tag (leave empty for default `sha-<commit>`)                      |
+| `promote_quay` | no                       | Set `true` to skip GHCR publish and promote an existing GHCR artifact to Quay |
+| `release_tag`  | when `promote_quay=true` | Quay destination tag (e.g., `v0.5.0`)                                         |
+| `source_sha`   | no                       | Source commit SHA to promote (defaults to current HEAD)                       |
 
 ## Cutting a Release
 

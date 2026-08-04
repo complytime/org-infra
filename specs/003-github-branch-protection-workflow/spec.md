@@ -75,7 +75,7 @@ The workflow must:
 ## Artifacts Produced
 
 | Artifact Name | Content |
-|---------------|---------|
+| --------------- | --------- |
 | `report-policies-ampel-branch-protection.md` | Human-readable Markdown compliance report |
 | `ampel.intoto.json` | ampel in-toto attestation(s) with policy evaluation results |
 | `snappy.intoto.json` | snappy in-toto attestation(s) with raw branch protection data |

@@ -33,7 +33,7 @@ generates and attaches an SPDX SBOM from a directory scan.
 ## Constitution Check
 
 | Principle | Status | Evidence |
-|-----------|--------|----------|
+| ----------- | -------- | ---------- |
 | I. Single Source of Truth | PASS | One reusable workflow for all ORAS OCI publishes; no per-repo duplication |
 | II. Simplicity & Isolation | PASS | Focused responsibility: ORAS push + attestations only; no build steps |
 | III. Incremental Improvement | PASS | New file only; no changes to existing workflows in this PR |
@@ -66,7 +66,7 @@ specs/005-reusable-publish-oras-workflow/
 All actions reuse SHAs already established in the org-infra codebase where available:
 
 | Action | SHA (pinned) | Version |
-|--------|-------------|---------|
+| -------- | ------------- | --------- |
 | `actions/checkout` | `de0fac2e4500dabe0009e67214ff5f5447ce83dd` | v6.0.2 |
 | `docker/login-action` | `b45d80f862d83dbcd57f89517bcf500b2ab88fb2` | v4.0.0 |
 | `actions/attest-build-provenance` | `a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32` | v4.1.0 |
@@ -185,7 +185,7 @@ required to match anything in complyctl's source.
 `reusable_sign_and_verify.yml` currently verifies four attestation types for any artifact it receives:
 
 | Step | Cosign type | Container image? | ORAS artifact? |
-|------|-------------|-----------------|----------------|
+| ------ | ------------- | ----------------- | ---------------- |
 | Verify signature | N/A (cosign sign) | ✅ | ✅ |
 | Verify SLSA provenance | `https://slsa.dev/provenance/v1` | ✅ | ✅ |
 | Verify SBOM | `https://spdx.dev/Document/v2.3` | ✅ | ✅ (directory SPDX) |

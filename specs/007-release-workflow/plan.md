@@ -26,7 +26,7 @@ to semver categories.
 ## Constitution Check
 
 | Principle | Status | Evidence |
-|-----------|--------|----------|
+| ----------- | -------- | ---------- |
 | I. Single Source of Truth | PASS | Version resolved from PR labels via release-drafter config; no separate VERSION file |
 | II. Simplicity & Isolation | PASS | Three focused files with clear responsibilities; no build steps or artifacts |
 | III. Incremental Improvement | PASS | New files only; no changes to existing workflows |
@@ -61,7 +61,7 @@ specs/007-release-workflow/
 ## Action Version Pinning
 
 | Action | SHA (pinned) | Version |
-|--------|-------------|---------|
+| -------- | ------------- | --------- |
 | `actions/checkout` | `de0fac2e4500dabe0009e67214ff5f5447ce83dd` | v6.0.2 |
 | `release-drafter/release-drafter` | `139054aeaa9adc52ab36ddf67437541f039b88e2` | v7.1.1 |
 | `actions/upload-artifact` | `bbbca2ddaa5d8feaa63e36b76fdaad77386f024f` | v7.0.0 |
@@ -73,7 +73,7 @@ specs/007-release-workflow/
 PR labels drive semver bumps. The `version-resolver` in `.github/release-drafter.yml`:
 
 | Bump | Labels |
-|------|--------|
+| ------ | -------- |
 | Major | `breaking`, `major` |
 | Minor | `feature`, `enhancement`, `minor` |
 | Patch | `fix`, `documentation`, `maintenance`, `patch`, `performance`, `workflows`, `compliance`, `sync-config` |
@@ -84,7 +84,7 @@ PR labels drive semver bumps. The `version-resolver` in `.github/release-drafter
 Maps conventional commit prefixes and file paths to labels automatically:
 
 | Pattern | Label |
-|---------|-------|
+| --------- | ------- |
 | `feat:` title | `feature` |
 | `fix:` title | `fix` |
 | `chore:` / `maintenance:` title | `maintenance` |

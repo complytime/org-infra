@@ -14,7 +14,7 @@ The reusable workflow accepts the following input parameters:
 ### Optional Inputs - Coverage Configuration
 
 | Input | Type | Default | Description |
-|-------|------|---------|-------------|
+| ------- | ------ | --------- | ------------- |
 | `coverage_artifact_name` | `string` | `coverage` | Name of the coverage artifact uploaded by the previous job. Used to download the coverage file. |
 | `coverage_file_path` | `string` | — | Path to the coverage file within the artifact (e.g., `coverage.out`, `coverage.xml`). When empty, no coverage data is provided to SonarCloud. |
 | `language_scanner_property` | `string` | — | SonarCloud scanner property for coverage reports. Language-specific values:<br>• Go: `sonar.go.coverage.reportPaths`<br>• Python: `sonar.python.coverage.reportPaths` |
@@ -101,7 +101,7 @@ The `coverage_file_path` input should match the path within the uploaded artifac
 The workflow uses environment variables to pass configuration to steps:
 
 | Variable | Source | Usage |
-|----------|--------|-------|
+| ---------- | -------- | ------- |
 | `GITHUB_TOKEN` | `secrets.source_token` | SonarCloud scanner GitHub integration |
 | `SONAR_TOKEN` | `secrets.SONAR_TOKEN` | SonarCloud authentication |
 | `SONAR_ORGANIZATION` | `inputs.sonar_organization` | Scanner configuration |
@@ -122,7 +122,7 @@ The workflow produces analysis results that are published to SonarCloud but does
 The workflow uses the following pinned GitHub actions:
 
 | Action | Purpose |
-|--------|---------|
+| -------- | --------- |
 | `actions/checkout` | Repository code checkout |
 | `actions/download-artifact` | Download coverage artifacts (current run) |
 | `SonarSource/sonarqube-scan-action` | Execute SonarCloud analysis |

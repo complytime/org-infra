@@ -53,7 +53,7 @@ class TestValidateGithubApiRequest:
     def test_allowed_get_contents_nested_path(self):
         assert (
             sync_module.validate_github_api_request(
-                f"{GITHUB_API}/repos/org/repo/contents/a/b/c.yml", "GET"
+                f"{GITHUB_API}/repos/org/repo/contents/a/b/c.yml", "GET",
             )
             is True
         )
@@ -64,7 +64,7 @@ class TestValidateGithubApiRequest:
 
     def test_disallowed_post_forks(self):
         result = sync_module.validate_github_api_request(
-            f"{GITHUB_API}/repos/org/repo/forks", "POST"
+            f"{GITHUB_API}/repos/org/repo/forks", "POST",
         )
         assert not result
 
@@ -78,7 +78,7 @@ class TestValidateGithubApiRequest:
 
     def test_disallowed_delete_branch_ref(self):
         result = sync_module.validate_github_api_request(
-            f"{GITHUB_API}/repos/org/repo/git/refs/heads/main", "DELETE"
+            f"{GITHUB_API}/repos/org/repo/git/refs/heads/main", "DELETE",
         )
         assert not result
 

@@ -7,7 +7,7 @@ This feature does not introduce a traditional data model. The relevant data stru
 ## Workflow Inputs (configuration interface)
 
 | Input | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
+| ------- | ------ | ---------- | --------- | ------------- |
 | go-version-file | string | no | `./go.mod` | Path to go.mod for Go version detection |
 | gaze-version | string | no | `latest` | Gaze version tag for `go install` |
 | baseline-file | string | no | `.gaze/baseline.json` | Path to committed baseline thresholds |
@@ -19,7 +19,7 @@ This feature does not introduce a traditional data model. The relevant data stru
 ## Workflow Outputs
 
 | Output | Type | Description |
-|--------|------|-------------|
+| -------- | ------ | ------------- |
 | status | string | `pass` or `fail` |
 | crapload-count | number | Functions at or above CRAP threshold |
 | gaze-crapload-count | number | Functions at or above GazeCRAP threshold |

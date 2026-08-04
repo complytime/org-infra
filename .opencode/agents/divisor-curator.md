@@ -228,7 +228,7 @@ End your review with a clear **APPROVE** or **REQUEST CHANGES** verdict and a su
 ## Graceful Degradation
 
 | Condition | Behavior |
-|-----------|----------|
+| ----------- | ---------- |
 | `gh` not available | Report failure as a finding with the issue text you would have filed, so the developer can file it manually. Include the full `gh issue create` command in the recommendation. |
 | Website repo inaccessible | Report failure as a finding with the issue text for manual filing. Do not block the review — report the issue content and let the developer file it. |
 | Dewey not available | Skip Step 0 (Prior Learnings), proceed with standard review. Note the skip as informational. |
