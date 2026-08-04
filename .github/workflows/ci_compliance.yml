@@ -2,6 +2,7 @@ name: Compliance Checks
 
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:Manual complytime config/policy overrides are intentional operational controls for on-demand compliance runs, not build-output parameters.
     inputs:
       complytime_config_path:
         description: "Relative path of the complytime configuration file in this repository"
