@@ -63,7 +63,7 @@ examining the current branch and workspace:
 5. **Select mode based on classification**:
 
    | Condition | Mode | Rationale |
-   |-----------|------|-----------|
+   | ----------- | ------ | ----------- |
    | Code files changed | **Code Review** | Post-implementation -- review the code |
    | Only spec files changed | **Spec Review** | Pre-implementation -- review the specs |
    | No files changed vs main | **Spec Review** | On main or fresh branch -- review specs |
@@ -104,7 +104,7 @@ Before entering either review mode, discover which reviewer agents are available
 This table documents known Divisor persona roles and their focus areas. It is used for context when delegating to discovered agents, but the **invocation list comes solely from discovery** — not from this table.
 
 | Agent Name | Persona | Code Review Focus | Spec Review Focus |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `divisor-adversary` | The Adversary | Secrets/credentials, dependency CVEs/supply chain, error handling/resilience, path/injection safety | Completeness, testability, ambiguity, security gaps, dependency risks, cross-spec consistency |
 | `divisor-architect` | The Architect | Architectural alignment, coding conventions [PACK], pattern adherence, DRY, testing conventions [PACK], documentation [PACK] | Template consistency, spec-to-plan alignment, task coverage, data model coherence, inter-spec architecture |
 | `divisor-guard` | The Guard | Intent drift/plan alignment, zero-waste mandate, constitution alignment, cross-component value [PACK] | Intent fidelity, scope discipline, inter-spec consistency, status accuracy, user value, constitution alignment |

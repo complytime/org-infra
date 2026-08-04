@@ -7,7 +7,7 @@ on:
   workflow_call:
     inputs:
       scan-args:
-        description: 'Additional arguments to pass to osv-scanner'
+        description: "Additional arguments to pass to osv-scanner"
         required: false
         type: string
 
@@ -27,8 +27,8 @@ jobs:
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
     permissions:
       contents: read
-      actions: read           # Needed to upload SARIF file to CodeQL. See: https://github.com/github/codeql-action/issues/2117
-      security-events: write  # Needed to upload the results to code-scanning dashboard.
+      actions: read # Needed to upload SARIF file to CodeQL. See: https://github.com/github/codeql-action/issues/2117
+      security-events: write # Needed to upload the results to code-scanning dashboard.
     with:
       scan-args: "${{ inputs.scan-args }}"
       fail-on-vuln: true
@@ -39,6 +39,6 @@ jobs:
     name: OpenSSF Scorecards
     permissions:
       contents: read
-      security-events: write  # Needed to upload the results to code-scanning dashboard.
-      id-token: write         # Needed to access GitHub's OIDC token which verifies the authenticity of the result when publishing it.
+      security-events: write # Needed to upload the results to code-scanning dashboard.
+      id-token: write # Needed to access GitHub's OIDC token which verifies the authenticity of the result when publishing it.
     uses: complytime/org-infra/.github/workflows/reusable_security.yml@0c784711926c9864f027ec565fd7c06a382d80f8 # v0.7.1

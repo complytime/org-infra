@@ -39,22 +39,22 @@ discovery. Reviews are posted as inline comments on PR diff lines.
 
 ## Workflow files
 
-| File | Synced? | Trigger | Purpose |
-|------|---------|---------|---------|
-| `ci_council_review_collect.yml` | Yes | `pull_request` | Fork-safe diff collection, no secrets needed |
-| `ci_council_review.yml` | Yes | `workflow_run` / `workflow_dispatch` | Thin consumer, passes secrets to the reusable |
-| `reusable_council_review.yml` | **No** | `workflow_call` | Core logic: WIF auth, action invocation, comment posting |
+| File                            | Synced? | Trigger                              | Purpose                                                  |
+|---------------------------------|---------|--------------------------------------|----------------------------------------------------------|
+| `ci_council_review_collect.yml` | Yes     | `pull_request`                       | Fork-safe diff collection, no secrets needed             |
+| `ci_council_review.yml`         | Yes     | `workflow_run` / `workflow_dispatch` | Thin consumer, passes secrets to the reusable            |
+| `reusable_council_review.yml`   | **No**  | `workflow_call`                      | Core logic: WIF auth, action invocation, comment posting |
 
 Consumer workflows have `DO NOT EDIT` provenance headers indicating they
 are managed by org-infra. Downstream repos should not modify them directly.
 
 ## Required secrets
 
-| Secret | Required | Scope | Purpose |
-|--------|----------|-------|---------|
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Yes | Org-level | WIF provider for Vertex AI authentication |
-| `GCP_PROJECT_ID` | Yes | Org-level | GCP project containing Vertex AI |
-| `ORG_CHECK_TOKEN` | No | Org-level | PAT with `org:read` for private org membership checks |
+| Secret                           | Required | Scope     | Purpose                                               |
+|----------------------------------|----------|-----------|-------------------------------------------------------|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Yes      | Org-level | WIF provider for Vertex AI authentication             |
+| `GCP_PROJECT_ID`                 | Yes      | Org-level | GCP project containing Vertex AI                      |
+| `ORG_CHECK_TOKEN`                | No       | Org-level | PAT with `org:read` for private org membership checks |
 
 If `GCP_WORKLOAD_IDENTITY_PROVIDER` is not set, the review is skipped with a
 `::notice::` annotation. No tokens are consumed.

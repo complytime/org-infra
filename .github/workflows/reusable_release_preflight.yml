@@ -37,40 +37,40 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: 'Semver tag to release (e.g., v1.2.3)'
+        description: "Semver tag to release (e.g., v1.2.3)"
         required: true
         type: string
       allow_prerelease:
-        description: 'Accept pre-release suffixes (e.g., v1.0.0-beta.0)'
+        description: "Accept pre-release suffixes (e.g., v1.0.0-beta.0)"
         required: false
         type: boolean
         default: false
       ci_checks:
-        description: 'JSON array of CI check names to verify. Empty = auto-discover from workflow files.'
+        description: "JSON array of CI check names to verify. Empty = auto-discover from workflow files."
         required: false
         type: string
-        default: ''
+        default: ""
       skip_semver_check:
-        description: 'Skip semver ordering verification against the latest existing tag'
+        description: "Skip semver ordering verification against the latest existing tag"
         required: false
         type: boolean
         default: false
       skip_ci_checks:
-        description: 'Skip CI check verification on HEAD commit'
+        description: "Skip CI check verification on HEAD commit"
         required: false
         type: boolean
         default: false
       skip_unreleased_check:
-        description: 'Skip verification that unreleased commits exist since the last tag'
+        description: "Skip verification that unreleased commits exist since the last tag"
         required: false
         type: boolean
         default: false
     outputs:
       tag:
-        description: 'Validated tag string'
+        description: "Validated tag string"
         value: ${{ jobs.preflight.outputs.tag }}
       tag_created:
-        description: 'Whether a new tag was created (true/false)'
+        description: "Whether a new tag was created (true/false)"
         value: ${{ jobs.preflight.outputs.tag_created }}
     secrets:
       tag_push_token:
@@ -90,8 +90,8 @@ jobs:
     timeout-minutes: 10
 
     permissions:
-      contents: write  # Create and push tags
-      checks: read     # Query CI check run results
+      contents: write # Create and push tags
+      checks: read # Query CI check run results
 
     concurrency:
       group: release-${{ github.repository }}

@@ -9,7 +9,7 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-        args: [--unsafe]  # Allow custom GitHub Actions YAML tags
+        args: [--unsafe] # Allow custom GitHub Actions YAML tags
       - id: check-added-large-files
       - id: check-merge-conflict
 

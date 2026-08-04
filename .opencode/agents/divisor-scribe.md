@@ -66,9 +66,9 @@ When asked to add change entries to CHANGELOG.md:
 1. Read the full current CHANGELOG.md
 2. Entries MUST follow this format:
    - Line 1: `- <change-name>: <summary of what changed>`
-   - Line 2+: `  - Spec: \`openspec/specs/<capability>/spec.md\`` (one per capability)
+   - Line 2+: `- Spec: \`openspec/specs/<capability>/spec.md\`` (one per capability)
    - Every entry MUST include at least one Spec path pointing to the canonical spec under `openspec/specs/`. This applies to both OpenSpec and SpecKit workflows.
-   - If the change has no spec (e.g., pure chore/infra), use `  - Spec: _(none — <reason>)_`
+   - If the change has no spec (e.g., pure chore/infra), use `- Spec: _(none — <reason>)_`
 3. Follow the existing format precisely — match indentation, bullet style
 4. Verify all spec paths against the actual codebase
 

@@ -24,7 +24,7 @@ Move the reusable CRAP Load Analysis workflow from complyctl to org-infra, provi
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
 | Principle | Status | Evidence |
-|-----------|--------|----------|
+| ----------- | -------- | ---------- |
 | I. Single Source of Truth | PASS | Moving workflow to org-infra centralizes it as the single source; eliminates duplicate in complyctl |
 | II. Simplicity & Isolation | PASS | Reusable workflow has single responsibility (CRAP analysis); consumer workflow is a thin caller |
 | III. Incremental Improvement | PASS | This PR only moves the workflow and adds sync config — no unrelated changes |

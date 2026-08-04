@@ -18,33 +18,33 @@ on:
   workflow_call:
     inputs:
       content_path:
-        description: 'Directory containing policy files to pack'
+        description: "Directory containing policy files to pack"
         required: true
         type: string
       image_name:
-        description: 'Image name without registry (e.g., complytime/complypack-ampel-branch-protection)'
+        description: "Image name without registry (e.g., complytime/complypack-ampel-branch-protection)"
         required: true
         type: string
       tag:
-        description: 'Image tag (e.g., sha-abc123, v1.0.0)'
+        description: "Image tag (e.g., sha-abc123, v1.0.0)"
         required: true
         type: string
       evaluator_id:
-        description: 'Evaluator ID for complypack config (e.g., ampel)'
+        description: "Evaluator ID for complypack config (e.g., ampel)"
         required: true
         type: string
       complypack_id:
-        description: 'Globally unique pack identifier'
+        description: "Globally unique pack identifier"
         required: true
         type: string
       complypack_version:
-        description: 'Version to embed in complypack config'
+        description: "Version to embed in complypack config"
         required: true
         type: string
       go_version:
-        description: 'Go version for setup-go'
+        description: "Go version for setup-go"
         required: false
-        default: 'stable'
+        default: "stable"
         type: string
       complypack_cli_ref:
         description: >-
@@ -52,27 +52,27 @@ on:
           Callers SHOULD pin to a specific release tag for reproducibility.
           Default is latest because complypack has no formal releases yet.
         required: false
-        default: 'latest'
+        default: "latest"
         type: string
       tag_latest:
-        description: 'Also tag the artifact as latest after pushing the primary tag'
+        description: "Also tag the artifact as latest after pushing the primary tag"
         required: false
         default: false
         type: boolean
       generate_attestations:
         description: "Generate SLSA provenance and SBOM. Values: auto (based on ref_protected), true (always). Default: auto"
         required: false
-        default: 'auto'
+        default: "auto"
         type: string
     outputs:
       digest:
-        description: 'Pushed artifact digest (sha256:...)'
+        description: "Pushed artifact digest (sha256:...)"
         value: ${{ jobs.publish.outputs.digest }}
       image:
-        description: 'Full image reference (ghcr.io/<image_name>)'
+        description: "Full image reference (ghcr.io/<image_name>)"
         value: ${{ jobs.publish.outputs.image }}
       tag:
-        description: 'Tag used for the push'
+        description: "Tag used for the push"
         value: ${{ jobs.publish.outputs.tag }}
 
 permissions:
@@ -92,10 +92,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: read       # Checkout source for policy files
-      packages: write      # Push artifact and attestations to GHCR
-      id-token: write      # OIDC token for GitHub attestations
-      attestations: write  # Write attestations to GHCR
+      contents: read # Checkout source for policy files
+      packages: write # Push artifact and attestations to GHCR
+      id-token: write # OIDC token for GitHub attestations
+      attestations: write # Write attestations to GHCR
     outputs:
       digest: ${{ steps.digest.outputs.digest }}
       image: ${{ steps.image_ref.outputs.image }}

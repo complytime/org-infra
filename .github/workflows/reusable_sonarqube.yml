@@ -9,41 +9,41 @@ on:
       sonar_organization:
         required: true
         type: string
-        description: 'The SonarCloud organization key (e.g., rh-psce).'
+        description: "The SonarCloud organization key (e.g., rh-psce)."
       sonar_project_key:
-        required: true    # Make this mandatory for clarity
+        required: true # Make this mandatory for clarity
         type: string
-        description: 'The SonarCloud project key (e.g., rh-psce_complyctl).'
+        description: "The SonarCloud project key (e.g., rh-psce_complyctl)."
       coverage_artifact_name:
-        required: false   # Optional, as some repos might not have coverage
+        required: false # Optional, as some repos might not have coverage
         type: string
         default: coverage
-        description: 'The name of the coverage artifact that was uploaded by the caller (e.g., coverage).'
+        description: "The name of the coverage artifact that was uploaded by the caller (e.g., coverage)."
       coverage_file_path:
-        required: false   # Optional, as some repos might not have coverage
+        required: false # Optional, as some repos might not have coverage
         type: string
-        description: 'The path to the generated coverage file (e.g., coverage.out).'
+        description: "The path to the generated coverage file (e.g., coverage.out)."
       language_scanner_property:
         required: false
         type: string
-        description: 'The Sonar Scanner property for coverage, e.g., sonar.typescript.lcov.reportPaths.'
+        description: "The Sonar Scanner property for coverage, e.g., sonar.typescript.lcov.reportPaths."
       sonar_sources:
         required: false
         type: string
-        default: ''
-        description: 'Comma-separated list of source directories (e.g., src/,lib/). Maps to sonar.sources.'
+        default: ""
+        description: "Comma-separated list of source directories (e.g., src/,lib/). Maps to sonar.sources."
       sonar_tests:
         required: false
         type: string
-        default: ''
-        description: 'Comma-separated list of test directories (e.g., tests/). Maps to sonar.tests.'
+        default: ""
+        description: "Comma-separated list of test directories (e.g., tests/). Maps to sonar.tests."
     secrets:
       SONAR_TOKEN:
         required: true
-        description: 'The SonarCloud analysis token.'
+        description: "The SonarCloud analysis token."
       source_token:
         required: true
-        description: 'GitHub Token'
+        description: "GitHub Token"
 
 permissions:
   contents: none

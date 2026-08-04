@@ -87,7 +87,7 @@ Adjust `complytime_config_path` to the path of your `complytime.yaml` relative t
 ### complytime.yaml Variables
 
 | Variable | Required | Description |
-|----------|----------|-------------|
+| ---------- | ---------- | ------------- |
 | `url` | Yes | Full GitHub repository URL to scan (e.g., `https://github.com/myorg/myrepo`) |
 | `branches` | No | Comma-separated list of branch names to scan (default: `main`) |
 | `specs` | Yes | Spec file to use — use `builtin:github/branch-rules.yaml` for standard GitHub branch rules |
@@ -132,7 +132,7 @@ After the workflow runs:
 The `ampel-branch-protection` policy checks the following requirements:
 
 | ID | Tenet | Description | Pass Condition | Guidance on Failure |
-|----|-------|-------------|----------------|---------------------|
+| ---- | ------- | ------------- | ---------------- | --------------------- |
 | require-pull-request | 01 | Require pull/merge requests — direct pushes are disabled | A `update` ruleset rule exists (GitHub) or `push_access_levels` is empty (GitLab) | GitHub: create a branch ruleset and enable **Restrict updates**. GitLab: remove all `push_access_levels`. |
 | minimum-approvals | 01 | Minimum one approval required before merge | `required_approving_review_count >= 1` (GitHub) or `approvals_before_merge >= 1` (GitLab) | GitHub: set `required_approving_review_count >= 1`. GitLab: set `approvals_before_merge >= 1`. |
 | minimum-approvals | 02 | Stale approvals dismissed on new commits | `dismiss_stale_reviews_on_push == true` (GitHub) or `reset_approvals_on_push == true` (GitLab) | GitHub: enable **Dismiss stale pull request approvals when new commits are pushed**. GitLab: enable **Remove all approvals when commits are added to the source branch**. |

@@ -9,7 +9,7 @@ This feature modifies two workflow files. Data flows between jobs via GitHub Act
 ### reusable_dependabot_reviewer.yml Outputs
 
 | Output | Type | Description | Possible Values |
-|--------|------|-------------|-----------------|
+| -------- | ------ | ------------- | ----------------- |
 | `risk_level` | string | Semantic version risk classification | `low` (patch), `medium` (minor), `high` (major/unknown) |
 | `updates_count` | string (number) | Repositories using this dependency version | `0`..`N`, informational only |
 | `release_age_hours` | string (number) | Hours since the dependency version was released | `0`..`N`, or `-1` if unknown |
@@ -36,7 +36,7 @@ call_dependabot_reviewer ┤
 ### Auto-Approval Decision Matrix
 
 | risk_level | review_conclusion | release_age_hours | CI Status | Decision |
-|------------|-------------------|-------------------|-----------|----------|
+| ------------ | ------------------- | ------------------- | ----------- | ---------- |
 | low | success | >= 24 | passing | AUTO-APPROVE |
 | medium | success | >= 24 | passing | AUTO-APPROVE |
 | high | success | >= 24 | passing | MANUAL REVIEW |
@@ -66,7 +66,7 @@ Source 3: Commit title/body text
 ### Environment Variables (internal to workflow steps)
 
 | Variable | Set By | Used By | Description |
-|----------|--------|---------|-------------|
+| ---------- | -------- | --------- | ------------- |
 | `DEP_NAME` | Extract step | Risk, Ecosystem, Release Age, Usage | Dependency name |
 | `DEP_VERSION` | Extract step | Release Age, Outputs | New version (primary; same value as TO_VERSION) |
 | `FROM_VERSION` | Extract step | Comment (informational) | Old version (from commit title "from X to Y") |

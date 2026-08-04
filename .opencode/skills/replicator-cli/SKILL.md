@@ -10,7 +10,7 @@ Quick reference for all replicator commands.
 ## Commands
 
 | Command | Purpose |
-|---------|---------|
+| --------- | --------- |
 | `replicator init` | Per-repo setup: creates `.uf/replicator/` + agent kit |
 | `replicator setup` | Per-machine setup: creates global SQLite DB |
 | `replicator serve` | Start MCP JSON-RPC server on stdio |

@@ -44,7 +44,7 @@ The `paths` input maps each local file to its OCI layer media type. The exact ty
 Using the wrong type causes `complyctl list` / `generate` / `scan` to silently fail to find content.
 
 | Layer content | Correct media type |
-|--------------|-------------------|
+| -------------- | ------------------- |
 | Gemara catalog YAML | `application/vnd.gemara.catalog.v1+yaml` |
 | Gemara policy YAML | `application/vnd.gemara.policy.v1+yaml` |
 | Gemara guidance YAML | `application/vnd.gemara.guidance.v1+yaml` |
@@ -60,7 +60,7 @@ Push to a protected branch (e.g., `main`) to trigger the publish job and attesta
 ## Customizing Inputs
 
 | Input | Required | Default | Description |
-|-------|----------|---------|-------------|
+| ------- | ---------- | --------- | ------------- |
 | `image_name` | Yes | — | Image name without registry, e.g. `complytime/policies/my-bundle` |
 | `artifact_type` | Yes | — | OCI `artifactType` annotation for manifest-level discovery |
 | `paths` | Yes | — | Newline-separated `file:mediatype` pairs passed to `oras push` |

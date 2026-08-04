@@ -17,10 +17,10 @@ to distribute PR review workload fairly.
 GitHub offers two routing algorithms for auto-assignment: **Round Robin**
 and **Load Balance**.
 
-| Algorithm | Selection criteria | Awareness of pending reviews |
-|---|---|---|
-| Round Robin | Least recent review request | No |
-| Load Balance | Total requests in a rolling 30-day window | Yes |
+| Algorithm    | Selection criteria                        | Awareness of pending reviews |
+|--------------|-------------------------------------------|------------------------------|
+| Round Robin  | Least recent review request               | No                           |
+| Load Balance | Total requests in a rolling 30-day window | Yes                          |
 
 **Load Balance** is used for all teams because it accounts for each
 member's outstanding review count, adapting to vacations, busy periods,
@@ -36,13 +36,13 @@ whose membership is fully covered by another auto-assigned team have
 auto-assignment disabled to avoid redundant reviewer selection from
 the same pool.
 
-| Team | Auto-assignment | Algorithm | Reviewers | Count existing requests | Notify | Skipped members |
-|---|---|---|---|---|---|---|
-| `complytime-dev` | Enabled | Load Balance | 2 | Yes | -- | *(onboarding members)* |
-| `complytime-approvers` | Enabled | Load Balance | 2 | Yes | -- | -- |
-| `ampel-provider-approvers` | Disabled | -- | -- | -- | Requested only | -- |
-| `openscap-provider-approvers` | Disabled | -- | -- | -- | Requested only | -- |
-| `opa-provider-approvers` | Disabled | -- | -- | -- | Requested only | -- |
+| Team                          | Auto-assignment | Algorithm    | Reviewers | Count existing requests | Notify         | Skipped members        |
+|-------------------------------|-----------------|--------------|-----------|-------------------------|----------------|------------------------|
+| `complytime-dev`              | Enabled         | Load Balance | 2         | Yes                     | --             | *(onboarding members)* |
+| `complytime-approvers`        | Enabled         | Load Balance | 2         | Yes                     | --             | --                     |
+| `ampel-provider-approvers`    | Disabled        | --           | --        | --                      | Requested only | --                     |
+| `openscap-provider-approvers` | Disabled        | --           | --        | --                      | Requested only | --                     |
+| `opa-provider-approvers`      | Disabled        | --           | --        | --                      | Requested only | --                     |
 
 **Count existing requests** must be enabled on all auto-assigned teams.
 Without it, a member who belongs to multiple requested teams can consume

@@ -27,15 +27,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import yaml
-import requests
-
 from datetime import datetime
+from pathlib import Path
+
+import requests
+import yaml
 from git import GitCommandError
 from git.repo import Repo
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-
 
 GITHUB_API = "https://api.github.com"
 
@@ -78,7 +76,7 @@ SOURCE_REPO = "org-infra"
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Sync repository standards across organization repositories"
+        description="Sync repository standards across organization repositories",
     )
     parser.add_argument(
         "--org",
@@ -116,7 +114,7 @@ def load_sync_config(config_path: str) -> dict:
     """Load the sync configuration file."""
     script_dir = Path(__file__).parent.parent
     full_path = f"{script_dir}/{config_path}"
-    with open(full_path, "r") as f:
+    with open(full_path) as f:
         return yaml.safe_load(f)
 
 
@@ -149,9 +147,9 @@ def validate_github_api_request(endpoint: str, method: str) -> bool:
 def github_api_request(
     endpoint: str,
     method: str = "GET",
-    data: Optional[dict] = None,
-    params: Optional[dict] = None,
-) -> Tuple[int, Dict]:
+    data: dict | None = None,
+    params: dict | None = None,
+) -> tuple[int, dict]:
     """Make a GitHub API request using the requests library.
 
     Args:
@@ -201,7 +199,7 @@ def validate_branch_name(branch_name: str) -> bool:
     return bool(branch_name) and branch_name.startswith(SYNC_BRANCH_PREFIX)
 
 
-def check_existing_sync_pr(org: str, repo_name: str) -> Optional[Dict[str, str]]:
+def check_existing_sync_pr(org: str, repo_name: str) -> dict[str, str] | None:
     """Check if an open sync PR already exists for the target repository.
 
     Args:
@@ -249,7 +247,7 @@ def fetch_peribolos_file(org: str) -> dict:
             repo_path = os.path.join(tmpdir, peribolos_repo)
             peribolos_path = os.path.join(repo_path, "peribolos.yaml")
             if os.path.exists(peribolos_path):
-                with open(peribolos_path, "r") as f:
+                with open(peribolos_path) as f:
                     return yaml.safe_load(f)
             print(f"Error: peribolos.yaml not found in {peribolos_repo} repository")
             sys.exit(1)
@@ -289,8 +287,7 @@ def sync_file(source_path: str, dest_path: str, relative_path: str) -> bool:
         if compare_files(source_path, dest_path):
             print(f"{relative_path} is up to date")
             return False
-        else:
-            print(f"{relative_path} needs update")
+        print(f"{relative_path} needs update")
     else:
         print(f"{relative_path} is missing")
 
@@ -298,7 +295,7 @@ def sync_file(source_path: str, dest_path: str, relative_path: str) -> bool:
     return True
 
 
-def resolve_file_vars(file_config: dict, repo_name: str) -> Dict[str, str]:
+def resolve_file_vars(file_config: dict, repo_name: str) -> dict[str, str]:
     """Resolve per-file variable values for a target repository.
 
     Each variable in the ``vars`` config has a ``default`` value and an
@@ -317,7 +314,7 @@ def resolve_file_vars(file_config: dict, repo_name: str) -> Dict[str, str]:
     if not vars_config:
         return {}
 
-    resolved: Dict[str, str] = {}
+    resolved: dict[str, str] = {}
     for var_name, var_def in vars_config.items():
         default_value = str(var_def.get("default", ""))
         repo_overrides = var_def.get("repos", {})
@@ -325,7 +322,7 @@ def resolve_file_vars(file_config: dict, repo_name: str) -> Dict[str, str]:
     return resolved
 
 
-def apply_file_vars(content: str, resolved_vars: Dict[str, str]) -> str:
+def apply_file_vars(content: str, resolved_vars: dict[str, str]) -> str:
     """Apply variable substitutions to file content via regex.
 
     For each variable, finds ``<var_name>: <value>`` in the content and
@@ -350,7 +347,7 @@ def apply_file_vars(content: str, resolved_vars: Dict[str, str]) -> str:
 
 def get_latest_release(
     org: str, repo_name: str,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """Fetch the latest release tag and resolve it to a commit SHA.
 
     Queries the GitHub API for the latest published release, then
@@ -378,7 +375,7 @@ def get_latest_release(
         print(
             f"No release found for {org}/{repo_name}. "
             f"Use --release-ref <tag> to specify a "
-            f"release tag."
+            f"release tag.",
         )
         sys.exit(1)
 
@@ -392,7 +389,7 @@ def get_latest_release(
     if ref_status != 200:
         print(
             f"Error: Could not resolve tag '{tag_name}' "
-            f"for {org}/{repo_name}."
+            f"for {org}/{repo_name}.",
         )
         sys.exit(1)
 
@@ -407,7 +404,7 @@ def get_latest_release(
         if tag_status != 200:
             print(
                 f"Error: Could not dereference tag object "
-                f"for {org}/{repo_name}."
+                f"for {org}/{repo_name}.",
             )
             sys.exit(1)
         commit_sha = tag_data.get("object", {}).get("sha", "")
@@ -484,7 +481,7 @@ def setup_git_credentials(repo_path: str, org: str, repo_name: str) -> None:
 def create_branch_and_commit(
     repo_path: str,
     branch_name: str,
-    files_changed: List[str],
+    files_changed: list[str],
     commit_message: str,
 ) -> bool:
     """Create a new branch, commit changes, and push to origin.
@@ -494,7 +491,7 @@ def create_branch_and_commit(
     if not validate_branch_name(branch_name):
         print(
             f"Error: Branch name '{branch_name}' does not match "
-            f"required prefix '{SYNC_BRANCH_PREFIX}'"
+            f"required prefix '{SYNC_BRANCH_PREFIX}'",
         )
         return False
 
@@ -524,7 +521,7 @@ def create_pull_request(
     title: str,
     body: str,
     base_branch: str = "main",
-) -> Optional[str]:
+) -> str | None:
     """Create a pull request from a branch in the target repository.
 
     Args:
@@ -552,13 +549,12 @@ def create_pull_request(
         pr_url = response_data.get("html_url", "")
         print(f"Pull request created successfully: {pr_url}")
         return pr_url
-    else:
-        error_msg = response_data.get("message", "Unknown error")
-        print(f"Failed to create PR (HTTP {status}): {error_msg}")
-        return None
+    error_msg = response_data.get("message", "Unknown error")
+    print(f"Failed to create PR (HTTP {status}): {error_msg}")
+    return None
 
 
-def generate_dependabot_config(repo_name: str, config: dict) -> Optional[List[dict]]:
+def generate_dependabot_config(repo_name: str, config: dict) -> list[dict] | None:
     """Build the managed set of Dependabot entries for a repository.
 
     Starts with common entries, then applies per-repo overrides.
@@ -586,7 +582,7 @@ def generate_dependabot_config(repo_name: str, config: dict) -> Optional[List[di
 
     # Build managed set keyed by package-ecosystem.
     # Overrides replace common entries for the same ecosystem.
-    managed: Dict[str, dict] = {}
+    managed: dict[str, dict] = {}
     for entry in common_entries:
         ecosystem = entry["package-ecosystem"]
         managed[ecosystem] = dict(entry)
@@ -599,7 +595,7 @@ def generate_dependabot_config(repo_name: str, config: dict) -> Optional[List[di
 
 
 def merge_dependabot_entries(
-    managed_entries: List[dict],
+    managed_entries: list[dict],
     existing_path: str,
 ) -> str:
     """Merge managed entries with unmanaged entries from the existing file.
@@ -617,9 +613,9 @@ def merge_dependabot_entries(
     """
     managed_ecosystems = {entry["package-ecosystem"] for entry in managed_entries}
 
-    unmanaged_entries: List[dict] = []
+    unmanaged_entries: list[dict] = []
     if os.path.exists(existing_path):
-        with open(existing_path, "r") as f:
+        with open(existing_path) as f:
             existing_data = yaml.safe_load(f)
         if existing_data and "updates" in existing_data:
             for entry in existing_data["updates"]:
@@ -660,9 +656,9 @@ def sync_repository(
     repo_name: str,
     config: dict,
     dry_run: bool = False,
-    release_tag: Optional[str] = None,
-    release_sha: Optional[str] = None,
-) -> Dict[str, Optional[str]]:
+    release_tag: str | None = None,
+    release_sha: str | None = None,
+) -> dict[str, str | None]:
     """Sync a single repository with standard files using direct push.
 
     Args:
@@ -700,7 +696,7 @@ def sync_repository(
             # Step 2: Setup credentials and check for existing PR
             # This must happen BEFORE any file changes to keep the
             # working tree clean for a potential branch checkout.
-            existing_pr: Optional[Dict[str, str]] = None
+            existing_pr: dict[str, str] | None = None
             if not dry_run:
                 setup_git_credentials(repo_path, org, repo_name)
                 existing_pr = check_existing_sync_pr(org, repo_name)
@@ -729,7 +725,7 @@ def sync_repository(
 
                     print(
                         f"Open sync PR exists: {existing_pr['url']}"
-                        f" — checking out branch '{pr_branch}'"
+                        f" — checking out branch '{pr_branch}'",
                     )
                     repo = Repo(repo_path)
                     try:
@@ -741,7 +737,7 @@ def sync_repository(
                         return {"status": "failed", "pr_url": None, "error": err}
 
             # Step 3: Process static files to sync
-            files_changed: List[str] = []
+            files_changed: list[str] = []
             for file_config in files_to_sync:
                 source_rel_path = file_config["source"]
                 dest_rel_path = file_config.get("destination", source_rel_path)
@@ -805,14 +801,14 @@ def sync_repository(
                         if dry_run:
                             print(
                                 "[DRY RUN] workflow refs "
-                                "transformed"
+                                "transformed",
                             )
 
                     resolved_content = source_content
 
                     existing_content = ""
                     if os.path.exists(dest_path):
-                        with open(dest_path, "r") as f:
+                        with open(dest_path) as f:
                             existing_content = f.read()
 
                     if resolved_content != existing_content:
@@ -824,7 +820,7 @@ def sync_repository(
                             )
                             print(
                                 f"[DRY RUN] Would {action}: "
-                                f"{dest_rel_path}"
+                                f"{dest_rel_path}",
                             )
                         else:
                             os.makedirs(
@@ -835,7 +831,7 @@ def sync_repository(
                                 f.write(resolved_content)
                             print(
                                 f"{dest_rel_path} updated "
-                                f"(content transformed)"
+                                f"(content transformed)",
                             )
                         files_changed.append(dest_rel_path)
                     else:
@@ -844,7 +840,7 @@ def sync_repository(
                     if not os.path.exists(dest_path):
                         print(
                             f"[DRY RUN] Would add: "
-                            f"{dest_rel_path}"
+                            f"{dest_rel_path}",
                         )
                         files_changed.append(dest_rel_path)
                     elif not compare_files(
@@ -852,18 +848,17 @@ def sync_repository(
                     ):
                         print(
                             f"[DRY RUN] Would update: "
-                            f"{dest_rel_path}"
+                            f"{dest_rel_path}",
                         )
                         files_changed.append(dest_rel_path)
                     else:
                         print(f"{dest_rel_path} is up to date")
-                else:
-                    if sync_file(
-                        str(source_path),
-                        dest_path,
-                        dest_rel_path,
-                    ):
-                        files_changed.append(dest_rel_path)
+                elif sync_file(
+                    str(source_path),
+                    dest_path,
+                    dest_rel_path,
+                ):
+                    files_changed.append(dest_rel_path)
 
             # Step 4: Generate and sync dependabot.yml
             managed_entries = generate_dependabot_config(repo_name, config)
@@ -876,7 +871,7 @@ def sync_repository(
 
                 existing_content = ""
                 if os.path.exists(dependabot_dest):
-                    with open(dependabot_dest, "r") as f:
+                    with open(dependabot_dest) as f:
                         existing_content = f.read()
 
                 if rendered != existing_content:
@@ -986,7 +981,7 @@ def sync_repository(
 
 
 def write_step_summary(
-    results: List[Dict[str, Optional[str]]],
+    results: list[dict[str, str | None]],
     org: str,
     dry_run: bool,
 ) -> None:
@@ -1005,7 +1000,7 @@ def write_step_summary(
     )
     total = len(results)
 
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append("## Sync Organization Repositories")
     lines.append("")
     lines.append(f"**Organization:** {org}")
@@ -1013,7 +1008,7 @@ def write_step_summary(
         lines.append("**Mode:** Dry run")
     lines.append(
         f"**Result:** {success_count}/{total} "
-        f"repositories processed successfully"
+        f"repositories processed successfully",
     )
     lines.append("")
 
@@ -1054,7 +1049,7 @@ def write_step_summary(
             f"`{r['repo']}`" for r in dry_run_repos
         )
         lines.append(
-            f"**Would create PRs:** {names}"
+            f"**Would create PRs:** {names}",
         )
         lines.append("")
 
@@ -1085,8 +1080,8 @@ def main() -> None:
     config = load_sync_config(args.config)
 
     # Detect or resolve release for workflow ref transformation
-    release_tag: Optional[str] = None
-    release_sha: Optional[str] = None
+    release_tag: str | None = None
+    release_sha: str | None = None
 
     if args.release_ref:
         # User provided an explicit tag — resolve it to SHA
@@ -1100,7 +1095,7 @@ def main() -> None:
         if status != 200:
             print(
                 f"Error: Tag '{release_tag}' not found "
-                f"for {args.org}/{SOURCE_REPO}."
+                f"for {args.org}/{SOURCE_REPO}.",
             )
             sys.exit(1)
         # Handle annotated vs lightweight tags
@@ -1117,7 +1112,7 @@ def main() -> None:
                 print(
                     f"Error: Could not dereference "
                     f"tag object for "
-                    f"{args.org}/{SOURCE_REPO}."
+                    f"{args.org}/{SOURCE_REPO}.",
                 )
                 sys.exit(1)
             release_sha = tag_data.get(
@@ -1136,7 +1131,7 @@ def main() -> None:
     if release_tag and release_sha:
         print(
             f"Release ref: {release_tag} "
-            f"({release_sha[:12]})"
+            f"({release_sha[:12]})",
         )
 
     # Fetch and parse peribolos.yml
@@ -1164,7 +1159,7 @@ def main() -> None:
     print(f"{len(excluded_repos)} repositories were excluded in this sync:\n- {excluded_list}")
     print(f"\nWill process {len(repositories)} repository(ies)")
 
-    results: List[Dict[str, Optional[str]]] = []
+    results: list[dict[str, str | None]] = []
     for repo_name in repositories:
         try:
             result = sync_repository(
@@ -1192,7 +1187,7 @@ def main() -> None:
     print(f"\n{'=' * 60}")
     print(
         f"Summary: Successfully processed "
-        f"{success_count}/{len(repositories)} repositories"
+        f"{success_count}/{len(repositories)} repositories",
     )
     print(f"{'=' * 60}")
 

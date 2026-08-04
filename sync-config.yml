@@ -6,10 +6,10 @@
 # Repositories to exclude from synchronization
 # org-infra is excluded by default as it's the source repository
 exclude_repos:
-  - org-infra                   # This repository itself
-  - nunya                       # Internal tooling (Jira migration)
-  - roadmap                     # Internal tooling (roadmap scripts)
-  - complyscribe                # Archived
+  - org-infra # This repository itself
+  - nunya # Internal tooling (Jira migration)
+  - roadmap # Internal tooling (roadmap scripts)
+  - complyscribe # Archived
 
 # Files and workflows to synchronize
 # Each entry specifies:
