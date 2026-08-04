@@ -10,6 +10,7 @@ name: Sync Organization Repositories
 # Only allow manual trigger.
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:repos/dry_run are intentional manual operational controls for scoping the org-file sync; this workflow produces no build artifact.
     inputs:
       repos:
         description: "Specific repositories to sync (space-separated, leave empty for all)"
