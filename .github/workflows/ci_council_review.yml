@@ -13,6 +13,7 @@ name: Council Review
 # --------------------------------------------------------------------------
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:triggering_run_id is an intentional manual-testing input to select the collect-workflow artifact; this consumer workflow produces no build output.
     inputs:
       triggering_run_id:
         description: >-
