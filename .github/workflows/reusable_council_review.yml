@@ -95,7 +95,8 @@ jobs:
         if: steps.gate.outputs.should_review == 'true'
         id: review
         continue-on-error: true
-        uses: unbound-force/unbound-force/council-review-action@7836c070a63f3eeeab78ebd48c5dd5921ae486e2 # main (merged #336)
+        # SHA pinned to a merged main commit; no version tag exists yet (staged rollout per AGENTS.md).
+        uses: unbound-force/unbound-force/council-review-action@7836c070a63f3eeeab78ebd48c5dd5921ae486e2 # main (merged #336) # zizmor: ignore[ref-version-mismatch]
         with:
           model: ${{ inputs.model }}
           diff-path: pr-diff.patch
