@@ -1,0 +1,17 @@
+# grype configuration for org-infra
+#
+# grype scans the entire working directory, which includes the gitignored local
+# virtualenv (.venv/) and generated report directories (e.g. megalinter-reports/).
+# These are not repo source: the venv can carry stale package installs that drift
+# from what the repo actually declares. This repo's real Python dependencies live
+# in requirements.txt (GitPython is pinned to a safe 3.1.57). Excluding these
+# non-source paths keeps grype focused on tracked repo source and avoids false
+# positives from stale local venv installs and generated artifacts.
+exclude:
+  - './.venv/**'
+  - './megalinter-reports/**'
+  - './vendor/**'
+  - './.git/**'
+  - './__pycache__/**'
+  - './.pytest_cache/**'
+  - './.test-output/**'
