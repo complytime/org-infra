@@ -169,13 +169,11 @@ jobs:
           steps.cooldown.outputs.cooled_down == 'true'
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
 
-      # TODO(#440): remove continue-on-error once council review is stable  # DevSkim: ignore DS176209 - tracked TODO referencing issue #440, not a suspicious/leftover comment
       - name: Run council review
         if: >-
           steps.gate.outputs.should_review == 'true' &&
           steps.cooldown.outputs.cooled_down == 'true'
         id: review
-        continue-on-error: true
         # SHA pinned to a merged main commit; no version tag exists yet (staged rollout per AGENTS.md).
         uses: unbound-force/unbound-force/council-review-action@7836c070a63f3eeeab78ebd48c5dd5921ae486e2 # main (merged #336) # zizmor: ignore[ref-version-mismatch]
         with:
