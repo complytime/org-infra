@@ -41,6 +41,7 @@ org-infra/
 │  │  ├── ci_scheduled.yml                  # Scheduled OSV-Scanner and OpenSSF Scorecards via `reusable_scheduled`.
 │  │  ├── ci_crapload.yml                   # Workflow to consume `reusable_crapload_analysis` for CRAP load analysis.
 │  │  ├── ci_security.yml                   # Workflow to consume `reusable_vuln_scan` and `reusable_security`.
+│  │  ├── ci_stale_reviews.yml              # Scheduled stale review detection via `reusable_stale_reviews`.
 │  │  ├── reusable_ci.yml                   # Generic CI checks, such as linters, typos and PR titles.
 │  │  ├── reusable_compliance.yml           # Compliance evaluation with attestation-based policy checks.
 │  │  ├── reusable_crapload_analysis.yml    # CRAP (Change Risk Anti-Patterns) load analysis for Go code using Gaze.
@@ -55,6 +56,7 @@ org-infra/
 │  │  ├── reusable_security.yml             # OpenSSF Scorecards analysis and SARIF upload.
 │  │  ├── reusable_sign_and_verify.yml      # Sigstore keyless signing and attestation verification for container images.
 │  │  ├── reusable_sonarqube.yml            # SonarCloud static analysis for code quality and security.
+│  │  ├── reusable_stale_reviews.yml        # Detect and flag PRs with overdue review requests.
 │  │  ├── reusable_vuln_scan.yml            # Vulnerability scanning via OSV-Scanner and Trivy.
 │  │  └── sync_org_repositories.yml         # Manual, scheduled, and event-based workflow to synchronize files.
 │  ├── dependabot.yml                       # Dependabot settings for GitHub Actions and Go modules.

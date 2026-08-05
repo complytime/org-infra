@@ -156,7 +156,7 @@ determine the exact request date). If the threshold is exceeded:
    number of business days each has been pending.
 
 Draft PRs and PRs with an existing approval are skipped. To avoid spam,
-a reminder is posted at most once every 3 days per PR.
+a reminder is posted at most once every 3 calendar days per PR.
 
 ### Implementation
 
@@ -179,7 +179,7 @@ Additional behavior (hardcoded, changeable in the script):
 
 - Draft PRs are skipped.
 - PRs with at least 1 approval are skipped.
-- Reminders are deduplicated (3-day cooldown per PR).
+- Reminders are deduplicated (3 calendar-day cooldown per PR).
 - The `stale-review` label is auto-removed when no pending reviewers remain.
 
 ### Workflow Files
@@ -187,6 +187,7 @@ Additional behavior (hardcoded, changeable in the script):
 | File | Purpose |
 |------|---------|
 | `.github/workflows/ci_stale_reviews.yml` | Per-repo scheduled caller |
+| `.github/workflows/ci_test_stale_reviews.yml` | Manual test workflow (org-infra only) |
 | `.github/workflows/reusable_stale_reviews.yml` | Reusable workflow (org-infra) |
 
 The caller workflow is synced to repositories via `sync-config.yml`. The
@@ -207,12 +208,12 @@ When a PR is flagged:
 
 - **Reviewer available:** Complete the review or leave a status comment
   explaining when review will happen.
-- **Reviewer unavailable:** Re-request review from another team member or
-  use `/assign-reviewer` to trigger Load Balance rebalancing.
+- **Reviewer unavailable:** Re-request review from another team member
+  to trigger Load Balance rebalancing.
 - **PR no longer relevant:** Close the PR or convert to draft.
 
 The `stale-review` label is automatically removed the next time the workflow
-runs if the PR has received a review or approval.
+runs if no review requests remain pending on the PR.
 
 ### Customization
 

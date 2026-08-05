@@ -1,3 +1,8 @@
+# Stale Review Alerts
+# --------------------------------------------------------------------------
+# Scheduled caller: flags PRs with review requests pending beyond a
+# configurable business-day threshold. Consumes reusable_stale_reviews.yml.
+# --------------------------------------------------------------------------
 name: Stale Review Alerts
 
 on:
@@ -17,4 +22,5 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      issues: write
     uses: ./.github/workflows/reusable_stale_reviews.yml
