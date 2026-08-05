@@ -1,10 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for stale review business-day logic.
 
-Mirrors the countBusinessDays function from
-.github/workflows/reusable_stale_reviews.yml to validate
-edge cases in the business-day calculation used for
-staleness detection.
+IMPORTANT: The ``count_business_days`` function below mirrors the JS
+``countBusinessDays`` in ``.github/workflows/reusable_stale_reviews.yml``
+(lines 63-75). If the JS implementation changes, this mirror MUST be
+updated to match. Run ``ci_test_stale_reviews.yml`` to validate
+end-to-end behavior after any changes.
+
+Note on time-of-day semantics: the JS implementation normalises both
+``from`` and ``to`` to midnight via ``setHours(0, 0, 0, 0)`` before
+iterating. This Python mirror accepts ``date`` objects (no time
+component), which is functionally equivalent for date-only inputs.
+Time-of-day normalisation is covered by the JS implementation and is
+not modelled here.
 """
 
 from datetime import date, datetime, timedelta
@@ -93,6 +101,25 @@ class TestCountBusinessDays:
         """Validate values around the default 5-day stale threshold."""
         assert count_business_days(from_d, to_d) == expected
 
+    # -- Negative / error-path tests --
+
+    def test_reversed_dates_returns_zero(self):
+        """from_date after to_date should return 0 (while loop never executes)."""
+        assert count_business_days(date(2026, 8, 10), date(2026, 8, 3)) == 0
+
+    def test_large_span_one_year(self):
+        """Validate correctness over a full year (261 business days in 2026)."""
+        assert count_business_days(date(2026, 1, 1), date(2027, 1, 1)) == 261
+
+    # -- Date-assumption guard --
+
+    def test_date_assumptions(self):
+        """Verify hardcoded dates fall on expected weekdays."""
+        assert date(2026, 8, 3).weekday() == 0, "Aug 3 2026 must be Monday"
+        assert date(2026, 8, 7).weekday() == 4, "Aug 7 2026 must be Friday"
+        assert date(2026, 8, 8).weekday() == 5, "Aug 8 2026 must be Saturday"
+        assert date(2026, 8, 9).weekday() == 6, "Aug 9 2026 must be Sunday"
+
 
 class TestReminderCooldown:
     """Validates the 3-calendar-day cooldown logic.
@@ -109,7 +136,7 @@ class TestReminderCooldown:
         cooldown_ms: int = 3 * 24 * 60 * 60 * 1000,
     ) -> bool:
         """Mirror the JS cooldown check: (now - created_at) < cooldown_ms."""
-        diff_ms = (now - created_at).total_seconds() * 1000
+        diff_ms = int((now - created_at).total_seconds() * 1000)
         return diff_ms < cooldown_ms
 
     def test_same_time_within_cooldown(self):
