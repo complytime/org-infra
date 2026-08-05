@@ -28,7 +28,7 @@ Replace the fragile dependency-usage-based auto-approval gate with a robust crit
 | I. Single Source of Truth | PASS | Auto-approval criteria centralized in `ci_dependencies.yml` `if:` condition. Release age threshold extracted to workflow-level `env: MIN_RELEASE_AGE_HOURS: 24` and referenced in both the approval condition and PR comment template. |
 | II. Simplicity & Isolation | PASS | Net reduction of ~51 lines. Extraction step replaces 112 lines of nested loops with ~30 lines of sequential metadata/diff/title parsing. Each step has a single responsibility. |
 | III. Incremental Improvement | PASS | Changes are focused on the approval criteria and extraction robustness. No unrelated changes included. |
-| IV. Readability First | PASS | Commit metadata parsing is explicit (`grep 'dependency-name:'`). Risk classification uses a clear `case` statement. Error handling uses ` | | true` instead of `set -e`. |
+| IV. Readability First | PASS | Commit metadata parsing is explicit (`grep 'dependency-name:'`). Risk classification uses a clear `case` statement. Error handling uses `|| true` instead of `set -e`. |
 | V. Do Not Reinvent the Wheel | PASS | Uses built-in dependabot metadata, existing `gh` CLI, standard package registry APIs. No new external dependencies added. |
 | VI. Composability | PASS | Workflow steps remain modular. New `release_age_hours` output integrates cleanly with existing output pattern. |
 | VII. Convention Over Configuration | PASS | 24h threshold is a sensible default. Auto-approval defaults to not approving when data is unavailable (safe default). |
