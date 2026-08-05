@@ -50,7 +50,7 @@ jobs:
       component_name: org-infra-test
       containerfile_path: .github/ci-tests/ghcr-publish/Containerfile
       context_path: .github/ci-tests/ghcr-publish
-      image_name: complytime/org-infra-test
+      image_name: complytime/org-infra-test-build-only
       allow_unprotected_ref: true
       push: false
 
