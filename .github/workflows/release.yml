@@ -19,9 +19,10 @@ name: Release
 
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:The tag input is the build entry point / top-level source location (the release tag) explicitly permitted by SLSA, validated to strict semver before use.
     inputs:
       tag:
-        description: 'Semver tag to release (e.g., v1.0.0)'
+        description: "Semver tag to release (e.g., v1.0.0)"
         required: true
         type: string
 

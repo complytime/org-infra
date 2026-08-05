@@ -24,7 +24,7 @@ Delegates to the `gaze-reporter` agent which runs the appropriate
 ### Modes
 
 | Mode | Description |
-|------|-------------|
+| ------ | ------------- |
 | (none) | Full report: CRAP + quality + classification + health assessment |
 | `crap` | CRAP scores only |
 | `quality` | Test quality metrics only |

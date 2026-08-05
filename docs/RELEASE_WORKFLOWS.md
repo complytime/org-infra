@@ -51,12 +51,12 @@ The release pipeline is split into two reusable workflows that compose with exis
 
 ### Composition Patterns
 
-| Pattern | Repos | Pipeline |
-|---------|-------|----------|
-| **Binary** | complyctl, complytime-providers, c2p-go | preflight → goreleaser |
-| **Container** | complybeacon, gemara-content-service, complypack | preflight → ghcr → trivy → sign (→ quay) |
-| **Hybrid** | (future) | preflight → goreleaser + ghcr → trivy → sign |
-| **Library** | oscal-sdk-go | preflight → GitHub Release (no build artifacts) |
+| Pattern       | Repos                                            | Pipeline                                        |
+|---------------|--------------------------------------------------|-------------------------------------------------|
+| **Binary**    | complyctl, complytime-providers, c2p-go          | preflight → goreleaser                          |
+| **Container** | complybeacon, gemara-content-service, complypack | preflight → ghcr → trivy → sign (→ quay)        |
+| **Hybrid**    | (future)                                         | preflight → goreleaser + ghcr → trivy → sign    |
+| **Library**   | oscal-sdk-go                                     | preflight → GitHub Release (no build artifacts) |
 
 The preflight workflow is universal — every release type uses it. Downstream jobs branch based on what the repo produces.
 
@@ -339,11 +339,11 @@ The preflight workflow automatically discovers which CI checks must pass before 
 
 ### The Three-File Convention
 
-| File | Source | Check name construction |
-|------|--------|------------------------|
-| `ci_checks.yml` | Synced from org-infra | Known by convention: `CI / Standardized CI / Run linters` |
+| File              | Source                | Check name construction                                                   |
+|-------------------|-----------------------|---------------------------------------------------------------------------|
+| `ci_checks.yml`   | Synced from org-infra | Known by convention: `CI / Standardized CI / Run linters`                 |
 | `ci_security.yml` | Synced from org-infra | Pattern match: at least one `Security Checks / OSV-Scanner / *` must pass |
-| `ci_local.yml` | Repo-specific | Parsed with `yq`: `<workflow name> / <job name>` for each job |
+| `ci_local.yml`    | Repo-specific         | Parsed with `yq`: `<workflow name> / <job name>` for each job             |
 
 ### How Check Names Are Constructed
 
@@ -454,43 +454,43 @@ signs:
 
 **Inputs:**
 
-| Input | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `tag` | `string` | yes | — | Semver tag to release (e.g., `v1.2.3`) |
-| `allow_prerelease` | `boolean` | no | `false` | Accept pre-release suffixes (e.g., `v1.0.0-beta.0`) |
-| `ci_checks` | `string` | no | `''` (empty) | JSON array of CI check names to verify. Empty = auto-discover from workflow files |
+| Input              | Type      | Required | Default      | Description                                                                       |
+|--------------------|-----------|----------|--------------|-----------------------------------------------------------------------------------|
+| `tag`              | `string`  | yes      | —            | Semver tag to release (e.g., `v1.2.3`)                                            |
+| `allow_prerelease` | `boolean` | no       | `false`      | Accept pre-release suffixes (e.g., `v1.0.0-beta.0`)                               |
+| `ci_checks`        | `string`  | no       | `''` (empty) | JSON array of CI check names to verify. Empty = auto-discover from workflow files |
 
 **Secrets:**
 
-| Secret | Required | Description |
-|--------|----------|-------------|
-| `tag_push_token` | no | Optional elevated token for tag creation. When provided, the tag event can trigger downstream workflows. Falls back to `GITHUB_TOKEN` when not provided |
+| Secret           | Required | Description                                                                                                                                             |
+|------------------|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `tag_push_token` | no       | Optional elevated token for tag creation. When provided, the tag event can trigger downstream workflows. Falls back to `GITHUB_TOKEN` when not provided |
 
 > **Warning:** Do not use an elevated token in downstream workflows that re-invoke this preflight workflow, or you will create a recursive loop.
 
 **Outputs:**
 
-| Output | Description |
-|--------|-------------|
-| `tag` | The validated tag string (empty if validation failed) |
+| Output        | Description                                                                                               |
+|---------------|-----------------------------------------------------------------------------------------------------------|
+| `tag`         | The validated tag string (empty if validation failed)                                                     |
 | `tag_created` | Whether a new tag was created (`true` / `false`). `false` on re-runs where the tag already exists at HEAD |
 
 ### `reusable_release_goreleaser.yml`
 
 **Inputs:**
 
-| Input | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `tag` | `string` | yes | — | The release tag (e.g., `v1.2.3`). Must exist as a git tag |
-| `goreleaser_version` | `string` | no | `'~> v2'` | GoReleaser version constraint |
-| `goreleaser_args` | `string` | no | `'release --clean --verbose'` | GoReleaser command-line arguments |
+| Input                | Type     | Required | Default                       | Description                                               |
+|----------------------|----------|----------|-------------------------------|-----------------------------------------------------------|
+| `tag`                | `string` | yes      | —                             | The release tag (e.g., `v1.2.3`). Must exist as a git tag |
+| `goreleaser_version` | `string` | no       | `'~> v2'`                     | GoReleaser version constraint                             |
+| `goreleaser_args`    | `string` | no       | `'release --clean --verbose'` | GoReleaser command-line arguments                         |
 
 **Permissions required:**
 
-| Permission | Reason |
-|------------|--------|
+| Permission        | Reason                                     |
+|-------------------|--------------------------------------------|
 | `contents: write` | Create GitHub Release and upload artifacts |
-| `id-token: write` | Sigstore OIDC for cosign keyless signing |
+| `id-token: write` | Sigstore OIDC for cosign keyless signing   |
 
 ## Migration Checklist
 
@@ -602,15 +602,15 @@ v1.0.0-alpha < v1.0.0-alpha.1 < v1.0.0-alpha.beta < v1.0.0-beta
 
 ## Repo Adoption Status
 
-| Repository | Release Type | ci_local.yml | Supply Chain | Adoption Status |
-|---|---|---|---|---|
-| complyctl | Binary | No (custom) | Full | Override needed |
-| complytime-providers | Binary | Yes | Full | Ready |
-| complypack | Container | No | Via GHCR | Ready |
-| complybeacon | Container | No | Via GHCR | Needs ci_local |
-| gemara-content-service | Container | No | Via GHCR | Needs ci_local |
-| compliance-to-policy-go | Binary | No | Partial | Override needed |
-| oscal-sdk-go | Library | No | N/A | TBD |
+| Repository              | Release Type | ci_local.yml | Supply Chain | Adoption Status |
+|-------------------------|--------------|--------------|--------------|-----------------|
+| complyctl               | Binary       | No (custom)  | Full         | Override needed |
+| complytime-providers    | Binary       | Yes          | Full         | Ready           |
+| complypack              | Container    | No           | Via GHCR     | Ready           |
+| complybeacon            | Container    | No           | Via GHCR     | Needs ci_local  |
+| gemara-content-service  | Container    | No           | Via GHCR     | Needs ci_local  |
+| compliance-to-policy-go | Binary       | No           | Partial      | Override needed |
+| oscal-sdk-go            | Library      | No           | N/A          | TBD             |
 
 **Legend:**
 
@@ -625,10 +625,10 @@ This document covers **one-time setup** — how to adopt the reusable release wo
 
 For **ongoing release operations** (how to trigger a release, what to verify after it completes, failure recovery, pre-release workflows, and supply chain expectations), see [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md).
 
-| Document | Audience | When to read |
-|----------|----------|--------------|
+| Document                               | Audience             | When to read               |
+|----------------------------------------|----------------------|----------------------------|
 | `docs/RELEASE_WORKFLOWS.md` (this doc) | Workflow maintainers | Once, during initial setup |
-| `docs/RELEASE_PROCESS.md` | Release operators | Every release cycle |
+| `docs/RELEASE_PROCESS.md`              | Release operators    | Every release cycle        |
 
 ## Related
 

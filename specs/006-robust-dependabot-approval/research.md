@@ -28,7 +28,7 @@
 **Findings**:
 
 | Ecosystem | API | Field | Auth Required |
-|-----------|-----|-------|---------------|
+| ----------- | ----- | ------- | --------------- |
 | GitHub Actions | `gh api repos/{owner}/{repo}/releases/tags/v{version}` | `.published_at` | GH_TOKEN (available) |
 | GitHub Actions (tag only) | `gh api repos/{owner}/{repo}/git/ref/tags/v{version}` | tag object date | GH_TOKEN (available) |
 | Go modules | `curl https://proxy.golang.org/{module}/@v/v{version}.info` | `.Time` | None |
@@ -69,7 +69,7 @@
 **Findings**:
 
 | Component | Current Lines | Proposed Lines | Change |
-|-----------|--------------|----------------|--------|
+| ----------- | -------------- | ---------------- | -------- |
 | Dependency extraction (bash) | 112 | ~30 | -82 |
 | Risk classification | 30 | ~15 | -15 |
 | Ecosystem detection | 23 | ~23 | 0 |

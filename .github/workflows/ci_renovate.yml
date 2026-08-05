@@ -14,8 +14,9 @@ name: Renovate
 
 on:
   schedule:
-    - cron: '30 5 * * *'
+    - cron: "30 5 * * *"
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:dry_run is an intentional manual operational control for Renovate simulation modes; this workflow produces no build output.
     inputs:
       dry_run:
         description: >-

@@ -312,7 +312,7 @@ Follow these rules strictly:
 Only these 10 emojis may appear in the report. No others.
 
 | Emoji | Role | Usage |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | 🔍 | Report title marker | Prefixes the report title line |
 | 📊 | CRAP section marker | Prefixes CRAP Summary header |
 | 🧪 | Quality section marker | Prefixes Quality Summary header |
@@ -327,7 +327,7 @@ Only these 10 emojis may appear in the report. No others.
 ### Grade-to-Emoji Mapping
 
 | Grade | Emoji |
-|-------|-------|
+| ------- | ------- |
 | A, A-, B+ | 🟢 |
 | B, B-, C+, C | 🟡 |
 | C-, D, F | 🔴 |

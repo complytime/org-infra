@@ -85,7 +85,7 @@ Decrease the number of decisions a developer or user needs to make. Provide defa
 Every repository under the ComplyTime organization MUST contain the following standard files in the root directory to ensure a consistent developer experience:
 
 | File | Description | Standard |
-|:---|:----|:----|
+| :--- | :---- | :---- |
 | `README.md` | Project overview, installation, and usage. | Markdown |
 | `LICENSE` | Legal terms of use. | **Apache License 2.0** |
 | `CONTRIBUTING.md` | Guidelines for contributors. | Link to org-wide guide or repo-specific details. |

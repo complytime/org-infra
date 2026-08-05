@@ -169,7 +169,7 @@ gh pr checks <number> --watch
   > "CI checks failed on PR #<number>:
   >
   > - Build & Test: FAIL (45s)
-  >   https://github.com/.../runs/...
+  >   <https://github.com/.../runs/>...
   >
   > Options:
   > 1. Investigate the failure

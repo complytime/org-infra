@@ -5,16 +5,16 @@ name: Test Preflight Token
 on:
   pull_request:
     paths:
-      - '.github/workflows/ci_test_preflight.yml'
-      - '.github/workflows/reusable_release_preflight.yml'
-      - 'tests/test_preflight_token.sh'
+      - ".github/workflows/ci_test_preflight.yml"
+      - ".github/workflows/reusable_release_preflight.yml"
+      - "tests/test_preflight_token.sh"
   push:
     branches:
       - main
     paths:
-      - '.github/workflows/ci_test_preflight.yml'
-      - '.github/workflows/reusable_release_preflight.yml'
-      - 'tests/test_preflight_token.sh'
+      - ".github/workflows/ci_test_preflight.yml"
+      - ".github/workflows/reusable_release_preflight.yml"
+      - "tests/test_preflight_token.sh"
 
 permissions:
   contents: read

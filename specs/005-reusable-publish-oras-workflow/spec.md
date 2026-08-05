@@ -25,7 +25,7 @@ and confirmed by
 [`internal/policy/loader.go:LoadLayerByMediaType`](https://github.com/complytime/complyctl/blob/main/internal/policy/loader.go):
 
 | Layer content | Correct media type |
-|--------------|-------------------|
+| -------------- | ------------------- |
 | Gemara catalog YAML | `application/vnd.gemara.catalog.v1+yaml` |
 | Gemara policy YAML | `application/vnd.gemara.policy.v1+yaml` |
 | Gemara guidance YAML | `application/vnd.gemara.guidance.v1+yaml` |

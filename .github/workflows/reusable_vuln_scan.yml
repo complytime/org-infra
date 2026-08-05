@@ -13,21 +13,21 @@ on:
   workflow_call:
     inputs:
       enable_osv:
-        description: 'Enable OSV dependency scanning'
+        description: "Enable OSV dependency scanning"
         type: boolean
         default: true
       enable_trivy_source:
-        description: 'Enable Trivy source scan (secrets + misconfig)'
+        description: "Enable Trivy source scan (secrets + misconfig)"
         type: boolean
         default: false
       trivy_severity:
-        description: 'Severity levels to report'
+        description: "Severity levels to report"
         type: string
-        default: 'HIGH,CRITICAL'
+        default: "HIGH,CRITICAL"
       trivy_ignorefile:
-        description: 'Path to .trivyignore or .trivyignore.yaml for scoped exclusions'
+        description: "Path to .trivyignore or .trivyignore.yaml for scoped exclusions"
         type: string
-        default: ''
+        default: ""
 
 permissions:
   contents: none
@@ -69,26 +69,26 @@ jobs:
 
       - name: Run Trivy source scanner
         id: trivy
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: 'v0.70.0'
-          scan-type: 'fs'
-          scanners: 'secret,misconfig'
+          version: "v0.70.0"
+          scan-type: "fs"
+          scanners: "secret,misconfig"
           severity: ${{ inputs.trivy_severity }}
           trivyignores: ${{ inputs.trivy_ignorefile }}
           ignore-unfixed: true
-          format: 'sarif'
-          output: 'trivy-source-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
+          format: "sarif"
+          output: "trivy-source-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif"
           # NOTE: exit-code 0 because trivy-action's exit-code behavior is inconsistent
           # with SARIF format. We parse SARIF to check for actual findings instead.
-          exit-code: '0'
+          exit-code: "0"
 
       - name: Upload SARIF
         if: ${{ always() }}
         uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4.37.4
         with:
-          sarif_file: 'trivy-source-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
-          category: 'trivy-source'
+          sarif_file: "trivy-source-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif"
+          category: "trivy-source"
 
       - name: Publish findings to summary
         if: ${{ steps.trivy.outcome == 'success' }}

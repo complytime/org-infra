@@ -58,7 +58,7 @@ reusable_council_review.yml  [NOT synced — org-infra only]
 ### Required secrets
 
 | Secret | Scope | Purpose |
-|--------|-------|---------|
+| -------- | ------- | --------- |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | Org-level | WIF provider for Vertex AI auth |
 | `GCP_PROJECT_ID` | Org-level | GCP project containing Vertex AI |
 | `ORG_CHECK_TOKEN` | Optional | PAT with `org:read` for private membership checks (falls back to `GITHUB_TOKEN` for public-only) |
