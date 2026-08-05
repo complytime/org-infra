@@ -30,6 +30,8 @@ REPORT_JSON="${2:-/tmp/gaze-report.json}"
 COMMENT_FILE="${COMMENT_FILE:-/tmp/crapload-comment-body.md}"
 MAX_COMMENT_SIZE="${MAX_COMMENT_SIZE:-65536}"
 
+: "${BASELINE:?BASELINE must be set (path to baseline file)}"
+
 # Extract summary metrics from gaze crap JSON.
 TOTAL_FUNCS=$(jq -r '.summary.total_functions // 0' "$CRAP_JSON")
 AVG_COMPLEXITY=$(jq -r '(.summary.avg_complexity // 0) * 10 | round / 10' "$CRAP_JSON")
@@ -46,8 +48,7 @@ IMP_COUNT=$(jq -r '.comparison.improvements // 0' "$CRAP_JSON")
 NEW_COUNT=$(jq -r '(.comparison.new_functions // 0) + (.comparison.new_violations // 0)' "$CRAP_JSON")
 
 # No-baseline path: generate quickstart comment.
-# BASELINE is a required environment variable (see header); with `set -u` an
-# unset value aborts the script, so it is always assigned externally at runtime.
+# BASELINE is validated by the :? guard above; shellcheck cannot trace that.
 # shellcheck disable=SC2154
 if [[ ! -f "$BASELINE" ]] || [[ ! -s "$BASELINE" ]]; then
 	# Heredoc expands environment-provided variables: GAZE_VERSION (required),

@@ -288,14 +288,14 @@ def extract_repositories(peribolos_data: dict, org: str) -> list:
     return repos
 
 
-def compare_files(source_file: str, dest_file: str) -> bool:
+def compare_files(source_file: str | Path, dest_file: str | Path) -> bool:
     """Compare two files and return True if they are identical."""
     if not Path(dest_file).exists():
         return False
     return filecmp.cmp(source_file, dest_file, shallow=False)
 
 
-def sync_file(source_path: str, dest_path: str, relative_path: str) -> bool:
+def sync_file(source_path: str | Path, dest_path: str | Path, relative_path: str) -> bool:
     """Sync a file from source to destination.
 
     Returns True if file was copied/updated, False if identical.
@@ -623,7 +623,7 @@ def generate_dependabot_config(repo_name: str, config: dict) -> list[dict] | Non
 
 def merge_dependabot_entries(
     managed_entries: list[dict],
-    existing_path: str,
+    existing_path: str | Path,
 ) -> str:
     """Merge managed entries with unmanaged entries from the existing file.
 
@@ -874,7 +874,7 @@ def sync_repository(  # noqa: PLR0913, PLR0911, PLR0912, PLR0915 - end-to-end pe
                         )
                         files_changed.append(dest_rel_path)
                     elif not compare_files(
-                        str(source_path), dest_path,
+                        source_path, dest_path,
                     ):
                         print(
                             f"[DRY RUN] Would update: "
@@ -884,7 +884,7 @@ def sync_repository(  # noqa: PLR0913, PLR0911, PLR0912, PLR0915 - end-to-end pe
                     else:
                         print(f"{dest_rel_path} is up to date")
                 elif sync_file(
-                    str(source_path),
+                    source_path,
                     dest_path,
                     dest_rel_path,
                 ):
@@ -895,7 +895,7 @@ def sync_repository(  # noqa: PLR0913, PLR0911, PLR0912, PLR0915 - end-to-end pe
             if managed_entries is not None:
                 dependabot_dest = repo_path / ".github" / "dependabot.yml"
                 rendered = merge_dependabot_entries(
-                    managed_entries, str(dependabot_dest),
+                    managed_entries, dependabot_dest,
                 )
                 dependabot_rel = ".github/dependabot.yml"
 
