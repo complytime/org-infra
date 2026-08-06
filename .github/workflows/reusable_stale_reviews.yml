@@ -128,6 +128,8 @@ jobs:
                   pull_number: pr.number,
                   per_page: 100,
                 });
+                // Dismissed reviews have state === 'DISMISSED' (not 'APPROVED'),
+                // so this correctly skips only PRs with active approvals.
                 const hasApproval = reviews.some(r => r.state === 'APPROVED');
                 if (hasApproval) { stats.approved++; continue; }
 
@@ -184,6 +186,7 @@ jobs:
                 });
 
                 const recentReminder = comments.find(c =>
+                  c.user.login === 'github-actions[bot]' &&
                   c.body.includes(SIGNATURE) &&
                   (now - new Date(c.created_at)) < REMINDER_COOLDOWN_MS
                 );
@@ -215,7 +218,7 @@ jobs:
                   `**Reviewer:** Complete the review, or if unavailable, unassign yourself so another team member can pick it up.`,
                   `**Author (@${pr.user.login}):** If the reviewer is unavailable, re-request review from another team member or convert this PR to draft if it's not ready.`,
                   '',
-                  '_This reminder will not repeat for 3 days._',
+                  `_This reminder will not repeat for ${REMINDER_COOLDOWN_MS / (24*60*60*1000)} days._`,
                 ].join('\n');
 
                 await github.rest.issues.createComment({
