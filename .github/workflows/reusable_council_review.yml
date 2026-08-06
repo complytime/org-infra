@@ -174,7 +174,7 @@ jobs:
           steps.gate.outputs.should_review == 'true' &&
           steps.cooldown.outputs.cooled_down == 'true'
         id: review
-        uses: unbound-force/unbound-force/council-review-action@7836c070a63f3eeeab78ebd48c5dd5921ae486e2  # main (merged #336)
+        uses: unbound-force/unbound-force/council-review-action@327f45a9462ffd36c7bd732c1c16ee4dd9e4bbaa  # main (merged #336)
         with:
           model: ${{ inputs.model }}
           diff-path: pr-diff.patch
