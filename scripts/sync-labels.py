@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Synchronize GitHub labels across organization repositories.
 
 This tool intentionally supports three behaviors:
@@ -12,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -19,13 +21,19 @@ from typing import Dict, Iterable, List, Tuple
 
 
 API_ROOT = "https://api.github.com"
+REPO_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+HTTP_ERROR_DETAIL_LIMIT = 500
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Sync labels across GitHub repositories")
     parser.add_argument("--policy", default="labels-policy.json", help="Path to the label policy JSON file")
     parser.add_argument("--org", help="GitHub organization to manage; defaults to policy value")
-    parser.add_argument("--repos", nargs="*", help="Optional subset of repos to target")
+    parser.add_argument(
+        "--repos",
+        nargs="*",
+        help="Optional subset of repos to target (space- or comma-separated names)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Show intended changes without applying them")
     parser.add_argument(
         "--token-env",
@@ -33,6 +41,26 @@ def parse_args() -> argparse.Namespace:
         help="Environment variable that contains the GitHub token",
     )
     return parser.parse_args()
+
+
+def expand_repo_args(repos: Iterable[str] | None) -> List[str] | None:
+    """Expand space/comma-separated repo names and validate each token."""
+    if not repos:
+        return None
+
+    expanded: List[str] = []
+    for item in repos:
+        for part in item.split(","):
+            name = part.strip()
+            if not name:
+                continue
+            if not REPO_NAME_RE.fullmatch(name):
+                raise SystemExit(
+                    f"Invalid repo name {name!r}: only alphanumeric, dots, hyphens, "
+                    "and underscores are allowed"
+                )
+            expanded.append(name)
+    return expanded
 
 
 def load_policy(path: str) -> dict:
@@ -77,6 +105,8 @@ def gh_request(
             return json.loads(payload.decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
+        if len(detail) > HTTP_ERROR_DETAIL_LIMIT:
+            detail = detail[:HTTP_ERROR_DETAIL_LIMIT] + "...(truncated)"
         raise RuntimeError(f"{method} {path} failed: HTTP {exc.code}: {detail}") from exc
 
 
@@ -85,7 +115,8 @@ def gh_paginate(token: str, path: str) -> List[dict]:
     page = 1
     while True:
         batch = gh_request(token, "GET", path, query={"per_page": 100, "page": page})
-        assert isinstance(batch, list)
+        if not isinstance(batch, list):
+            raise TypeError(f"Expected list from {path}, got {type(batch).__name__}")
         if not batch:
             break
         items.extend(batch)
@@ -245,7 +276,8 @@ def main() -> int:
     policy = load_policy(args.policy)
     token = get_token(args.token_env)
     org = args.org or policy["org"]
-    repos = list_repos(token, org, args.repos, policy["exclude_repos"])
+    selected_repos = expand_repo_args(args.repos)
+    repos = list_repos(token, org, selected_repos, policy["exclude_repos"])
 
     if not repos:
         print("No repositories selected.")

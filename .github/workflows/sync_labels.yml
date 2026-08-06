@@ -61,22 +61,21 @@ jobs:
           INPUT_REPOS: ${{ inputs.repos }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          set -eu
+          set -euo pipefail
 
-          REPO_ARGS=""
-          if [ -n "$INPUT_REPOS" ]; then
-            CLEANED=$(printf '%s' "$INPUT_REPOS" | tr ',' ' ')
-            REPO_ARGS="--repos $CLEANED"
-          fi
+          ARGS=(--policy labels-policy.json)
 
           if [ "$DRY_RUN" = "true" ]; then
-            DRY_ARG="--dry-run"
-          else
-            DRY_ARG=""
+            ARGS+=(--dry-run)
           fi
 
-          # shellcheck disable=SC2086
-          python3 scripts/sync-labels.py \
-            --policy labels-policy.json \
-            $DRY_ARG \
-            $REPO_ARGS
+          if [ -n "$INPUT_REPOS" ]; then
+            # Keep the value as a single argv entry; Python splits/validates repo names.
+            if ! printf '%s' "$INPUT_REPOS" | grep -qE '^[A-Za-z0-9._-]+(,[A-Za-z0-9._-]+)*$'; then
+              echo "::error::Invalid repos input: only alphanumeric, dots, hyphens, underscores, and commas allowed"
+              exit 1
+            fi
+            ARGS+=(--repos "$INPUT_REPOS")
+          fi
+
+          python3 scripts/sync-labels.py "${ARGS[@]}"
