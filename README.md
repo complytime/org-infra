@@ -56,7 +56,8 @@ org-infra/
 │  │  ├── reusable_sign_and_verify.yml      # Sigstore keyless signing and attestation verification for container images.
 │  │  ├── reusable_sonarqube.yml            # SonarCloud static analysis for code quality and security.
 │  │  ├── reusable_vuln_scan.yml            # Vulnerability scanning via OSV-Scanner and Trivy.
-│  │  └── sync_org_repositories.yml         # Manual, scheduled, and event-based workflow to synchronize files.
+│  │  ├── sync_org_repositories.yml         # Manual, scheduled, and event-based workflow to synchronize files.
+│  │  └── sync_project_board.yml            # Sync open issues/PRs into Compliance Automation planning board.
 │  ├── dependabot.yml                       # Dependabot settings for GitHub Actions and Go modules.
 │  ├── dependabot_python.yml                # Dependabot settings for GitHub Actions (Python repos) and pip.
 │  └── pull_request_template.md             # PR template applicable to all repositories.
@@ -64,12 +65,15 @@ org-infra/
 │  └── ampel/                               # Policy definitions for branch protection rule compliance checks.
 ├── docs/                                   # More detailed and specific documentation.
 │  ├── LOCAL_TESTING.md                     # Documentation on how to test synchronization locally.
+│  ├── PROJECT_BOARD_SYNC.md                # Compliance Automation project board sync setup.
 │  └── SYNC_REPOSITORIES_SETUP.md          # Documentation on how to setup the repository synchronization infrastructure.
 ├── scripts/
 │  ├── sync-org-repositories.py             # Python script to check and ensure consistence among repositories.
+│  ├── sync-project-board.py                # Sync open issues/PRs into the Compliance Automation project board.
 │  └── resolve-go-packages.sh              # Bash: multi-module Go package auto-discovery
 ├── ...                                     # Multiple technology specific configuration files
 ├── sync-config.yml                         # Configuration file consumed by `sync-org-repositories.py`
+├── project-sync-config.yml                 # Orgs/repos synced into Compliance Automation planning board
 └── README.md                               # This file.
 ```
 

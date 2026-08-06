@@ -1,0 +1,33 @@
+# Configuration for syncing repositories and open work items into the
+# Compliance Automation planning GitHub Project board.
+#
+# Consumed by scripts/sync-project-board.py and
+# .github/workflows/sync_project_board.yml
+
+project:
+  owner: complytime
+  number: 14
+  # Status option applied to newly added items (must match a Status field option)
+  default_status: "Backlog"
+
+# What to sync onto the board
+sync:
+  issues: true
+  pull_requests: true
+  # Skip archived repositories unless explicitly listed under include_archived
+  skip_archived: true
+  # Also link each discovered repository to the project (enables native Project automations)
+  link_repositories: true
+
+# Organizations and repository selection rules
+organizations:
+  - name: Agentic-SSDLC
+    # All repositories
+
+  - name: complytime
+    exclude_repos:
+      - roadmap
+      - complytime
+
+  - name: unbound-force
+    # All repositories
