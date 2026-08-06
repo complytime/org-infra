@@ -169,3 +169,9 @@ class TestReminderCooldown:
         created = datetime(2026, 8, 7, 9, 0, 0)  # Friday
         now = datetime(2026, 8, 10, 8, 59, 59)  # Monday
         assert self.within_cooldown(created, now) is True
+
+    def test_future_created_at_within_cooldown(self):
+        """created_at in the future produces negative diff = within cooldown."""
+        created = datetime(2026, 8, 10, 9, 0, 0)
+        now = datetime(2026, 8, 4, 9, 0, 0)  # 6 days before created
+        assert self.within_cooldown(created, now) is True
