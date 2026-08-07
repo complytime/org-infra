@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Stale review alerts**: Added `reusable_stale_reviews.yml` and
+  `ci_stale_reviews.yml` to detect and flag PRs with review requests
+  pending beyond a configurable business-day threshold. Applies a
+  `stale-review` label and posts a reminder comment @-mentioning
+  assigned reviewers. Synced to org repos via `sync-config.yml` with
+  staged rollout (org-infra first). (#478)
+
 - **SECURITY.md sync**: Added `SECURITY.md` to `sync-config.yml` for
   org-wide security policy distribution. Each synced repository receives a
   stub with the security contact email (`complytime-security@redhat.com`),

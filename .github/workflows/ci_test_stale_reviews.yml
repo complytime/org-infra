@@ -1,0 +1,35 @@
+# Test Stale Review Alerts
+# --------------------------------------------------------------------------
+# Manual test workflow for reusable_stale_reviews.yml. Allows overriding
+# the stale-days threshold (default 0) for immediate validation.
+# WARNING: Running with stale-days=0 will flag ALL open PRs with pending
+# reviewers. Use with caution.
+# --------------------------------------------------------------------------
+name: Test Stale Review Alerts
+
+on:
+  workflow_dispatch:
+    inputs:
+      stale-days:
+        description: "Business days threshold (use 0 for immediate testing)"
+        required: false
+        default: "0"
+        type: string
+
+permissions:
+  contents: read
+  actions: none
+  id-token: none
+  security-events: none
+  pull-requests: none
+
+jobs:
+  call_reusable_stale_reviews:
+    name: Test Stale Review Check
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    uses: ./.github/workflows/reusable_stale_reviews.yml
+    with:
+      stale-days: ${{ fromJSON(inputs.stale-days) }}
