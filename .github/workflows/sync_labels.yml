@@ -1,0 +1,81 @@
+name: Sync Repository Labels
+
+# Manual workflow to reconcile labels across organization repositories
+# using labels-policy.json and scripts/sync-labels.py.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview label changes without applying them"
+        required: false
+        type: boolean
+        default: true
+      repos:
+        description: >-
+          Optional comma-separated list of repos to target.
+          Leave empty to target all repos except those excluded in labels-policy.json.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: label-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-labels:
+    if: github.repository_owner == 'complytime'
+    name: Sync Labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout org-infra Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SYNC_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }} # zizmor: ignore[github-app]
+          permission-issues: write
+
+      - name: Sync labels
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          INPUT_REPOS: ${{ inputs.repos }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          ARGS=(--policy labels-policy.json)
+
+          if [ "$DRY_RUN" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+
+          if [ -n "$INPUT_REPOS" ]; then
+            # Keep the value as a single argv entry; Python splits/validates repo names.
+            if ! printf '%s' "$INPUT_REPOS" | grep -qE '^[A-Za-z0-9._-]+(,[A-Za-z0-9._-]+)*$'; then
+              echo "::error::Invalid repos input: only alphanumeric, dots, hyphens, underscores, and commas allowed"
+              exit 1
+            fi
+            ARGS+=(--repos "$INPUT_REPOS")
+          fi
+
+          python3 scripts/sync-labels.py "${ARGS[@]}"
