@@ -59,7 +59,8 @@ jobs:
             const SIGNATURE = '<!-- stale-review-alert -->';
             // Cooldown: 3 calendar days (not business days). Since the workflow
             // runs weekdays only, this effectively skips ~2-3 runs between reminders.
-            const REMINDER_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
+            const REMINDER_COOLDOWN_DAYS = 3;
+            const REMINDER_COOLDOWN_MS = REMINDER_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
 
             function countBusinessDays(from, to) {
               let count = 0;
@@ -218,7 +219,7 @@ jobs:
                   `**Reviewer:** Complete the review, or if unavailable, unassign yourself so another team member can pick it up.`,
                   `**Author (@${pr.user.login}):** If the reviewer is unavailable, re-request review from another team member or convert this PR to draft if it's not ready.`,
                   '',
-                  `_This reminder will not repeat for ${REMINDER_COOLDOWN_MS / (24*60*60*1000)} days._`,
+                  `_This reminder will not repeat for ${REMINDER_COOLDOWN_DAYS} days._`,
                 ].join('\n');
 
                 await github.rest.issues.createComment({

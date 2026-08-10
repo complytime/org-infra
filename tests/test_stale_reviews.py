@@ -175,3 +175,67 @@ class TestReminderCooldown:
         created = datetime(2026, 8, 10, 9, 0, 0)
         now = datetime(2026, 8, 4, 9, 0, 0)  # 6 days before created
         assert self.within_cooldown(created, now) is True
+
+
+class TestLabelRemovalDecision:
+    """Validates the label-removal decision logic.
+
+    When a PR has no pending reviewers (users=[], teams=[]), the
+    workflow removes the ``stale-review`` label if it is present
+    and skips the PR. This mirrors lines L105-L121 of
+    ``reusable_stale_reviews.yml``.
+
+    The actual GitHub API call (``issues.removeLabel``) cannot be
+    unit-tested here, but we validate the decision predicates:
+    - no pending reviewers triggers the removal path
+    - label presence determines whether removeLabel is called
+    - a 404 from removeLabel is swallowed (documented, not tested)
+    """
+
+    @staticmethod
+    def should_remove_label(
+        pending_users: list,
+        pending_teams: list,
+        current_labels: list[str],
+        stale_label: str = "stale-review",
+    ) -> bool:
+        """Mirror the label-removal decision from the workflow."""
+        if pending_users or pending_teams:
+            return False
+        return stale_label in current_labels
+
+    def test_no_reviewers_with_stale_label(self):
+        """Label present + no pending reviewers = remove label."""
+        assert self.should_remove_label([], [], ["stale-review"]) is True
+
+    def test_no_reviewers_without_stale_label(self):
+        """No label + no pending reviewers = no removal needed."""
+        assert self.should_remove_label([], [], ["bug", "enhancement"]) is False
+
+    def test_no_reviewers_empty_labels(self):
+        """No labels at all = no removal needed."""
+        assert self.should_remove_label([], [], []) is False
+
+    def test_pending_users_with_stale_label(self):
+        """Pending reviewers exist = do NOT remove (continue to staleness check)."""
+        assert self.should_remove_label(
+            [{"login": "alice"}], [], ["stale-review"],
+        ) is False
+
+    def test_pending_teams_with_stale_label(self):
+        """Pending team reviewers exist = do NOT remove."""
+        assert self.should_remove_label(
+            [], [{"slug": "core"}], ["stale-review"],
+        ) is False
+
+    def test_stale_label_among_multiple_labels(self):
+        """Label present among other labels = remove."""
+        assert self.should_remove_label(
+            [], [], ["bug", "stale-review", "needs-triage"],
+        ) is True
+
+    def test_custom_label_name(self):
+        """Custom stale label name is respected."""
+        assert self.should_remove_label(
+            [], [], ["review-overdue"], stale_label="review-overdue",
+        ) is True
