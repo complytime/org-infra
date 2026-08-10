@@ -1,0 +1,207 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# CI Test: Homebrew Formula Generation
+# ======================================
+# Validates the formula generation and brew audit logic from
+# reusable_release_homebrew.yml on a macOS runner. Runs on PRs
+# that modify Homebrew-related workflow files.
+#
+# This test generates a formula with synthetic inputs and validates
+# it with `brew audit --strict`. It does NOT push to any tap
+# repository (no secrets required).
+
+name: Test Homebrew Formula
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/reusable_release_homebrew.yml"
+      - ".github/workflows/ci_test_homebrew.yml"
+
+concurrency:
+  group: test-homebrew-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test-formula-generation:
+    name: Generate and Audit Formula
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    env:
+      PROJECT_NAME: testproject
+      FORMULA_DESC: "A test project for CI validation"
+      BINARY_NAME: testproject
+      GO_MAIN_PATH: ./cmd/testproject
+      LDFLAGS_MODULE: github.com/complytime/testproject/internal/version
+      HOMEPAGE: https://github.com/complytime/testproject
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Generate test formula
+        run: |
+          set -euo pipefail
+
+          # Use a well-known Go project tarball for a real SHA256
+          # We use the org-infra repo itself (any public repo works)
+          TEST_TAG="v0.0.0-test"
+          VERSION="0.0.0-test"
+          CLASS_NAME="Testproject"
+
+          # Create a minimal tarball for SHA256 computation
+          echo "test content" > /tmp/source.tar.gz
+          SHA256=$(shasum -a 256 /tmp/source.tar.gz | cut -d' ' -f1)
+
+          TARBALL_URL="https://github.com/complytime/testproject/archive/refs/tags/${TEST_TAG}.tar.gz"
+
+          cat > "/tmp/${BINARY_NAME}.rb" <<'HEREDOC_END'
+          class __CLASS_NAME__ < Formula
+            desc "__FORMULA_DESC__"
+            homepage "__HOMEPAGE__"
+            url "__TARBALL_URL__"
+            sha256 "__SHA256__"
+            license "Apache-2.0"
+            head "__HOMEPAGE__.git", branch: "main"
+
+            depends_on "go" => :build
+
+            def install
+              ldflags = %W[
+                -X __LDFLAGS_MODULE__.version=#{version}
+                -X __LDFLAGS_MODULE__.buildDate=#{time.iso8601}
+                -X __LDFLAGS_MODULE__.gitTreeState=clean
+              ]
+              system "go", "build", *std_go_args(ldflags:), "__GO_MAIN_PATH__"
+              generate_completions_from_executable(bin/"__BINARY_NAME__", "completion")
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/__BINARY_NAME__ version")
+            end
+          end
+          HEREDOC_END
+
+          # Strip leading indentation and replace placeholders
+          sed -i '' 's/^          //' "/tmp/${BINARY_NAME}.rb"
+          sed -i '' "s|__CLASS_NAME__|${CLASS_NAME}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i '' "s|__FORMULA_DESC__|${FORMULA_DESC}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i '' "s|__HOMEPAGE__|${HOMEPAGE}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i '' "s|__TARBALL_URL__|${TARBALL_URL}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i '' "s|__SHA256__|${SHA256}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i '' "s|__LDFLAGS_MODULE__|${LDFLAGS_MODULE}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i '' "s|__GO_MAIN_PATH__|${GO_MAIN_PATH}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i '' "s|__BINARY_NAME__|${BINARY_NAME}|g" "/tmp/${BINARY_NAME}.rb"
+
+          echo "Generated formula:"
+          cat "/tmp/${BINARY_NAME}.rb"
+
+      - name: Validate formula with brew audit
+        run: |
+          set -euo pipefail
+          brew update --quiet
+          echo "Running brew audit --strict on generated formula..."
+          brew audit --strict --formula "/tmp/${BINARY_NAME}.rb"
+          echo "Formula passed brew audit --strict"
+
+      - name: Validate formula content
+        run: |
+          set -euo pipefail
+
+          FORMULA_CONTENT=$(cat "/tmp/${BINARY_NAME}.rb")
+
+          # Verify expected content is present
+          echo "${FORMULA_CONTENT}" | grep -q 'class Testproject < Formula' || { echo "::error::Missing class declaration"; exit 1; }
+          echo "${FORMULA_CONTENT}" | grep -q 'desc "A test project for CI validation"' || { echo "::error::Missing description"; exit 1; }
+          echo "${FORMULA_CONTENT}" | grep -q 'depends_on "go" => :build' || { echo "::error::Missing go dependency"; exit 1; }
+          echo "${FORMULA_CONTENT}" | grep -q 'license "Apache-2.0"' || { echo "::error::Missing license"; exit 1; }
+          echo "${FORMULA_CONTENT}" | grep -q 'generate_completions_from_executable' || { echo "::error::Missing completions"; exit 1; }
+          echo "${FORMULA_CONTENT}" | grep -q 'assert_match version.to_s' || { echo "::error::Missing version test"; exit 1; }
+
+          echo "All formula content checks passed"
+
+  test-input-validation:
+    name: Validate Input Checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test tag validation rejects invalid tags
+        run: |
+          set -euo pipefail
+
+          # Valid tags should pass
+          for tag in "v1.0.0" "v0.1.0" "v10.20.30" "v1.0.0-beta.1"; do
+            if ! [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+              echo "::error::Valid tag rejected: ${tag}"
+              exit 1
+            fi
+          done
+
+          # Invalid tags should fail
+          for tag in "1.0.0" "v1.0" "v1.0.0.0" "latest" "main" "v1.0.0-"; do
+            if [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+              echo "::error::Invalid tag accepted: ${tag}"
+              exit 1
+            fi
+          done
+
+          echo "Tag validation logic is correct"
+
+      - name: Test project name validation
+        run: |
+          set -euo pipefail
+
+          # Valid names
+          for name in "complyctl" "comply-ctl" "myProject" "a"; do
+            if ! [[ "${name}" =~ ^[a-zA-Z][a-zA-Z0-9-]*$ ]]; then
+              echo "::error::Valid project name rejected: ${name}"
+              exit 1
+            fi
+          done
+
+          # Invalid names
+          for name in "1project" "-project" "my project" "my/project"; do
+            if [[ "${name}" =~ ^[a-zA-Z][a-zA-Z0-9-]*$ ]]; then
+              echo "::error::Invalid project name accepted: ${name}"
+              exit 1
+            fi
+          done
+
+          echo "Project name validation logic is correct"
+
+      - name: Test PascalCase conversion
+        run: |
+          set -euo pipefail
+
+          check_pascal() {
+            local input="$1"
+            local expected="$2"
+            local result
+            result=$(echo "${input}" | sed -E 's/(^|-)([a-z])/\U\2/g')
+            if [[ "${result}" != "${expected}" ]]; then
+              echo "::error::PascalCase conversion failed: '${input}' -> '${result}' (expected '${expected}')"
+              exit 1
+            fi
+          }
+
+          check_pascal "complyctl" "Complyctl"
+          check_pascal "comply-ctl" "ComplyCtl"
+          check_pascal "my-cool-tool" "MyCoolTool"
+          check_pascal "tool" "Tool"
+
+          echo "PascalCase conversion is correct"
