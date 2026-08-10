@@ -90,6 +90,9 @@ jobs:
   homebrew:
     name: Publish Homebrew Formula
     runs-on: ubuntu-latest
+    concurrency:
+      group: homebrew-publish-${{ inputs.tap_repo }}-${{ inputs.project_name }}
+      cancel-in-progress: false
     permissions:
       contents: read
     timeout-minutes: 15
@@ -103,6 +106,7 @@ jobs:
       LDFLAGS_MODULE: ${{ inputs.ldflags_module }}
       HOMEPAGE: ${{ inputs.homepage }}
       TAP_BRANCH: ${{ inputs.tap_branch }}
+    # No checkout needed — formula is generated from inputs and the source tarball URL.
     steps:
       - name: Validate tag format
         run: |
@@ -147,6 +151,24 @@ jobs:
             exit 1
           fi
 
+          # Validate description (printable ASCII, no shell/sed metacharacters)
+          if ! [[ "${FORMULA_DESC}" =~ ^[a-zA-Z0-9\ ,.\-\(\)/:]+$ ]]; then
+            echo "::error::description contains invalid characters: ${FORMULA_DESC}"
+            exit 1
+          fi
+
+          # Validate ldflags_module (Go module path characters only)
+          if ! [[ "${LDFLAGS_MODULE}" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+            echo "::error::ldflags_module contains invalid characters: ${LDFLAGS_MODULE}"
+            exit 1
+          fi
+
+          # Validate tap_branch (git branch name characters only)
+          if ! [[ "${TAP_BRANCH}" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+            echo "::error::tap_branch contains invalid characters: ${TAP_BRANCH}"
+            exit 1
+          fi
+
           echo "All inputs pass validation"
 
       - name: Download source tarball and compute SHA256
@@ -158,10 +180,11 @@ jobs:
           TARBALL_URL="${HOMEPAGE}/archive/refs/tags/${TAG}.tar.gz"
           echo "Downloading source tarball: ${TARBALL_URL}"
 
-          HTTP_CODE=$(curl -sL -o /tmp/source.tar.gz -w "%{http_code}" --fail --retry 3 --retry-delay 5 "${TARBALL_URL}")
+          HTTP_CODE=$(curl -sL -o /tmp/source.tar.gz -w "%{http_code}" --retry 3 --retry-delay 5 "${TARBALL_URL}")
 
           if [[ "${HTTP_CODE}" -ne 200 ]]; then
-            echo "::error::Failed to download source tarball. URL: ${TARBALL_URL}, HTTP status: ${HTTP_CODE}"
+            echo "::error::Failed to download source tarball (HTTP ${HTTP_CODE}). URL: ${TARBALL_URL}"
+            echo "::notice::Verify that tag ${TAG} exists and the repository is public."
             exit 1
           fi
 
@@ -191,6 +214,8 @@ jobs:
 
           # Generate formula file with heredoc. Content is indented by 10 spaces
           # (matching YAML nesting) and stripped after generation.
+          # NOTE: This template is duplicated in ci_test_homebrew.yml.
+          # Changes here must be mirrored there.
           cat > "/tmp/${BINARY_NAME}.rb" <<'HEREDOC_END'
           class __CLASS_NAME__ < Formula
             desc "__FORMULA_DESC__"
@@ -234,19 +259,20 @@ jobs:
           echo "Generated formula:"
           cat "/tmp/${BINARY_NAME}.rb"
 
-      - name: Install Homebrew and audit formula
+      - name: Audit formula with brew audit --strict
+        timeout-minutes: 5
         run: |
           set -euo pipefail
 
-          # Homebrew is pre-installed on GitHub runners (including ubuntu)
-          # Update to get latest audit rules
-          brew update --quiet
+          # Homebrew is pre-installed on GitHub runners (including ubuntu).
+          # Update to get latest audit rules, with retry for transient failures.
+          brew update --quiet || brew update --quiet
 
           echo "Running brew audit --strict on generated formula..."
           brew audit --strict --formula "/tmp/${BINARY_NAME}.rb"
           echo "Formula passed brew audit --strict"
 
-      - name: Extract tap repository name
+      - name: Prepare tap repository credentials
         id: tap-info
         run: |
           set -euo pipefail
@@ -290,10 +316,18 @@ jobs:
             exit 0
           fi
 
-          git commit -m "${PROJECT_NAME} ${VERSION}"
+          git commit -m "chore(formula): update ${PROJECT_NAME} to ${VERSION}"
 
           # Use gh CLI credential helper (token via env var, never persisted)
           gh auth setup-git
           git push origin "${TAP_BRANCH}"
 
           echo "Successfully published ${BINARY_NAME} ${VERSION} to ${TAP_REPO}"
+
+          {
+            echo "### Homebrew Formula Published"
+            echo "- **Project**: ${PROJECT_NAME}"
+            echo "- **Version**: ${TAG}"
+            echo "- **Tap**: ${TAP_REPO}"
+            echo "- **Formula**: Formula/${BINARY_NAME}.rb"
+          } >> "${GITHUB_STEP_SUMMARY}"

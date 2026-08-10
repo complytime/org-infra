@@ -34,16 +34,19 @@ org-infra already centralises release workflows with `reusable_release_preflight
 
 ## Decisions
 
-### D1: Formula generation via shell heredoc with variable interpolation
+### D1: Formula generation via quoted heredoc with placeholder substitution
 
-**Decision:** Generate the formula using a bash heredoc with direct shell variable
-interpolation (`${VERSION}`, `${SHA256}`, etc.) rather than sed placeholder
-replacement.
+**Decision:** Generate the formula using a single-quoted bash heredoc (`<<'HEREDOC_END'`)
+with `__PLACEHOLDER__` tokens, followed by `sed` substitution to replace tokens with
+validated input values. The single-quoted heredoc prevents shell expansion within the
+template, avoiding conflicts with Ruby's `#{variable}` interpolation syntax. All inputs
+are validated via regex before `sed` substitution, mitigating delimiter collision risks.
 
-**Alternative considered:** Heredoc + `sed` placeholder replacement (as in complyctl
-PR #742). Rejected because sed introduces fragility (delimiter collisions, ordering
-sensitivity) and is harder to read. Direct variable interpolation in a heredoc is
-simpler and achieves the same result safely when inputs are validated.
+**Alternative considered:** Unquoted heredoc with direct shell variable interpolation.
+Rejected because Ruby formula syntax uses `#{version}` and `#{time.iso8601}` which
+would require escaping in an unquoted heredoc, and the YAML block scalar parser
+conflicts with heredoc content at column 0. The placeholder approach cleanly separates
+the template from value injection.
 
 **Alternative considered:** Template file checked into the repository. Rejected because
 it would need to be synced, adding a non-workflow file to the sync config. The formula

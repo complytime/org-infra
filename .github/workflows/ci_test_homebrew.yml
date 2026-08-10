@@ -19,6 +19,12 @@ on:
     paths:
       - ".github/workflows/reusable_release_homebrew.yml"
       - ".github/workflows/ci_test_homebrew.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/reusable_release_homebrew.yml"
+      - ".github/workflows/ci_test_homebrew.yml"
 
 concurrency:
   group: test-homebrew-${{ github.workflow }}-${{ github.ref }}
@@ -63,6 +69,10 @@ jobs:
 
           TARBALL_URL="https://github.com/complytime/testproject/archive/refs/tags/${TEST_TAG}.tar.gz"
 
+          # NOTE: This template is duplicated from reusable_release_homebrew.yml.
+          # Changes there must be mirrored here.
+          # BSD sed requires '' after -i (macOS). The reusable workflow uses GNU sed -i (Linux).
+          echo "Using synthetic tarball for formula generation test (not a real release)"
           cat > "/tmp/${BINARY_NAME}.rb" <<'HEREDOC_END'
           class __CLASS_NAME__ < Formula
             desc "__FORMULA_DESC__"

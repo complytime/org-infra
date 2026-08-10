@@ -9,7 +9,7 @@
 - [x] 2.1 Add tag format validation step in `.github/workflows/reusable_release_homebrew.yml` with defense-in-depth regex check (`^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$`)
 - [x] 2.2 Add source tarball download step with curl retry logic and HTTP status validation in `.github/workflows/reusable_release_homebrew.yml`
 - [x] 2.3 Add SHA256 computation step with 64-char hex validation in `.github/workflows/reusable_release_homebrew.yml`
-- [x] 2.4 Add formula generation step via bash heredoc with direct variable interpolation (no sed) in `.github/workflows/reusable_release_homebrew.yml`
+- [x] 2.4 Add formula generation step via quoted heredoc with placeholder tokens and sed-based substitution in `.github/workflows/reusable_release_homebrew.yml`
 - [x] 2.5 Add GitHub App token generation step using `actions/create-github-app-token` (SHA-pinned) with scoped `repositories:` and `permission-contents: write` in `.github/workflows/reusable_release_homebrew.yml`
 
 ## 3. Quality Gate and Push

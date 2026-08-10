@@ -9,8 +9,8 @@ caller-provided inputs without requiring template files or sed substitution.
 - **THEN** the workflow generates a Ruby formula file containing the correct class name, tarball URL, SHA256 checksum, license, Go build instructions, and version assertion test
 
 #### Scenario: Formula class name derived from project name
-- **WHEN** the project name contains hyphens (e.g., `complyctl`)
-- **THEN** the formula class name is the PascalCase equivalent (e.g., `Complyctl`)
+- **WHEN** the project name contains hyphens (e.g., `comply-ctl`)
+- **THEN** the formula class name is the PascalCase equivalent (e.g., `ComplyCtl`)
 
 ### Requirement: Source tarball SHA256 verification
 The workflow SHALL download the source tarball for the given tag and compute
