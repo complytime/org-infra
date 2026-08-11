@@ -34,25 +34,29 @@ The workflow lives only in `org-infra` (it is **not** synced out to consumer rep
 GitHub App installation tokens are scoped to a **single** organization.
 Adding an issue from `Agentic-SSDLC` or `unbound-force` onto a project owned
 by `complytime` requires a credential that can see all three orgs and write
-to the project. Use a classic or fine-grained personal access token (or a
+to the project. Use a fine-grained or classic personal access token (or a
 machine-user token) stored as `PROJECT_SYNC_TOKEN`.
 
 ## One-time setup
 
 ### 1. Create the token
 
-**Classic PAT** (simplest for multi-org):
-
-- Scopes: `repo`, `read:org`, `project`
-- The token owner must be able to access private repos in all three orgs and
-  edit project `#14`
-
-**Fine-grained PAT** alternative:
+**Fine-grained PAT** (preferred — least privilege):
 
 - Resource owner / repository access covering the three orgs (or all repos the
   bot can see)
-- Permissions: Issues (read), Pull requests (read), Metadata (read)
+- Repository permissions: **Issues** (read), **Pull requests** (read),
+  **Metadata** (read)
 - Organization permission for `complytime`: **Projects = Read and write**
+- The token owner must be able to access private repos in all three orgs and
+  edit project `#14`
+
+**Classic PAT** (fallback when fine-grained multi-org access is impractical):
+
+- Prefer `public_repo` instead of `repo` if every target repository is public
+- Otherwise scopes: `repo`, `read:org`, `project`
+- Note: classic `repo` grants full read/write to all private repos the token
+  owner can access — broader than this sync needs
 
 ### 2. Add the repository secret
 

@@ -26,6 +26,10 @@ GITHUB_API = "https://api.github.com"
 GITHUB_GRAPHQL = f"{GITHUB_API}/graphql"
 DEFAULT_CONFIG = "project-sync-config.yml"
 
+# Expected failure modes while iterating orgs/repos (HTTP + explicit RuntimeError).
+# Keeps programming bugs (TypeError, KeyError, …) from being swallowed per item.
+SYNC_EXCEPTIONS = (requests.RequestException, RuntimeError)
+
 
 @dataclass
 class SyncStats:
@@ -138,6 +142,26 @@ def parse_args() -> argparse.Namespace:
 def load_config(path: Path) -> Dict[str, Any]:
     with path.open(encoding="utf-8") as handle:
         return yaml.safe_load(handle)
+
+
+def validate_config(config: Any) -> Dict[str, Any]:
+    """Validate required sync config shape; return the config on success."""
+    if not isinstance(config, dict):
+        raise ValueError("Config must be a mapping")
+    project = config.get("project")
+    if not isinstance(project, dict):
+        raise ValueError("Config missing 'project' mapping")
+    if not project.get("owner"):
+        raise ValueError("Config project requires 'owner'")
+    if "number" not in project:
+        raise ValueError("Config project requires 'number'")
+    organizations = config.get("organizations")
+    if not isinstance(organizations, list) or not organizations:
+        raise ValueError("Config requires a non-empty 'organizations' list")
+    for org in organizations:
+        if not isinstance(org, dict) or not org.get("name"):
+            raise ValueError("Each organization requires a 'name'")
+    return config
 
 
 def list_org_repos(
@@ -333,7 +357,8 @@ def add_item(
         )
 
 
-def write_summary(stats: SyncStats, dry_run: bool) -> None:
+def format_summary(stats: SyncStats, dry_run: bool) -> str:
+    """Format the job summary markdown (pure; no I/O)."""
     lines = [
         "## Compliance Automation project sync",
         "",
@@ -349,8 +374,12 @@ def write_summary(stats: SyncStats, dry_run: bool) -> None:
     if stats.errors:
         lines.extend(["", "### Errors", ""])
         lines.extend(f"- `{err}`" for err in stats.errors[:50])
+    return "\n".join(lines) + "\n"
 
-    summary = "\n".join(lines) + "\n"
+
+def write_summary(stats: SyncStats, dry_run: bool) -> None:
+    """Print the job summary and append it to GITHUB_STEP_SUMMARY when set."""
+    summary = format_summary(stats, dry_run)
     print(summary)
     step_summary = os.getenv("GITHUB_STEP_SUMMARY")
     if step_summary:
@@ -392,7 +421,7 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
             repos = list_org_repos(
                 client, org, exclude=exclude, skip_archived=skip_archived
             )
-        except Exception as exc:  # noqa: BLE001 - surface per-org failures
+        except SYNC_EXCEPTIONS as exc:
             msg = f"Failed listing repos for {org}: {exc}"
             print(msg)
             stats.errors.append(msg)
@@ -412,7 +441,7 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
                     else:
                         stats.repos_link_skipped += 1
                         print("  already linked (or skipped)")
-                except Exception as exc:  # noqa: BLE001
+                except SYNC_EXCEPTIONS as exc:
                     msg = f"Link failed for {full_name}: {exc}"
                     print(f"  {msg}")
                     stats.errors.append(msg)
@@ -424,7 +453,7 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
                     include_issues=include_issues,
                     include_prs=include_prs,
                 )
-            except Exception as exc:  # noqa: BLE001
+            except SYNC_EXCEPTIONS as exc:
                 msg = f"Failed listing items for {full_name}: {exc}"
                 print(f"  {msg}")
                 stats.errors.append(msg)
@@ -453,7 +482,7 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
                     stats.items_added += 1
                     on_board.add(node_id)
                     print(f"  + {label}")
-                except Exception as exc:  # noqa: BLE001
+                except SYNC_EXCEPTIONS as exc:
                     stats.items_failed += 1
                     msg = f"Failed adding {full_name} {label}: {exc}"
                     print(f"  ! {msg}")
@@ -474,7 +503,11 @@ def main() -> int:
         print(f"Config not found: {config_path}", file=sys.stderr)
         return 2
 
-    config = load_config(config_path)
+    try:
+        config = validate_config(load_config(config_path))
+    except ValueError as exc:
+        print(f"Invalid config: {exc}", file=sys.stderr)
+        return 2
     org_filter = {part for part in args.orgs.split() if part}
     client = GitHubClient(token=token, dry_run=args.dry_run)
     stats = sync(config, client, org_filter)
