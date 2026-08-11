@@ -255,6 +255,61 @@ class TestGenerateDependabotConfig:
         assert len(result) == 1
         assert result[0]["package-ecosystem"] == "github-actions"
 
+    def test_groups_pass_through(self):
+        common = [
+            {
+                "package-ecosystem": "github-actions",
+                "directory": "/",
+                "groups": {
+                    "minor-and-patch": {
+                        "update-types": ["minor", "patch"],
+                    },
+                },
+            },
+        ]
+        config = self._make_config(common=common)
+        result = sync_module.generate_dependabot_config("my-repo", config)
+        assert len(result) == 1
+        entry = result[0]
+        assert "groups" in entry
+        assert "minor-and-patch" in entry["groups"]
+        assert entry["groups"]["minor-and-patch"]["update-types"] == [
+            "minor",
+            "patch",
+        ]
+
+    def test_override_replaces_groups(self):
+        common = [
+            {
+                "package-ecosystem": "github-actions",
+                "directory": "/",
+                "groups": {
+                    "minor-and-patch": {
+                        "update-types": ["minor", "patch"],
+                    },
+                },
+            },
+        ]
+        overrides = {
+            "my-repo": [
+                {
+                    "package-ecosystem": "github-actions",
+                    "directory": "/",
+                    "groups": {
+                        "all-updates": {
+                            "update-types": ["major", "minor", "patch"],
+                        },
+                    },
+                },
+            ],
+        }
+        config = self._make_config(common=common, overrides=overrides)
+        result = sync_module.generate_dependabot_config("my-repo", config)
+        assert len(result) == 1
+        entry = result[0]
+        assert "all-updates" in entry["groups"]
+        assert "minor-and-patch" not in entry["groups"]
+
     def test_no_dependabot_section_returns_none(self):
         config = {}
         result = sync_module.generate_dependabot_config("my-repo", config)
@@ -353,6 +408,28 @@ class TestMergeDependabotEntries:
         entry = parsed["updates"][0]
         assert entry["directories"] == ["/", "/submod"]
         assert entry["schedule"]["interval"] == "weekly"
+
+    def test_groups_survive_yaml_roundtrip(self, tmp_path):
+        managed = [
+            {
+                "package-ecosystem": "github-actions",
+                "directory": "/",
+                "groups": {
+                    "minor-and-patch": {
+                        "update-types": ["minor", "patch"],
+                    },
+                },
+            },
+        ]
+        nonexistent = str(tmp_path / "missing.yml")
+        result = sync_module.merge_dependabot_entries(managed, nonexistent)
+        parsed = yaml.safe_load(result)
+        entry = parsed["updates"][0]
+        assert "groups" in entry
+        assert entry["groups"]["minor-and-patch"]["update-types"] == [
+            "minor",
+            "patch",
+        ]
 
     def test_all_unmanaged_preserved_when_no_overlap(self, tmp_path):
         managed = [
