@@ -206,8 +206,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          VERSION="${TAG#v}"
-
           # Convert project_name to PascalCase for Ruby class name
           # e.g., complyctl -> Complyctl, comply-ctl -> ComplyCtl
           CLASS_NAME=$(echo "${PROJECT_NAME}" | sed -E 's/(^|-)([a-z])/\U\2/g')
@@ -268,9 +266,18 @@ jobs:
           # Update to get latest audit rules, with retry for transient failures.
           brew update --quiet || brew update --quiet
 
+          # Install the formula into a local tap so brew audit can reference it
+          # by name (brew audit no longer accepts file paths directly).
+          TAP_DIR="$(brew --repository)/Library/Taps/local/homebrew-test"
+          mkdir -p "${TAP_DIR}/Formula"
+          cp "/tmp/${BINARY_NAME}.rb" "${TAP_DIR}/Formula/${BINARY_NAME}.rb"
+
           echo "Running brew audit --strict on generated formula..."
-          brew audit --strict --formula "/tmp/${BINARY_NAME}.rb"
+          brew audit --strict --formula "${BINARY_NAME}"
           echo "Formula passed brew audit --strict"
+
+          # Clean up temporary tap
+          rm -rf "${TAP_DIR}"
 
       - name: Prepare tap repository credentials
         id: tap-info

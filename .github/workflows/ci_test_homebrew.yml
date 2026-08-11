@@ -57,10 +57,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Use a well-known Go project tarball for a real SHA256
-          # We use the org-infra repo itself (any public repo works)
+          # Use synthetic test inputs for formula generation
           TEST_TAG="v0.0.0-test"
-          VERSION="0.0.0-test"
           CLASS_NAME="Testproject"
 
           # Create a minimal tarball for SHA256 computation
@@ -117,10 +115,20 @@ jobs:
       - name: Validate formula with brew audit
         run: |
           set -euo pipefail
-          brew update --quiet
+          brew update --quiet || brew update --quiet
+
+          # Install the formula into a local tap so brew audit can reference it
+          # by name (brew audit no longer accepts file paths directly).
+          TAP_DIR="$(brew --repository)/Library/Taps/local/homebrew-test"
+          mkdir -p "${TAP_DIR}/Formula"
+          cp "/tmp/${BINARY_NAME}.rb" "${TAP_DIR}/Formula/${BINARY_NAME}.rb"
+
           echo "Running brew audit --strict on generated formula..."
-          brew audit --strict --formula "/tmp/${BINARY_NAME}.rb"
+          brew audit --strict --formula "${BINARY_NAME}"
           echo "Formula passed brew audit --strict"
+
+          # Clean up temporary tap
+          rm -rf "${TAP_DIR}"
 
       - name: Validate formula content
         run: |
