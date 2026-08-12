@@ -60,7 +60,8 @@ org-infra/
 │  │  ├── reusable_stale_reviews.yml        # Detect and flag PRs with overdue review requests.
 │  │  ├── reusable_vuln_scan.yml            # Vulnerability scanning via OSV-Scanner and Trivy.
 │  │  ├── sync_labels.yml                   # Manual workflow to reconcile repository labels from policy.
-│  │  └── sync_org_repositories.yml         # Manual, scheduled, and event-based workflow to synchronize files.
+│  │  ├── sync_org_repositories.yml         # Manual, scheduled, and event-based workflow to synchronize files.
+│  │  └── sync_project_board.yml            # Sync open issues/PRs into Compliance Automation planning board.
 │  ├── dependabot.yml                       # Dependabot settings for GitHub Actions and Go modules.
 │  ├── dependabot_python.yml                # Dependabot settings for GitHub Actions (Python repos) and pip.
 │  └── pull_request_template.md             # PR template applicable to all repositories.
@@ -69,14 +70,17 @@ org-infra/
 ├── docs/                                   # More detailed and specific documentation.
 │  ├── LABEL_SYNC.md                        # Documentation for cross-repo label standardization.
 │  ├── LOCAL_TESTING.md                     # Documentation on how to test synchronization locally.
+│  ├── PROJECT_BOARD_SYNC.md                # Compliance Automation project board sync setup.
 │  └── SYNC_REPOSITORIES_SETUP.md          # Documentation on how to setup the repository synchronization infrastructure.
 ├── scripts/
 │  ├── sync-labels.py                       # Python script to reconcile labels from labels-policy.json.
 │  ├── sync-org-repositories.py             # Python script to check and ensure consistence among repositories.
+│  ├── sync-project-board.py                # Sync open issues/PRs into the Compliance Automation project board.
 │  └── resolve-go-packages.sh              # Bash: multi-module Go package auto-discovery
 ├── ...                                     # Multiple technology specific configuration files
 ├── labels-policy.json                      # Label create/rename/preserve/delete policy for sync-labels.py
 ├── sync-config.yml                         # Configuration file consumed by `sync-org-repositories.py`
+├── project-sync-config.yml                 # Orgs/repos synced into Compliance Automation planning board
 └── README.md                               # This file.
 ```
 
