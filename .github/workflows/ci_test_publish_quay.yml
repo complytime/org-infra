@@ -177,10 +177,26 @@ jobs:
 
       - name: Verify destination signature independently
         run: |
-          cosign verify "${DEST_IMAGE}@${SOURCE_DIGEST}" \
-            --certificate-identity-regexp="$IDENTITY" \
-            --certificate-oidc-issuer="$OIDC_ISSUER"
-          echo "::notice::Independent signature verification passed"
+          # Retry loop: registry signature propagation may lag behind the
+          # signing step in the previous job, causing transient "no valid
+          # bundles" errors from cosign verify.
+          MAX_ATTEMPTS=3
+          DELAY=10
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            echo "Attempt ${attempt}/${MAX_ATTEMPTS}: verifying destination signature"
+            if cosign verify "${DEST_IMAGE}@${SOURCE_DIGEST}" \
+                 --certificate-identity-regexp="$IDENTITY" \
+                 --certificate-oidc-issuer="$OIDC_ISSUER"; then
+              echo "::notice::Independent signature verification passed"
+              exit 0
+            fi
+            if [[ "$attempt" -lt "$MAX_ATTEMPTS" ]]; then
+              echo "::warning::Verification attempt ${attempt} failed, retrying in ${DELAY}s..."
+              sleep "$DELAY"
+            fi
+          done
+          echo "::error::Signature verification failed after ${MAX_ATTEMPTS} attempts"
+          exit 1
 
       - name: Confirm independent signature
         env:
