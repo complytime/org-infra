@@ -242,9 +242,20 @@ class TestSyncErrorHandling:
         monkeypatch.setattr(
             sync,
             "get_project",
-            lambda *_a, **_k: ("PROJECT", "STATUS_FIELD", {"Backlog": "OPT"}),
+            lambda *_a, **_k: sync.ProjectFields(
+                project_id="PROJECT",
+                status_field_id="STATUS_FIELD",
+                status_options={"Backlog": "OPT"},
+                organization_field_id="ORG_FIELD",
+                organization_options={
+                    "Agentic-SSDLC": "ORG_A",
+                    "complytime": "ORG_C",
+                    "unbound-force": "ORG_U",
+                },
+            ),
         )
         monkeypatch.setattr(sync, "existing_content_ids", lambda *_a, **_k: set())
+        monkeypatch.setattr(sync, "ensure_organizations", lambda *_a, **_k: None)
 
     def test_per_org_request_errors_are_recorded(self, monkeypatch: pytest.MonkeyPatch):
         self._project_mocks(monkeypatch)
@@ -392,3 +403,103 @@ class TestLinkRepository:
         client = MagicMock(dry_run=False)
         client.graphql.side_effect = RuntimeError("already linked to project")
         assert sync.link_repository(client, "P", "R") is False
+
+
+class TestOrganizationMapping:
+    def test_organization_option_for_owner_maps_known_orgs(self):
+        options = {
+            "Agentic-SSDLC": "A",
+            "complytime": "C",
+            "unbound-force": "U",
+        }
+        assert sync.organization_option_for_owner("complytime", options) == (
+            "complytime",
+            "C",
+        )
+        assert sync.organization_option_for_owner("complytime-labs", options) == (
+            "complytime",
+            "C",
+        )
+        assert sync.organization_option_for_owner("unknown", options) is None
+
+    def test_add_item_sets_status_and_organization(self):
+        client = MagicMock(dry_run=False)
+        client.graphql.side_effect = [
+            {"addProjectV2ItemById": {"item": {"id": "ITEM_1"}}},
+            {"updateProjectV2ItemFieldValue": {"projectV2Item": {"id": "ITEM_1"}}},
+            {"updateProjectV2ItemFieldValue": {"projectV2Item": {"id": "ITEM_1"}}},
+        ]
+        item_id = sync.add_item(
+            client,
+            "PROJECT",
+            "CONTENT",
+            "STATUS_FIELD",
+            "STATUS_OPT",
+            "ORG_FIELD",
+            "ORG_OPT",
+        )
+        assert item_id == "ITEM_1"
+        assert client.graphql.call_count == 3
+        # Second call sets Status; third sets Organization
+        status_vars = client.graphql.call_args_list[1].args[1]
+        org_vars = client.graphql.call_args_list[2].args[1]
+        assert status_vars["fieldId"] == "STATUS_FIELD"
+        assert status_vars["optionId"] == "STATUS_OPT"
+        assert org_vars["fieldId"] == "ORG_FIELD"
+        assert org_vars["optionId"] == "ORG_OPT"
+
+    def test_ensure_organizations_updates_missing_values(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        fields = sync.ProjectFields(
+            project_id="PROJECT",
+            status_field_id="STATUS_FIELD",
+            status_options={"Backlog": "OPT"},
+            organization_field_id="ORG_FIELD",
+            organization_options={
+                "Agentic-SSDLC": "ORG_A",
+                "complytime": "ORG_C",
+                "unbound-force": "ORG_U",
+            },
+        )
+        monkeypatch.setattr(
+            sync,
+            "iter_board_items_for_organization",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_1",
+                    "organization": None,
+                    "content": {
+                        "id": "I_1",
+                        "repository": {
+                            "nameWithOwner": "complytime/demo",
+                            "owner": {"login": "complytime"},
+                        },
+                    },
+                },
+                {
+                    "id": "PVTI_2",
+                    "organization": {"name": "unbound-force"},
+                    "content": {
+                        "id": "I_2",
+                        "repository": {
+                            "nameWithOwner": "unbound-force/gaze",
+                            "owner": {"login": "unbound-force"},
+                        },
+                    },
+                },
+            ],
+        )
+        set_calls = []
+
+        def _set(*args, **kwargs):
+            set_calls.append((args, kwargs))
+
+        monkeypatch.setattr(sync, "set_single_select", _set)
+        stats = sync.SyncStats()
+        sync.ensure_organizations(client, fields, stats)
+        assert stats.organization_set == 1
+        assert set_calls[0][0][2] == "PVTI_1"
+        assert set_calls[0][0][4] == "ORG_C"
+

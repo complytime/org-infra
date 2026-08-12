@@ -22,7 +22,11 @@ delayed under GitHub load:
 2. Links same-org repositories to project `#14` (idempotent). Cross-org repos
    cannot be linked (GitHub restriction) but their issues/PRs still sync.
 3. Collects open issues and open PRs
-4. Adds any missing items to the board with **Status = Backlog**
+4. Adds any missing items to the board with **Status = Backlog** and
+   **Organization** set from the source GitHub org (`Agentic-SSDLC`,
+   `complytime`, or `unbound-force`)
+5. Backfills **Organization** on any existing board items that are unset or
+   incorrect (for example items added manually)
 
 The workflow lives only in `org-infra` (it is **not** synced out to consumer repos).
 
