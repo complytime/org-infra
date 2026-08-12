@@ -123,6 +123,9 @@ jobs:
           mkdir -p "${TAP_DIR}/Formula"
           cp "/tmp/${BINARY_NAME}.rb" "${TAP_DIR}/Formula/${BINARY_NAME}.rb"
 
+          # Trust the local tap so brew can load formulae from it
+          brew trust local/test
+
           echo "Running brew audit --strict on generated formula..."
           brew audit --strict --formula "${BINARY_NAME}"
           echo "Formula passed brew audit --strict"
