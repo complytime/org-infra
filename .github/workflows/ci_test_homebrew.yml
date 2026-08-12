@@ -42,7 +42,7 @@ jobs:
     timeout-minutes: 15
     env:
       PROJECT_NAME: testproject
-      FORMULA_DESC: "A test project for CI validation"
+      FORMULA_DESC: "Test project for CI validation"
       BINARY_NAME: testproject
       GO_MAIN_PATH: ./cmd/testproject
       LDFLAGS_MODULE: github.com/complytime/testproject/internal/version
@@ -141,7 +141,7 @@ jobs:
 
           # Verify expected content is present
           echo "${FORMULA_CONTENT}" | grep -q 'class Testproject < Formula' || { echo "::error::Missing class declaration"; exit 1; }
-          echo "${FORMULA_CONTENT}" | grep -q 'desc "A test project for CI validation"' || { echo "::error::Missing description"; exit 1; }
+          echo "${FORMULA_CONTENT}" | grep -q 'desc "Test project for CI validation"' || { echo "::error::Missing description"; exit 1; }
           echo "${FORMULA_CONTENT}" | grep -q 'depends_on "go" => :build' || { echo "::error::Missing go dependency"; exit 1; }
           echo "${FORMULA_CONTENT}" | grep -q 'license "Apache-2.0"' || { echo "::error::Missing license"; exit 1; }
           echo "${FORMULA_CONTENT}" | grep -q 'generate_completions_from_executable' || { echo "::error::Missing completions"; exit 1; }

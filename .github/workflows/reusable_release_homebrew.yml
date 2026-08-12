@@ -157,6 +157,12 @@ jobs:
             exit 1
           fi
 
+          # Homebrew audit rejects descriptions starting with an article
+          if [[ "${FORMULA_DESC}" =~ ^(A|An|The)[[:space:]] ]]; then
+            echo "::error::description must not start with an article (A/An/The): ${FORMULA_DESC}"
+            exit 1
+          fi
+
           # Validate ldflags_module (Go module path characters only)
           if ! [[ "${LDFLAGS_MODULE}" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
             echo "::error::ldflags_module contains invalid characters: ${LDFLAGS_MODULE}"
