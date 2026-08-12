@@ -14,23 +14,23 @@ on:
   workflow_call:
     inputs:
       image_ref:
-        description: 'Image reference for image scan, e.g., ghcr.io/org/image:sha-<sha>'
+        description: "Image reference for image scan, e.g., ghcr.io/org/image:sha-<sha>"
         required: true
         type: string
       image_digest:
-        description: 'Image digest (e.g., sha256:abc...). If provided, vuln attestation is attached to image.'
+        description: "Image digest (e.g., sha256:abc...). If provided, vuln attestation is attached to image."
         type: string
-        default: ''
+        default: ""
       trivy_severity:
-        description: 'Severity levels to report'
+        description: "Severity levels to report"
         type: string
-        default: 'HIGH,CRITICAL'
+        default: "HIGH,CRITICAL"
     outputs:
       scan_passed:
-        description: 'Whether Trivy image scan completed successfully (no vulns found)'
+        description: "Whether Trivy image scan completed successfully (no vulns found)"
         value: ${{ jobs.trivy_image.outputs.scan_passed }}
       attestation_attached:
-        description: 'Whether vuln attestation was attached to image'
+        description: "Whether vuln attestation was attached to image"
         value: ${{ jobs.trivy_image.outputs.attestation_attached || 'false' }}
 
 permissions:
@@ -53,9 +53,9 @@ jobs:
       scan_passed: ${{ steps.scan_result.outputs.passed }}
       attestation_attached: ${{ steps.attest.outputs.attached }}
     permissions:
-      packages: write         # Push attestation to registry
-      security-events: write  # Upload SARIF
-      id-token: write         # Keyless signing of attestation
+      packages: write # Push attestation to registry
+      security-events: write # Upload SARIF
+      id-token: write # Keyless signing of attestation
     steps:
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -66,26 +66,26 @@ jobs:
 
       - name: Run Trivy image scanner
         id: trivy
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: 'v0.70.0'
-          scan-type: 'image'
-          scanners: 'vuln'
+          version: "v0.70.0"
+          scan-type: "image"
+          scanners: "vuln"
           image-ref: ${{ inputs.image_ref }}
           severity: ${{ inputs.trivy_severity }}
           ignore-unfixed: true
-          format: 'sarif'
-          output: 'trivy-image-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
+          format: "sarif"
+          output: "trivy-image-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif"
           # NOTE: exit-code 0 because trivy-action's exit-code behavior is inconsistent
           # with SARIF format. We parse SARIF to check for actual findings instead.
-          exit-code: '0'
+          exit-code: "0"
 
       - name: Upload SARIF
         if: ${{ always() }}
-        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4.37.4
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         with:
-          sarif_file: 'trivy-image-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'
-          category: 'trivy-image'
+          sarif_file: "trivy-image-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif"
+          category: "trivy-image"
 
       - name: Publish findings to summary
         if: ${{ steps.trivy.outcome == 'success' }}

@@ -2,19 +2,20 @@ name: Compliance Checks
 
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:Manual complytime config/policy overrides are intentional operational controls for on-demand compliance runs, not build-output parameters.
     inputs:
       complytime_config_path:
-        description: 'Relative path of the complytime configuration file in this repository'
+        description: "Relative path of the complytime configuration file in this repository"
         required: false
         type: string
-        default: '.complytime/complytime.yaml'
+        default: ".complytime/complytime.yaml"
       policy_id:
-        description: 'Policy ID to use for complyctl generate and scan commands'
+        description: "Policy ID to use for complyctl generate and scan commands"
         required: false
         type: string
-        default: 'ampel-bp'
+        default: "ampel-bp"
   schedule:
-    - cron: '0 0 * * *'
+    - cron: "0 0 * * *"
 
 permissions:
   contents: none

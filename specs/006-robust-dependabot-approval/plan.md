@@ -24,7 +24,7 @@ Replace the fragile dependency-usage-based auto-approval gate with a robust crit
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
 | Principle | Status | Notes |
-|-----------|--------|-------|
+| ----------- | -------- | ------- |
 | I. Single Source of Truth | PASS | Auto-approval criteria centralized in `ci_dependencies.yml` `if:` condition. Release age threshold extracted to workflow-level `env: MIN_RELEASE_AGE_HOURS: 24` and referenced in both the approval condition and PR comment template. |
 | II. Simplicity & Isolation | PASS | Net reduction of ~51 lines. Extraction step replaces 112 lines of nested loops with ~30 lines of sequential metadata/diff/title parsing. Each step has a single responsibility. |
 | III. Incremental Improvement | PASS | Changes are focused on the approval criteria and extraction robustness. No unrelated changes included. |

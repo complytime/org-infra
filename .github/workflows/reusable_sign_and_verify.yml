@@ -19,40 +19,40 @@ on:
   workflow_call:
     inputs:
       image_name:
-        description: 'Full image name (e.g., ghcr.io/org/image)'
+        description: "Full image name (e.g., ghcr.io/org/image)"
         required: true
         type: string
       digest:
-        description: 'Image digest to sign/verify (sha256:...)'
+        description: "Image digest to sign/verify (sha256:...)"
         required: true
         type: string
       allowed_identity_regex:
-        description: 'Certificate identity regex for Sigstore verification (e.g., https://github.com/org/repo/.github/workflows/reusable_.*)'
+        description: "Certificate identity regex for Sigstore verification (e.g., https://github.com/org/repo/.github/workflows/reusable_.*)"
         required: true
         type: string
       sign_environment:
-        description: 'Environment for signing approval gates'
+        description: "Environment for signing approval gates"
         required: false
         type: string
-        default: ''
+        default: ""
       verify_vuln:
-        description: 'Verify vulnerability scan attestation. Set false for artifacts with no software dependencies (e.g., YAML data content).'
+        description: "Verify vulnerability scan attestation. Set false for artifacts with no software dependencies (e.g., YAML data content)."
         required: false
         type: boolean
         default: true
     secrets:
       quay_username:
-        description: 'Quay.io username (only for quay.io images)'
+        description: "Quay.io username (only for quay.io images)"
         required: false
       quay_password:
-        description: 'Quay.io password (only for quay.io images)'
+        description: "Quay.io password (only for quay.io images)"
         required: false
     outputs:
       digest:
-        description: 'Signed image digest'
+        description: "Signed image digest"
         value: ${{ jobs.sign-and-verify.outputs.digest }}
       image:
-        description: 'Signed image reference'
+        description: "Signed image reference"
         value: ${{ jobs.sign-and-verify.outputs.image }}
 
 permissions:
@@ -69,8 +69,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      packages: write   # Push signature to registry
-      id-token: write   # OIDC token for keyless signing
+      packages: write # Push signature to registry
+      id-token: write # OIDC token for keyless signing
     environment: ${{ inputs.sign_environment || null }}
     outputs:
       digest: ${{ inputs.digest }}

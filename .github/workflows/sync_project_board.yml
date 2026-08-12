@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Sync open issues/PRs from configured organizations into the
+# Compliance Automation planning project board.
+#
+# Cross-org access requires a classic or fine-grained PAT stored as
+# PROJECT_SYNC_TOKEN (GitHub App installation tokens are single-org).
+# See docs/PROJECT_BOARD_SYNC.md.
+
+name: Sync Compliance Automation Project Board
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (discover only; do not mutate the project)'
+        required: false
+        type: boolean
+        default: false
+      orgs:
+        description: 'Optional org filter (space-separated). Leave empty for all configured orgs.'
+        required: false
+        type: string
+        default: ''
+  schedule:
+    # Daily catch-up for newly opened issues/PRs across orgs.
+    - cron: '0 6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  sync-project-board:
+    name: Sync project board
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout org-infra
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          # Hash-pinned install for Scorecard Pinned-Dependencies
+          python -m pip install --require-hashes -r requirements-project-sync.txt
+
+      - name: Sync project board
+        env:
+          GITHUB_TOKEN: ${{ secrets.PROJECT_SYNC_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          ORGS: ${{ inputs.orgs || '' }}
+        run: |
+          if [ -z "$GITHUB_TOKEN" ]; then
+            echo "::error::PROJECT_SYNC_TOKEN secret is not configured. See docs/PROJECT_BOARD_SYNC.md"
+            exit 1
+          fi
+
+          ARGS=(--config project-sync-config.yml)
+          if [ "$DRY_RUN" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+          if [ -n "$ORGS" ]; then
+            ARGS+=(--orgs "$ORGS")
+          fi
+
+          python scripts/sync-project-board.py "${ARGS[@]}"

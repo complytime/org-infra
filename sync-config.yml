@@ -6,10 +6,10 @@
 # Repositories to exclude from synchronization
 # org-infra is excluded by default as it's the source repository
 exclude_repos:
-  - org-infra                   # This repository itself
-  - nunya                       # Internal tooling (Jira migration)
-  - roadmap                     # Internal tooling (roadmap scripts)
-  - complyscribe                # Archived
+  - org-infra # This repository itself
+  - nunya # Internal tooling (Jira migration)
+  - roadmap # Internal tooling (roadmap scripts)
+  - complyscribe # Archived
 
 # Files and workflows to synchronize
 # Each entry specifies:
@@ -99,6 +99,41 @@ files_to_sync:
       - complytime-demos
       - complytime-policies
       - community
+
+  - source: .github/workflows/ci_stale_reviews.yml
+    destination: .github/workflows/ci_stale_reviews.yml
+    exclude_repos:
+      - .github
+      - community
+      # Staged rollout: validate on org-infra first, then widen once
+      # confirmed working (#478).
+      - complyapi
+      - complyctl
+      - complypack
+      - complytime
+      - complytime-collector-components
+      - complytime-demos
+      - complytime-policies
+      - complytime-providers
+      - homebrew-tap
+      - website
+
+  # Test workflow: org-infra only (never synced to downstream repos).
+  - source: .github/workflows/ci_test_stale_reviews.yml
+    destination: .github/workflows/ci_test_stale_reviews.yml
+    exclude_repos:
+      - .github
+      - community
+      - complyapi
+      - complyctl
+      - complypack
+      - complytime
+      - complytime-collector-components
+      - complytime-demos
+      - complytime-policies
+      - complytime-providers
+      - homebrew-tap
+      - website
 
   # Configuration Files
   - source: .mega-linter.yml

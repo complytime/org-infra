@@ -33,7 +33,7 @@ The `reusable_compliance.yml` workflow sources policies from `complytime-provide
 **Decision**: Use the Gemara semantic model distinction. Control IDs are noun-phrases describing the safeguard area. Requirement IDs (which become the policy JSON `id` field) are verb-phrases describing the verifiable condition.
 
 | Old | New Policy ID (Requirement) | New Control Ref |
-|-----|---------------------------|-----------------|
+| ----- | --------------------------- | ----------------- |
 | `BP-1.01` | `require-pull-request` | `pull-request-enforcement` |
 | `BP-2.01` | `minimum-approvals` | `approval-requirements` |
 | `BP-3.01` | `block-force-push` | `force-push-restriction` |

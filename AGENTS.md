@@ -63,7 +63,7 @@ reusable_council_review.yml  [NOT synced — org-infra only]
 ### Required secrets
 
 | Secret | Scope | Purpose |
-|--------|-------|---------|
+| -------- | ------- | --------- |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | Org-level | WIF provider for Vertex AI auth |
 | `GCP_PROJECT_ID` | Org-level | GCP project containing Vertex AI |
 | `ORG_CHECK_TOKEN` | Optional | PAT with `org:read` for private membership checks (falls back to `GITHUB_TOKEN` for public-only) |
@@ -125,6 +125,7 @@ Replace `model-name` with the actual model identifier (e.g., `claude-opus-4-6`).
 - 284-org-member-image-push: Extended `reusable_publish_ghcr.yml` with unprotected ref publishing (org membership verification, dev-prefixed tag isolation, configurable attestation policy). Added `docker/login-action@v4.2.0`, `docker/setup-qemu-action@v4.0.0`, `docker/setup-buildx-action@v4.1.0`, `docker/build-push-action@v7.2.0`, `docker/metadata-action@v6.1.0`, `actions/attest-build-provenance@v4.1.0`, `anchore/sbom-action@v0.24.0`, `actions/attest@v4.1.0`, `sigstore/cosign-installer@v4.1.2`
 - 306-publish-complypack-ampel-bp: Added `reusable_publish_complypack.yml` (pack and push complypack OCI artifacts to GHCR with SLSA provenance and SBOM attestation) and `ci_publish_complypack.yml` (dual-registry: GHCR on push, Quay on release). Renamed `resuable_publish_quay.yml` to `reusable_publish_quay.yml` (typo fix). Uses `complypack` CLI via `go install`, `oras-project/setup-oras`, `imjasonh/setup-crane`.
 - go-toolchain-patch-automation: Added `ci_renovate.yml` (centralized self-hosted Renovate runner for Go version patch updates). Uses `renovatebot/github-action@v46.1.16` with a dedicated GitHub App (`complytime-renovate[bot]`, `contents:write` + `pull-requests:write`). Shared preset (`go-toolchain-patches.json`) restricts to Go version patch updates only (matches `go` and `toolchain` directives via `matchDepNames`). Global config (`renovate-config.js`) autodiscovers org repos via `globalExtends`.
+- 478-stale-review-alerts: Added `reusable_stale_reviews.yml` (detect and flag PRs with review requests pending beyond a configurable business-day threshold) and `ci_stale_reviews.yml` (weekday scheduled caller). Uses `actions/github-script@v9.0.0` (SHA-pinned) with inline business-day calculation. Staged rollout via `sync-config.yml` exclusions.
 - 500-reusable-homebrew-workflow: Added `reusable_release_homebrew.yml` (generate, validate with `brew audit --strict`, and push source-build Homebrew formulae to a tap repository via GitHub App token) and `ci_test_homebrew.yml` (macOS-based CI self-test for formula generation and input validation). Uses `actions/create-github-app-token@v3.2.0`, `actions/checkout@v7.0.1`.
 
 ## Convention Packs

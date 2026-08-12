@@ -5,20 +5,20 @@ name: Test CRAP Load Workflow
 on:
   pull_request:
     paths:
-      - '.github/workflows/ci_test_crapload.yml'
-      - '.github/workflows/reusable_crapload_analysis.yml'
-      - 'scripts/generate-crapload-comment.sh'
-      - 'scripts/resolve-go-packages.sh'
-      - 'tests/test_crapload_package_resolution.py'
+      - ".github/workflows/ci_test_crapload.yml"
+      - ".github/workflows/reusable_crapload_analysis.yml"
+      - "scripts/generate-crapload-comment.sh"
+      - "scripts/resolve-go-packages.sh"
+      - "tests/test_crapload_package_resolution.py"
   push:
     branches:
       - main
     paths:
-      - '.github/workflows/ci_test_crapload.yml'
-      - '.github/workflows/reusable_crapload_analysis.yml'
-      - 'scripts/generate-crapload-comment.sh'
-      - 'scripts/resolve-go-packages.sh'
-      - 'tests/test_crapload_package_resolution.py'
+      - ".github/workflows/ci_test_crapload.yml"
+      - ".github/workflows/reusable_crapload_analysis.yml"
+      - "scripts/generate-crapload-comment.sh"
+      - "scripts/resolve-go-packages.sh"
+      - "tests/test_crapload_package_resolution.py"
 
 permissions:
   contents: read
@@ -36,13 +36,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.x'
-          cache: 'pip'
+          python-version: "3.x"
+          cache: "pip"
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: 'stable'
+          go-version: "stable"
 
       - name: Install Python dependencies
         run: |

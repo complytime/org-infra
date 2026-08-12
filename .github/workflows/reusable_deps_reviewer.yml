@@ -11,7 +11,7 @@ on:
         value: "${{ jobs.dependencies_review.outputs.review_step }}"
 
 env:
-  MIN_SCORECARD_LEVEL: '5'
+  MIN_SCORECARD_LEVEL: "5"
 
 # This workflow is passive so ensure the minimal permissions even if the
 # inherited token is more lenient.

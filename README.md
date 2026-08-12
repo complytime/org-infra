@@ -42,6 +42,7 @@ org-infra/
 │  │  ├── ci_scheduled.yml                  # Scheduled OSV-Scanner and OpenSSF Scorecards via `reusable_scheduled`.
 │  │  ├── ci_crapload.yml                   # Workflow to consume `reusable_crapload_analysis` for CRAP load analysis.
 │  │  ├── ci_security.yml                   # Workflow to consume `reusable_vuln_scan` and `reusable_security`.
+│  │  ├── ci_stale_reviews.yml              # Scheduled stale review detection via `reusable_stale_reviews`.
 │  │  ├── reusable_ci.yml                   # Generic CI checks, such as linters, typos and PR titles.
 │  │  ├── reusable_compliance.yml           # Compliance evaluation with attestation-based policy checks.
 │  │  ├── reusable_crapload_analysis.yml    # CRAP (Change Risk Anti-Patterns) load analysis for Go code using Gaze.
@@ -56,9 +57,11 @@ org-infra/
 │  │  ├── reusable_security.yml             # OpenSSF Scorecards analysis and SARIF upload.
 │  │  ├── reusable_sign_and_verify.yml      # Sigstore keyless signing and attestation verification for container images.
 │  │  ├── reusable_sonarqube.yml            # SonarCloud static analysis for code quality and security.
+│  │  ├── reusable_stale_reviews.yml        # Detect and flag PRs with overdue review requests.
 │  │  ├── reusable_vuln_scan.yml            # Vulnerability scanning via OSV-Scanner and Trivy.
 │  │  ├── sync_labels.yml                   # Manual workflow to reconcile repository labels from policy.
-│  │  └── sync_org_repositories.yml         # Manual, scheduled, and event-based workflow to synchronize files.
+│  │  ├── sync_org_repositories.yml         # Manual, scheduled, and event-based workflow to synchronize files.
+│  │  └── sync_project_board.yml            # Sync open issues/PRs into Compliance Automation planning board.
 │  ├── dependabot.yml                       # Dependabot settings for GitHub Actions and Go modules.
 │  ├── dependabot_python.yml                # Dependabot settings for GitHub Actions (Python repos) and pip.
 │  └── pull_request_template.md             # PR template applicable to all repositories.
@@ -67,14 +70,17 @@ org-infra/
 ├── docs/                                   # More detailed and specific documentation.
 │  ├── LABEL_SYNC.md                        # Documentation for cross-repo label standardization.
 │  ├── LOCAL_TESTING.md                     # Documentation on how to test synchronization locally.
+│  ├── PROJECT_BOARD_SYNC.md                # Compliance Automation project board sync setup.
 │  └── SYNC_REPOSITORIES_SETUP.md          # Documentation on how to setup the repository synchronization infrastructure.
 ├── scripts/
 │  ├── sync-labels.py                       # Python script to reconcile labels from labels-policy.json.
 │  ├── sync-org-repositories.py             # Python script to check and ensure consistence among repositories.
+│  ├── sync-project-board.py                # Sync open issues/PRs into the Compliance Automation project board.
 │  └── resolve-go-packages.sh              # Bash: multi-module Go package auto-discovery
 ├── ...                                     # Multiple technology specific configuration files
 ├── labels-policy.json                      # Label create/rename/preserve/delete policy for sync-labels.py
 ├── sync-config.yml                         # Configuration file consumed by `sync-org-repositories.py`
+├── project-sync-config.yml                 # Orgs/repos synced into Compliance Automation planning board
 └── README.md                               # This file.
 ```
 

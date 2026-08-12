@@ -17,19 +17,19 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: 'The release tag (e.g., v1.2.3). Must exist as a git tag.'
+        description: "The release tag (e.g., v1.2.3). Must exist as a git tag."
         required: true
         type: string
       goreleaser_version:
-        description: 'GoReleaser version constraint'
+        description: "GoReleaser version constraint"
         required: false
         type: string
-        default: '~> v2'
+        default: "~> v2"
       goreleaser_args:
-        description: 'GoReleaser command-line arguments'
+        description: "GoReleaser command-line arguments"
         required: false
         type: string
-        default: 'release --clean --verbose'
+        default: "release --clean --verbose"
 
 permissions: {}
 
