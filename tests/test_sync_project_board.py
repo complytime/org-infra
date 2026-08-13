@@ -312,6 +312,37 @@ class TestSyncErrorHandling:
         assert stats.items_added == 0
         assert any("Failed adding" in err for err in stats.errors)
 
+    def test_cross_org_repo_link_is_skipped_without_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        self._project_mocks(monkeypatch)
+        client = MagicMock(dry_run=False)
+        link = MagicMock(return_value=True)
+        monkeypatch.setattr(sync, "link_repository", link)
+        monkeypatch.setattr(
+            sync,
+            "list_org_repos",
+            MagicMock(
+                return_value=[
+                    {
+                        "name": "website",
+                        "full_name": "unbound-force/website",
+                        "node_id": "R_WEB",
+                        "archived": False,
+                    }
+                ]
+            ),
+        )
+        monkeypatch.setattr(sync, "list_open_items", MagicMock(return_value=[]))
+        config = _minimal_config(
+            organizations=[{"name": "unbound-force"}],
+        )
+        stats = sync.sync(config, client, org_filter={"unbound-force"})
+        link.assert_not_called()
+        assert stats.repos_link_skipped == 1
+        assert stats.repos_linked == 0
+        assert stats.errors == []
+
 
 class TestLinkRepository:
     def test_dry_run_does_not_call_graphql(self):

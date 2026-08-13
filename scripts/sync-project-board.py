@@ -433,18 +433,32 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
             print(f"\n- {full_name}")
 
             if link_repos:
-                try:
-                    linked = link_repository(client, project_id, repo["node_id"])
-                    if linked:
-                        stats.repos_linked += 1
-                        print("  linked to project")
-                    else:
+                # GitHub only allows linking a repository to a project owned by
+                # the same org. Cross-org boards (e.g. unbound-force repos on a
+                # complytime project) can still receive issues/PRs via
+                # addProjectV2ItemById — skip the unsupported link step.
+                if org != owner:
+                    stats.repos_link_skipped += 1
+                    print(
+                        "  skip repo link (cross-org; items still sync onto the board)"
+                    )
+                else:
+                    try:
+                        linked = link_repository(
+                            client, project_id, repo["node_id"]
+                        )
+                        if linked:
+                            stats.repos_linked += 1
+                            print("  linked to project")
+                        else:
+                            stats.repos_link_skipped += 1
+                            print("  already linked (or skipped)")
+                    except SYNC_EXCEPTIONS as exc:
+                        # Linking is best-effort for same-org repos (permissions
+                        # may be missing). Do not fail the job: item sync is the
+                        # primary goal.
                         stats.repos_link_skipped += 1
-                        print("  already linked (or skipped)")
-                except SYNC_EXCEPTIONS as exc:
-                    msg = f"Link failed for {full_name}: {exc}"
-                    print(f"  {msg}")
-                    stats.errors.append(msg)
+                        print(f"  skip repo link ({exc})")
 
             try:
                 open_items = list_open_items(

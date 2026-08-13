@@ -17,7 +17,8 @@ Archived repositories are skipped by default.
 On a daily schedule (and via manual `workflow_dispatch`):
 
 1. Discovers repositories from `project-sync-config.yml`
-2. Links each repository to project `#14` (idempotent)
+2. Links same-org repositories to project `#14` (idempotent). Cross-org repos
+   cannot be linked (GitHub restriction) but their issues/PRs still sync.
 3. Collects open issues and open PRs
 4. Adds any missing items to the board with **Status = Backlog**
 
