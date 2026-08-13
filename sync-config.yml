@@ -16,6 +16,8 @@ exclude_repos:
 #   - source: Path relative to org-infra repository root
 #   - destination: (optional) Path in target repo, defaults to same as source
 #   - exclude_repos: (optional) List of repositories to skip for this file
+#   - replaces: (optional) List of file paths in the target repo to delete
+#     as superseded when the replacement file is synced
 files_to_sync:
   # GitHub Workflows
   - source: .github/workflows/ci_checks.yml
