@@ -365,6 +365,203 @@ def apply_file_vars(content: str, resolved_vars: dict[str, str]) -> str:
     return content
 
 
+def _validate_replaces_path(
+    replace_path: str, repo_clone_root: str,
+) -> bool:
+    """Validate a replaces path is safe for deletion.
+
+    Rejects paths containing ``..`` segments or resolving outside
+    the repository clone directory.
+
+    Args:
+        replace_path: Relative path from the replaces list.
+        repo_clone_root: Absolute path to the cloned repo root.
+
+    Returns:
+        True if the path is safe, False otherwise.
+    """
+    # Reject paths with traversal segments
+    normalized = os.path.normpath(replace_path)
+    if ".." in normalized.split(os.sep):
+        print(
+            f"Error: replaces path '{replace_path}' "
+            f"contains traversal segments — skipping"
+        )
+        return False
+
+    # Verify resolved path stays within the repo clone
+    resolved = os.path.realpath(
+        os.path.join(repo_clone_root, replace_path),
+    )
+    real_root = os.path.realpath(repo_clone_root)
+    if not resolved.startswith(real_root + os.sep):
+        print(
+            f"Error: replaces path '{replace_path}' "
+            f"resolves outside repository — skipping"
+        )
+        return False
+
+    return True
+
+
+def process_replaces(
+    file_config: dict,
+    dest_rel_path: str,
+    repo_path: str,
+    dry_run: bool,
+    files_changed: list[str],
+    files_replaced: dict[str, str],
+) -> None:
+    """Process replaces entries for a files_to_sync entry.
+
+    Deletes superseded files listed in the ``replaces`` key of a
+    file config entry.  Tracks deletions in both ``files_changed``
+    (for git staging) and ``files_replaced`` (for reporting).
+
+    Args:
+        file_config: A single entry from ``files_to_sync``.
+        dest_rel_path: Destination path of the replacement file.
+        repo_path: Absolute path to the cloned downstream repo.
+        dry_run: If True, report without deleting.
+        files_changed: Mutable list of changed file paths.
+        files_replaced: Mutable dict mapping removed paths to
+            their replacement destination.
+    """
+    replaces = file_config.get("replaces")
+    if not replaces:
+        return
+
+    for replace_path in replaces:
+        # Skip self-replacement
+        if replace_path == dest_rel_path:
+            print(
+                f"Skipping replaces entry '{replace_path}' "
+                f"— same as destination"
+            )
+            continue
+
+        # Validate path safety
+        if not _validate_replaces_path(replace_path, repo_path):
+            continue
+
+        full_path = os.path.join(repo_path, replace_path)
+
+        # Skip directories
+        if os.path.isdir(full_path):
+            print(
+                f"Skipping replaces entry '{replace_path}' "
+                f"— is a directory"
+            )
+            continue
+
+        # Skip non-existent files.  lexists returns False for
+        # truly missing paths but True for broken symlinks;
+        # os.remove below handles both regular files and symlinks
+        # (removes the link itself, not the target).
+        if not os.path.lexists(full_path):
+            continue
+
+        if dry_run:
+            print(
+                f"[DRY RUN] Would remove (replaced): "
+                f"{replace_path}"
+            )
+        else:
+            os.remove(full_path)
+            print(
+                f"{replace_path} removed "
+                f"(replaced by {dest_rel_path})"
+            )
+
+        files_changed.append(replace_path)
+        files_replaced[replace_path] = dest_rel_path
+
+
+def build_commit_message(
+    files_changed: list[str],
+    files_replaced: dict[str, str],
+) -> str:
+    """Build the commit message for a sync PR.
+
+    Separates updated files from replaced (deleted) files.
+
+    Args:
+        files_changed: All changed file paths (updates + deletions).
+        files_replaced: Mapping of removed paths to their replacements.
+
+    Returns:
+        Formatted commit message string.
+    """
+    updated_only = [
+        f for f in files_changed
+        if f not in files_replaced
+    ]
+    message = "chore: sync repository standards\n\n"
+    if updated_only:
+        message += "Updated files:\n" + "\n".join(
+            f"- {f}" for f in updated_only
+        ) + "\n"
+    if files_replaced:
+        message += (
+            "\nRemoved files (replaced):\n"
+            + "\n".join(
+                f"- {removed} (replaced by "
+                f"{replacement})"
+                for removed, replacement
+                in files_replaced.items()
+            )
+        )
+    return message
+
+
+def build_pr_body(
+    files_changed: list[str],
+    files_replaced: dict[str, str],
+) -> str:
+    """Build the PR body for a sync PR.
+
+    Includes separate sections for updated and replaced files.
+
+    Args:
+        files_changed: All changed file paths (updates + deletions).
+        files_replaced: Mapping of removed paths to their replacements.
+
+    Returns:
+        Formatted PR body string.
+    """
+    body = (
+        "This PR synchronizes repository standards from "
+        "org-infra.\n\n"
+        "## Files Updated\n"
+        + "\n".join(
+            f"- `{f}`" for f in files_changed
+            if f not in files_replaced
+        )
+        + "\n\n"
+    )
+    if files_replaced:
+        body += (
+            "## Files Removed (Replaced)\n"
+            + "\n".join(
+                f"- `{removed}` (replaced by "
+                f"`{replacement}`)"
+                for removed, replacement
+                in files_replaced.items()
+            )
+            + "\n\n"
+        )
+    body += (
+        "## Description\n"
+        "This is an automated PR to ensure repository "
+        "settings are consistent across the "
+        "organization.\n\n"
+        "---\n"
+        "*This PR was automatically generated by the "
+        "sync_org_repositories workflow.*\n"
+    )
+    return body
+
+
 def get_latest_release(
     org: str, repo_name: str,
 ) -> tuple[str, str]:
@@ -768,6 +965,7 @@ def sync_repository(  # noqa: PLR0913, PLR0911, PLR0912, PLR0915 - end-to-end pe
 
             # Step 3: Process static files to sync
             files_changed: list[str] = []
+            files_replaced: dict[str, str] = {}
             for file_config in files_to_sync:
                 source_rel_path = file_config["source"]
                 dest_rel_path = file_config.get("destination", source_rel_path)
@@ -890,6 +1088,16 @@ def sync_repository(  # noqa: PLR0913, PLR0911, PLR0912, PLR0915 - end-to-end pe
                 ):
                     files_changed.append(dest_rel_path)
 
+                # Process replaces entries for this file
+                process_replaces(
+                    file_config,
+                    dest_rel_path,
+                    repo_path,
+                    dry_run,
+                    files_changed,
+                    files_replaced,
+                )
+
             # Step 4: Generate and sync dependabot.yml
             managed_entries = generate_dependabot_config(repo_name, config)
             if managed_entries is not None:
@@ -927,9 +1135,8 @@ def sync_repository(  # noqa: PLR0913, PLR0911, PLR0912, PLR0915 - end-to-end pe
                 return {"status": "dry_run", "pr_url": None, "error": None}
 
             # Step 5: Commit and push
-            commit_message = (
-                "chore: sync repository standards\n\nUpdated files:\n"
-                + "\n".join(f"- {f}" for f in files_changed)
+            commit_message = build_commit_message(
+                files_changed, files_replaced,
             )
 
             if existing_pr and existing_pr.get("branch"):
@@ -975,18 +1182,8 @@ def sync_repository(  # noqa: PLR0913, PLR0911, PLR0912, PLR0915 - end-to-end pe
                     "error": "Failed to create branch and commit",
                 }
 
-            pr_body = (
-                "This PR synchronizes repository standards from "
-                "org-infra.\n\n"
-                "## Files Updated\n"
-                + "\n".join(f"- `{f}`" for f in files_changed)
-                + "\n\n"
-                "## Description\n"
-                "This is an automated PR to ensure repository settings "
-                "are consistent across the organization.\n\n"
-                "---\n"
-                "*This PR was automatically generated by the "
-                "sync_org_repositories workflow.*\n"
+            pr_body = build_pr_body(
+                files_changed, files_replaced,
             )
 
             print("Creating pull request...")

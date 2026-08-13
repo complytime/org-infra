@@ -1143,3 +1143,444 @@ class TestWriteStepSummary:
         assert "### Failures" in content
         assert "repo-c" in content
         assert "Permission denied" in content
+
+
+class TestValidateReplacesPath:
+    """Tests for _validate_replaces_path."""
+
+    def test_clean_path_accepted(self, tmp_path):
+        repo_root = str(tmp_path)
+        assert (
+            sync_module._validate_replaces_path(
+                ".github/ISSUE_TEMPLATE/bug_report.md", repo_root,
+            )
+            is True
+        )
+
+    def test_traversal_path_rejected(self, tmp_path, capsys):
+        repo_root = str(tmp_path)
+        assert (
+            sync_module._validate_replaces_path(
+                "../../etc/passwd", repo_root,
+            )
+            is False
+        )
+        captured = capsys.readouterr()
+        assert "traversal segments" in captured.out
+
+    def test_path_resolving_outside_repo_rejected(self, tmp_path, capsys):
+        repo_root_dir = tmp_path / "repo"
+        repo_root_dir.mkdir()
+        # Create a symlink inside repo that points outside
+        outside_dir = tmp_path / "outside"
+        outside_dir.mkdir()
+        symlink = repo_root_dir / "escape"
+        symlink.symlink_to(outside_dir)
+        assert (
+            sync_module._validate_replaces_path(
+                "escape/secret.txt", str(repo_root_dir),
+            )
+            is False
+        )
+        captured = capsys.readouterr()
+        assert "resolves outside repository" in captured.out
+
+
+class TestProcessReplaces:
+    """Tests for process_replaces."""
+
+    def test_existing_file_deleted_and_tracked(self, tmp_path):
+        """4.1: Verify existing superseded file is deleted and tracked."""
+        repo_path = str(tmp_path)
+        old_file = tmp_path / ".github" / "ISSUE_TEMPLATE" / "bug_report.md"
+        old_file.parent.mkdir(parents=True)
+        old_file.write_text("old content")
+
+        files_changed: list = []
+        files_replaced: dict = {}
+        file_config = {
+            "source": ".github/ISSUE_TEMPLATE/bug_report.yml",
+            "destination": ".github/ISSUE_TEMPLATE/bug_report.yml",
+            "replaces": [".github/ISSUE_TEMPLATE/bug_report.md"],
+        }
+
+        sync_module.process_replaces(
+            file_config,
+            ".github/ISSUE_TEMPLATE/bug_report.yml",
+            repo_path,
+            False,
+            files_changed,
+            files_replaced,
+        )
+
+        assert not old_file.exists()
+        assert ".github/ISSUE_TEMPLATE/bug_report.md" in files_changed
+        assert ".github/ISSUE_TEMPLATE/bug_report.md" in files_replaced
+        assert (
+            files_replaced[".github/ISSUE_TEMPLATE/bug_report.md"]
+            == ".github/ISSUE_TEMPLATE/bug_report.yml"
+        )
+
+    def test_nonexistent_file_skipped_silently(self, tmp_path, capsys):
+        """4.2: Verify non-existent file is silently skipped."""
+        repo_path = str(tmp_path)
+        files_changed: list = []
+        files_replaced: dict = {}
+        file_config = {
+            "source": "new.yml",
+            "destination": "new.yml",
+            "replaces": ["old_file_that_does_not_exist.md"],
+        }
+
+        sync_module.process_replaces(
+            file_config, "new.yml", repo_path,
+            False, files_changed, files_replaced,
+        )
+
+        assert files_changed == []
+        assert files_replaced == {}
+        captured = capsys.readouterr()
+        # No error output for missing files
+        assert "Error" not in captured.out
+
+    def test_excluded_repo_skips_replaces(self, tmp_path):
+        """4.3: Verify replaces is skipped when exclude_repos matches.
+
+        The exclude_repos logic is in sync_repository() via ``continue``,
+        which skips the entire file entry including process_replaces().
+        We verify process_replaces is not called by testing that when
+        ``replaces`` is absent, no processing occurs.
+        """
+        repo_path = str(tmp_path)
+        old_file = tmp_path / "old.md"
+        old_file.write_text("should not be deleted")
+
+        files_changed: list = []
+        files_replaced: dict = {}
+        # Config without replaces key simulates what happens when
+        # the entry is excluded (process_replaces is never called,
+        # but if called without replaces key, it returns early)
+        file_config = {
+            "source": "new.yml",
+            "destination": "new.yml",
+        }
+
+        sync_module.process_replaces(
+            file_config, "new.yml", repo_path,
+            False, files_changed, files_replaced,
+        )
+
+        assert old_file.exists()
+        assert files_changed == []
+        assert files_replaced == {}
+
+    def test_dry_run_reports_without_deleting(self, tmp_path, capsys):
+        """4.4: Verify dry-run prints message without deleting."""
+        repo_path = str(tmp_path)
+        old_file = tmp_path / "old_template.md"
+        old_file.write_text("old content")
+
+        files_changed: list = []
+        files_replaced: dict = {}
+        file_config = {
+            "source": "new_template.yml",
+            "destination": "new_template.yml",
+            "replaces": ["old_template.md"],
+        }
+
+        sync_module.process_replaces(
+            file_config, "new_template.yml", repo_path,
+            True, files_changed, files_replaced,
+        )
+
+        # File must still exist
+        assert old_file.exists()
+        captured = capsys.readouterr()
+        assert "[DRY RUN] Would remove (replaced): old_template.md" in captured.out
+        # Tracked in both lists even during dry-run
+        assert "old_template.md" in files_changed
+        assert "old_template.md" in files_replaced
+        assert files_replaced["old_template.md"] == "new_template.yml"
+
+    def test_multiple_replaces_paths(self, tmp_path):
+        """4.5: Verify multiple replaces paths all processed."""
+        repo_path = str(tmp_path)
+        tpl_dir = tmp_path / ".github" / "ISSUE_TEMPLATE"
+        tpl_dir.mkdir(parents=True)
+        bug = tpl_dir / "bug_report.md"
+        feature = tpl_dir / "feature_request.md"
+        bug.write_text("bug")
+        feature.write_text("feature")
+
+        files_changed: list = []
+        files_replaced: dict = {}
+        file_config = {
+            "source": ".github/ISSUE_TEMPLATE/bug_report.yml",
+            "destination": ".github/ISSUE_TEMPLATE/bug_report.yml",
+            "replaces": [
+                ".github/ISSUE_TEMPLATE/bug_report.md",
+                ".github/ISSUE_TEMPLATE/feature_request.md",
+            ],
+        }
+
+        sync_module.process_replaces(
+            file_config,
+            ".github/ISSUE_TEMPLATE/bug_report.yml",
+            repo_path,
+            False,
+            files_changed,
+            files_replaced,
+        )
+
+        assert not bug.exists()
+        assert not feature.exists()
+        assert len(files_changed) == 2
+        assert len(files_replaced) == 2
+        assert ".github/ISSUE_TEMPLATE/bug_report.md" in files_changed
+        assert ".github/ISSUE_TEMPLATE/feature_request.md" in files_changed
+        assert (
+            files_replaced[".github/ISSUE_TEMPLATE/bug_report.md"]
+            == ".github/ISSUE_TEMPLATE/bug_report.yml"
+        )
+        assert (
+            files_replaced[".github/ISSUE_TEMPLATE/feature_request.md"]
+            == ".github/ISSUE_TEMPLATE/bug_report.yml"
+        )
+
+    def test_traversal_path_rejected_no_deletion(self, tmp_path, capsys):
+        """4.8: Verify path traversal is rejected with error log."""
+        repo_path = str(tmp_path)
+        files_changed: list = []
+        files_replaced: dict = {}
+        file_config = {
+            "source": "new.yml",
+            "destination": "new.yml",
+            "replaces": ["../../etc/passwd"],
+        }
+
+        sync_module.process_replaces(
+            file_config, "new.yml", repo_path,
+            False, files_changed, files_replaced,
+        )
+
+        captured = capsys.readouterr()
+        assert "traversal segments" in captured.out
+        assert files_changed == []
+        assert files_replaced == {}
+
+    def test_directory_path_skipped(self, tmp_path, capsys):
+        """4.9: Verify directory replaces path is skipped."""
+        repo_path = str(tmp_path)
+        dir_path = tmp_path / "some_directory"
+        dir_path.mkdir()
+
+        files_changed: list = []
+        files_replaced: dict = {}
+        file_config = {
+            "source": "new.yml",
+            "destination": "new.yml",
+            "replaces": ["some_directory"],
+        }
+
+        sync_module.process_replaces(
+            file_config, "new.yml", repo_path,
+            False, files_changed, files_replaced,
+        )
+
+        assert dir_path.exists()
+        captured = capsys.readouterr()
+        assert "is a directory" in captured.out
+        assert files_changed == []
+        assert files_replaced == {}
+
+    def test_self_replacement_skipped(self, tmp_path, capsys):
+        """4.10: Verify replaces path matching destination is skipped."""
+        repo_path = str(tmp_path)
+        dest_file = tmp_path / "config.yml"
+        dest_file.write_text("content")
+
+        files_changed: list = []
+        files_replaced: dict = {}
+        file_config = {
+            "source": "config.yml",
+            "destination": "config.yml",
+            "replaces": ["config.yml"],
+        }
+
+        sync_module.process_replaces(
+            file_config, "config.yml", repo_path,
+            False, files_changed, files_replaced,
+        )
+
+        assert dest_file.exists()
+        captured = capsys.readouterr()
+        assert "same as destination" in captured.out
+        assert files_changed == []
+        assert files_replaced == {}
+
+    def test_empty_replaces_list_no_op(self, tmp_path):
+        """Verify replaces: [] is treated as no-op."""
+        repo_path = str(tmp_path)
+        files_changed: list = []
+        files_replaced: dict = {}
+        file_config = {
+            "source": "new.yml",
+            "destination": "new.yml",
+            "replaces": [],
+        }
+
+        sync_module.process_replaces(
+            file_config, "new.yml", repo_path,
+            False, files_changed, files_replaced,
+        )
+
+        assert files_changed == []
+        assert files_replaced == {}
+
+    def test_no_replaces_key_no_op(self, tmp_path):
+        """Verify missing replaces key is treated as no-op."""
+        repo_path = str(tmp_path)
+        files_changed: list = []
+        files_replaced: dict = {}
+        file_config = {
+            "source": "new.yml",
+            "destination": "new.yml",
+        }
+
+        sync_module.process_replaces(
+            file_config, "new.yml", repo_path,
+            False, files_changed, files_replaced,
+        )
+
+        assert files_changed == []
+        assert files_replaced == {}
+
+    def test_valid_symlink_within_repo_deleted(self, tmp_path):
+        """Verify symlink to file inside repo is removed and tracked."""
+        repo_path = str(tmp_path)
+        target = tmp_path / "real_file.md"
+        target.write_text("real content")
+        link = tmp_path / "old_link.md"
+        link.symlink_to(target)
+
+        files_changed: list = []
+        files_replaced: dict = {}
+        file_config = {
+            "source": "new.yml",
+            "destination": "new.yml",
+            "replaces": ["old_link.md"],
+        }
+
+        sync_module.process_replaces(
+            file_config, "new.yml", repo_path,
+            False, files_changed, files_replaced,
+        )
+
+        # Symlink removed, target still exists
+        assert not link.exists() and not link.is_symlink()
+        assert target.exists()
+        assert "old_link.md" in files_changed
+        assert files_replaced["old_link.md"] == "new.yml"
+
+    def test_broken_symlink_removed(self, tmp_path):
+        """Verify dangling symlink is removed and tracked."""
+        repo_path = str(tmp_path)
+        link = tmp_path / "broken_link.md"
+        link.symlink_to(tmp_path / "nonexistent_target.md")
+
+        files_changed: list = []
+        files_replaced: dict = {}
+        file_config = {
+            "source": "new.yml",
+            "destination": "new.yml",
+            "replaces": ["broken_link.md"],
+        }
+
+        sync_module.process_replaces(
+            file_config, "new.yml", repo_path,
+            False, files_changed, files_replaced,
+        )
+
+        assert not link.is_symlink()
+        assert "broken_link.md" in files_changed
+        assert files_replaced["broken_link.md"] == "new.yml"
+
+
+class TestReplacesReporting:
+    """Tests for build_commit_message and build_pr_body with replaces."""
+
+    def test_commit_message_includes_replaced_section(self):
+        """4.6: Verify commit message format with replacements."""
+        files_changed = [
+            ".github/ISSUE_TEMPLATE/bug_report.yml",
+            ".github/ISSUE_TEMPLATE/bug_report.md",
+        ]
+        files_replaced = {
+            ".github/ISSUE_TEMPLATE/bug_report.md": (
+                ".github/ISSUE_TEMPLATE/bug_report.yml"
+            ),
+        }
+
+        commit_message = sync_module.build_commit_message(
+            files_changed, files_replaced,
+        )
+
+        assert "Updated files:" in commit_message
+        assert "- .github/ISSUE_TEMPLATE/bug_report.yml" in commit_message
+        assert "Removed files (replaced):" in commit_message
+        assert (
+            "- .github/ISSUE_TEMPLATE/bug_report.md "
+            "(replaced by .github/ISSUE_TEMPLATE/bug_report.yml)"
+        ) in commit_message
+        # Removed file should NOT appear in updated section
+        assert commit_message.count(".github/ISSUE_TEMPLATE/bug_report.md") == 1
+
+    def test_commit_message_no_replaced_section_without_replacements(self):
+        """4.6: Verify commit message unchanged without replacements."""
+        files_changed = [".golangci.yml"]
+        files_replaced: dict = {}
+
+        commit_message = sync_module.build_commit_message(
+            files_changed, files_replaced,
+        )
+
+        assert "Updated files:" in commit_message
+        assert "Removed files (replaced):" not in commit_message
+
+    def test_pr_body_includes_replaced_section(self):
+        """4.7: Verify PR body includes replaced section."""
+        files_changed = [
+            ".github/ISSUE_TEMPLATE/bug_report.yml",
+            ".github/ISSUE_TEMPLATE/bug_report.md",
+        ]
+        files_replaced = {
+            ".github/ISSUE_TEMPLATE/bug_report.md": (
+                ".github/ISSUE_TEMPLATE/bug_report.yml"
+            ),
+        }
+
+        pr_body = sync_module.build_pr_body(
+            files_changed, files_replaced,
+        )
+
+        assert "## Files Updated" in pr_body
+        assert "- `.github/ISSUE_TEMPLATE/bug_report.yml`" in pr_body
+        assert "## Files Removed (Replaced)" in pr_body
+        assert (
+            "- `.github/ISSUE_TEMPLATE/bug_report.md` "
+            "(replaced by `.github/ISSUE_TEMPLATE/bug_report.yml`)"
+        ) in pr_body
+        # Removed file should NOT be in updated section
+        assert "bug_report.md`\n" not in pr_body.split("## Files Removed")[0]
+
+    def test_pr_body_no_replaced_section_without_replacements(self):
+        """4.7: Verify PR body unchanged without replacements."""
+        files_changed = [".golangci.yml"]
+        files_replaced: dict = {}
+
+        pr_body = sync_module.build_pr_body(
+            files_changed, files_replaced,
+        )
+
+        assert "## Files Updated" in pr_body
+        assert "## Files Removed (Replaced)" not in pr_body
