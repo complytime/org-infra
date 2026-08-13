@@ -529,16 +529,20 @@ def build_pr_body(
     Returns:
         Formatted PR body string.
     """
+    updated_only = [
+        f for f in files_changed
+        if f not in files_replaced
+    ]
     body = (
         "This PR synchronizes repository standards from "
         "org-infra.\n\n"
-        "## Files Updated\n"
-        + "\n".join(
-            f"- `{f}`" for f in files_changed
-            if f not in files_replaced
-        )
-        + "\n\n"
     )
+    if updated_only:
+        body += (
+            "## Files Updated\n"
+            + "\n".join(f"- `{f}`" for f in updated_only)
+            + "\n\n"
+        )
     if files_replaced:
         body += (
             "## Files Removed (Replaced)\n"
