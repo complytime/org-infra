@@ -1584,3 +1584,35 @@ class TestReplacesReporting:
 
         assert "## Files Updated" in pr_body
         assert "## Files Removed (Replaced)" not in pr_body
+
+    def test_pr_body_only_replacements_no_empty_updated_section(self):
+        """Verify PR body omits Files Updated when all changes are replacements."""
+        files_changed = [".github/ISSUE_TEMPLATE/bug_report.md"]
+        files_replaced = {
+            ".github/ISSUE_TEMPLATE/bug_report.md": (
+                ".github/ISSUE_TEMPLATE/bug_report.yml"
+            ),
+        }
+
+        pr_body = sync_module.build_pr_body(
+            files_changed, files_replaced,
+        )
+
+        assert "## Files Updated" not in pr_body
+        assert "## Files Removed (Replaced)" in pr_body
+
+    def test_commit_message_only_replacements_no_empty_updated_section(self):
+        """Verify commit message omits Updated files when all are replacements."""
+        files_changed = [".github/ISSUE_TEMPLATE/bug_report.md"]
+        files_replaced = {
+            ".github/ISSUE_TEMPLATE/bug_report.md": (
+                ".github/ISSUE_TEMPLATE/bug_report.yml"
+            ),
+        }
+
+        commit_message = sync_module.build_commit_message(
+            files_changed, files_replaced,
+        )
+
+        assert "Updated files:" not in commit_message
+        assert "Removed files (replaced):" in commit_message
