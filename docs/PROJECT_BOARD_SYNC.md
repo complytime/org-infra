@@ -7,7 +7,7 @@ board populated with open issues and pull requests from:
 | Organization | Selection |
 |---|---|
 | `Agentic-SSDLC` | All repositories |
-| `complytime` | All repositories **except** `roadmap` and `complytime` |
+| `complytime` | All repositories **except** `roadmap`, `complytime`, and `nunya` |
 | `unbound-force` | All repositories |
 
 Archived repositories are skipped by default.

@@ -28,6 +28,7 @@ organizations:
     exclude_repos:
       - roadmap
       - complytime
+      - nunya # Private internal tooling; keep off the planning board
 
   - name: unbound-force
     # All repositories

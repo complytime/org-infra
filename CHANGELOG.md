@@ -21,6 +21,10 @@
 
 ### Changed
 
+- **Project board sync**: Exclude `complytime/nunya` from the Compliance
+  Automation planning board (`project-sync-config.yml`). Nunya is private
+  internal tooling and should not be backfilled or linked onto project `#14`.
+
 - **crapload workflow**: Replaced custom `scripts/compare-crapload.sh`
   (315 lines) with gaze's native `gaze crap --baseline` comparison.
   The workflow now writes a temporary `.gaze.yaml` from workflow inputs

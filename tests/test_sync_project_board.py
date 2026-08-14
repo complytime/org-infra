@@ -45,6 +45,12 @@ class TestLoadAndValidateConfig:
         assert loaded["project"]["owner"] == "complytime"
         assert loaded["organizations"][0]["exclude_repos"] == ["roadmap", "complytime"]
 
+    def test_committed_config_excludes_nunya(self):
+        path = Path(__file__).parent.parent / "project-sync-config.yml"
+        loaded = sync.load_config(path)
+        org = next(o for o in loaded["organizations"] if o["name"] == "complytime")
+        assert "nunya" in org.get("exclude_repos", [])
+
     def test_validate_config_accepts_minimal(self):
         assert sync.validate_config(_minimal_config())["project"]["number"] == 14
 
