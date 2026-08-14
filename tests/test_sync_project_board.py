@@ -343,6 +343,42 @@ class TestSyncErrorHandling:
         assert stats.repos_linked == 0
         assert stats.errors == []
 
+    def test_same_org_link_failure_is_best_effort(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        self._project_mocks(monkeypatch)
+        client = MagicMock(dry_run=False)
+        monkeypatch.setattr(
+            sync,
+            "link_repository",
+            MagicMock(
+                side_effect=RuntimeError(
+                    "beatrizmcouto does not have the correct permissions "
+                    "to execute `LinkProjectV2ToRepository`"
+                )
+            ),
+        )
+        monkeypatch.setattr(
+            sync,
+            "list_org_repos",
+            MagicMock(
+                return_value=[
+                    {
+                        "name": "complyapi",
+                        "full_name": "complytime/complyapi",
+                        "node_id": "R_API",
+                        "archived": False,
+                    }
+                ]
+            ),
+        )
+        monkeypatch.setattr(sync, "list_open_items", MagicMock(return_value=[]))
+        stats = sync.sync(_minimal_config(), client, org_filter={"complytime"})
+        assert stats.repos_link_skipped == 1
+        assert stats.repos_linked == 0
+        assert stats.errors == []
+        assert stats.items_failed == 0
+
 
 class TestLinkRepository:
     def test_dry_run_does_not_call_graphql(self):

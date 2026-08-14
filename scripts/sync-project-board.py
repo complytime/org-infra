@@ -458,7 +458,7 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
                         # may be missing). Do not fail the job: item sync is the
                         # primary goal.
                         stats.repos_link_skipped += 1
-                        print(f"  skip repo link ({exc})")
+                        print(f"  skip repo link for {full_name} ({exc})")
 
             try:
                 open_items = list_open_items(
