@@ -344,7 +344,7 @@ class TestSyncErrorHandling:
         assert stats.errors == []
 
     def test_same_org_link_failure_is_best_effort(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ):
         self._project_mocks(monkeypatch)
         client = MagicMock(dry_run=False)
@@ -374,10 +374,12 @@ class TestSyncErrorHandling:
         )
         monkeypatch.setattr(sync, "list_open_items", MagicMock(return_value=[]))
         stats = sync.sync(_minimal_config(), client, org_filter={"complytime"})
+        captured = capsys.readouterr()
         assert stats.repos_link_skipped == 1
         assert stats.repos_linked == 0
         assert stats.errors == []
         assert stats.items_failed == 0
+        assert "skip repo link for complytime/complyapi" in captured.out
 
 
 class TestLinkRepository:
