@@ -14,7 +14,9 @@ Archived repositories are skipped by default.
 
 ## What the automation does
 
-On a daily schedule (and via manual `workflow_dispatch`):
+On a 5-minute schedule (GitHub Actions' shortest interval; 1-minute cron is
+not honored) and via manual `workflow_dispatch`. Scheduled runs can still be
+delayed under GitHub load:
 
 1. Discovers repositories from `project-sync-config.yml`
 2. Links same-org repositories to project `#14` (idempotent). Cross-org repos
