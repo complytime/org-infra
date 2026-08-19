@@ -33,6 +33,8 @@ DEFAULT_CONFIG = "project-sync-config.yml"
 OWNER_TO_ORGANIZATION = {
     "Agentic-SSDLC": "Agentic-SSDLC",
     "complytime": "complytime",
+    # Not in project-sync-config.yml yet; maps to complytime when labs repos
+    # land on the board (manual add or future sync scope).
     "complytime-labs": "complytime",
     "unbound-force": "unbound-force",
 }
@@ -149,6 +151,16 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional space-separated org filter (defaults to all configured orgs)",
     )
+    parser.add_argument(
+        "--backfill-org",
+        choices=("auto", "always", "never"),
+        default="auto",
+        help=(
+            "When to walk existing board items to fix Organization. "
+            "auto skips that extra listing when this tick already set "
+            "Organization on newly added items (default: auto)"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -205,6 +217,20 @@ class ProjectFields:
     status_options: Dict[str, str]
     organization_field_id: Optional[str]
     organization_options: Dict[str, str]
+
+
+@dataclass
+class AddItemResult:
+    """Outcome of adding a project item and optionally setting Organization.
+
+    ``item_id`` is None in dry-run mode (no mutation, so no board item id).
+    Organization field updates are best-effort: a failure is recorded on this
+    result instead of raising, so the caller can still treat the add as success.
+    """
+
+    item_id: Optional[str]
+    organization_set: bool = False
+    organization_error: Optional[str] = None
 
 
 def get_project(client: GitHubClient, owner: str, number: int) -> ProjectFields:
@@ -400,11 +426,20 @@ def add_item(
     status_option_id: Optional[str],
     organization_field_id: Optional[str] = None,
     organization_option_id: Optional[str] = None,
-) -> str:
-    """Add content to the project and set Status / Organization. Returns item id."""
+) -> AddItemResult:
+    """Add content to the project and set Status / Organization.
+
+    Returns an ``AddItemResult``. In dry-run mode ``item_id`` is None.
+    Organization updates are best-effort: if ``set_single_select`` fails after
+    the item was added, the result still includes the item id so the caller
+    can record a successful add.
+    """
     if client.dry_run:
         print(f"  [dry-run] would add {content_id}")
-        return "DRY_RUN_ITEM"
+        return AddItemResult(
+            item_id=None,
+            organization_set=bool(organization_field_id and organization_option_id),
+        )
 
     data = client.graphql(
         """
@@ -422,18 +457,33 @@ def add_item(
         set_single_select(
             client, project_id, item_id, status_field_id, status_option_id
         )
+
+    organization_set = False
+    organization_error: Optional[str] = None
     if organization_field_id and organization_option_id:
-        set_single_select(
-            client, project_id, item_id, organization_field_id, organization_option_id
-        )
-    return item_id
+        try:
+            set_single_select(
+                client,
+                project_id,
+                item_id,
+                organization_field_id,
+                organization_option_id,
+            )
+            organization_set = True
+        except SYNC_EXCEPTIONS as exc:
+            organization_error = str(exc)
+
+    return AddItemResult(
+        item_id=item_id,
+        organization_set=organization_set,
+        organization_error=organization_error,
+    )
 
 
-
-def iter_board_items_for_organization(
+def list_board_items_with_org_metadata(
     client: GitHubClient, project_id: str
 ) -> List[Dict[str, Any]]:
-    """Return board items with Organization value and content repository owner."""
+    """Return all board items with Organization value and content repository owner."""
     query = """
     query($projectId: ID!, $cursor: String) {
       node(id: $projectId) {
@@ -484,7 +534,7 @@ def ensure_organizations(
         return
 
     print("\n=== Ensuring Organization on existing board items ===")
-    for node in iter_board_items_for_organization(client, fields.project_id):
+    for node in list_board_items_with_org_metadata(client, fields.project_id):
         content = node.get("content") or {}
         repo = content.get("repository") or {}
         owner_login = (repo.get("owner") or {}).get("login")
@@ -514,6 +564,20 @@ def ensure_organizations(
             msg = f"Failed setting Organization on {label}: {exc}"
             print(f"  ! {msg}")
             stats.errors.append(msg)
+
+
+def should_run_organization_backfill(backfill_org: str, stats: SyncStats) -> bool:
+    """Decide whether to paginate the board to fix Organization values.
+
+    ``auto`` skips the extra listing when this tick already added items and no
+    add-time Organization update failed. Quiet ticks still backfill so
+    manually added items are corrected within one schedule interval.
+    """
+    if backfill_org == "always":
+        return True
+    if backfill_org == "never":
+        return False
+    return stats.items_added == 0 or stats.organization_failed > 0
 
 
 def format_summary(stats: SyncStats, dry_run: bool) -> str:
@@ -548,7 +612,12 @@ def write_summary(stats: SyncStats, dry_run: bool) -> None:
             handle.write(summary)
 
 
-def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> SyncStats:
+def sync(
+    config: Dict[str, Any],
+    client: GitHubClient,
+    org_filter: Set[str],
+    backfill_org: str = "auto",
+) -> SyncStats:
     stats = SyncStats()
     project_cfg = config["project"]
     sync_cfg = config.get("sync", {})
@@ -662,7 +731,7 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
                     continue
 
                 try:
-                    add_item(
+                    result = add_item(
                         client,
                         project_id,
                         node_id,
@@ -672,17 +741,33 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
                         organization_option_id,
                     )
                     stats.items_added += 1
-                    if organization_option_id:
-                        stats.organization_set += 1
                     on_board.add(node_id)
                     print(f"  + {label}")
+                    if result.organization_set:
+                        stats.organization_set += 1
+                    if result.organization_error:
+                        stats.organization_failed += 1
+                        msg = (
+                            f"Failed setting Organization on {full_name} "
+                            f"{label}: {result.organization_error}"
+                        )
+                        print(f"  ! {msg}")
+                        stats.errors.append(msg)
                 except SYNC_EXCEPTIONS as exc:
                     stats.items_failed += 1
                     msg = f"Failed adding {full_name} {label}: {exc}"
                     print(f"  ! {msg}")
                     stats.errors.append(msg)
 
-    ensure_organizations(client, fields, stats)
+    if should_run_organization_backfill(backfill_org, stats):
+        ensure_organizations(client, fields, stats)
+    else:
+        reason = (
+            "--backfill-org never"
+            if backfill_org == "never"
+            else "newly added items already have Organization"
+        )
+        print(f"\nSkipping Organization backfill ({reason})")
     return stats
 
 
@@ -705,7 +790,7 @@ def main() -> int:
         return 2
     org_filter = {part for part in args.orgs.split() if part}
     client = GitHubClient(token=token, dry_run=args.dry_run)
-    stats = sync(config, client, org_filter)
+    stats = sync(config, client, org_filter, backfill_org=args.backfill_org)
     write_summary(stats, dry_run=args.dry_run)
     return 1 if stats.items_failed or stats.errors else 0
 

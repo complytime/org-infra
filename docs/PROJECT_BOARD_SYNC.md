@@ -24,9 +24,13 @@ delayed under GitHub load:
 3. Collects open issues and open PRs
 4. Adds any missing items to the board with **Status = Backlog** and
    **Organization** set from the source GitHub org (`Agentic-SSDLC`,
-   `complytime`, or `unbound-force`)
-5. Backfills **Organization** on any existing board items that are unset or
-   incorrect (for example items added manually)
+   `complytime`, or `unbound-force`). Organization updates are best-effort:
+   a field-write failure does not undo the board add.
+5. Backfills **Organization** on existing board items that are unset or
+   incorrect (for example items added manually). Default `--backfill-org auto`
+   skips that extra board listing when this tick already set Organization on
+   newly added items. Quiet ticks still backfill. Pass `--backfill-org always`
+   (or the workflow input) to force a full walk.
 
 The workflow lives only in `org-infra` (it is **not** synced out to consumer repos).
 
@@ -87,6 +91,7 @@ Optional: set `orgs` to a single org (for example `complytime`) to stage the rol
 export GITHUB_TOKEN="$(gh auth token)"   # needs project write for apply mode
 pip install -r requirements.txt
 python scripts/sync-project-board.py --config project-sync-config.yml --dry-run
+python scripts/sync-project-board.py --config project-sync-config.yml --backfill-org always
 ```
 
 ## Changing scope
