@@ -21,6 +21,11 @@
 
 ### Changed
 
+- **Project board sync**: Run the Compliance Automation planning board
+  sync every 5 minutes instead of once daily. GitHub Actions does not
+  honor a 1-minute cron; 5 minutes is the documented minimum. Concurrent
+  runs are serialized so ticks do not pile up.
+
 - **crapload workflow**: Replaced custom `scripts/compare-crapload.sh`
   (315 lines) with gaze's native `gaze crap --baseline` comparison.
   The workflow now writes a temporary `.gaze.yaml` from workflow inputs

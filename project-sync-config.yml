@@ -16,7 +16,9 @@ sync:
   pull_requests: true
   # Skip archived repositories unless explicitly listed under include_archived
   skip_archived: true
-  # Also link each discovered repository to the project (enables native Project automations)
+  # Link same-org repos to the project (enables native Project automations).
+  # Cross-org repos are skipped for linking — GitHub only allows same-owner links —
+  # but their issues/PRs are still added to the board.
   link_repositories: true
 
 # Organizations and repository selection rules

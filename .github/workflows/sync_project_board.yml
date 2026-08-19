@@ -23,8 +23,16 @@ on:
         type: string
         default: ''
   schedule:
-    # Daily catch-up for newly opened issues/PRs across orgs.
-    - cron: '0 6 * * *'
+    # Fastest GitHub Actions interval. Cron of every 1 minute is valid YAML
+    # but GitHub will not honor intervals shorter than 5 minutes.
+    # See: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onschedule
+    - cron: '*/5 * * * *'
+
+# A full sync can take several minutes. Keep one run in flight (and at most
+# one queued) so 5-minute ticks do not pile up.
+concurrency:
+  group: sync-compliance-automation-project-board
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -33,7 +41,7 @@ jobs:
   sync-project-board:
     name: Sync project board
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 15
 
     steps:
       - name: Checkout org-infra
