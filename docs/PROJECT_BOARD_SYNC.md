@@ -23,6 +23,11 @@ delayed under GitHub load:
    cannot be linked (GitHub restriction) but their issues/PRs still sync.
 3. Collects open issues and open PRs
 4. Adds any missing items to the board with **Status = Backlog**
+5. Fills **Review priority** on pull requests when the field is empty and a
+   linked closing issue (`Fixes` / `Closes`) on the board has **Priority**.
+   Several linked issues use the highest rank (Urgent > High > Medium > Low).
+   An existing Review priority is never overwritten, so a human can still
+   change it. PRs with no parent Priority stay empty for hand review.
 
 The workflow lives only in `org-infra` (it is **not** synced out to consumer repos).
 

@@ -21,6 +21,12 @@
 
 ### Changed
 
+- **Project board sync**: Fill empty **Review priority** on pull requests
+  from the linked closing issue's **Priority** (highest rank when several
+  issues are linked). Existing Review priority values are left alone so
+  reviewers can still override them; PRs without a parent Priority stay
+  empty.
+
 - **Project board sync**: Run the Compliance Automation planning board
   sync every 5 minutes instead of once daily. GitHub Actions does not
   honor a 1-minute cron; 5 minutes is the documented minimum. Concurrent
