@@ -56,7 +56,12 @@ class SyncStats:
     items_failed: int = 0
     review_priority_set: int = 0
     review_priority_failed: int = 0
+    review_priority_unmapped: int = 0
     errors: List[str] = field(default_factory=list)
+
+
+# How many closing-issue refs to fetch per PR. Warn when GitHub has more.
+CLOSING_ISSUES_PAGE_SIZE = 20
 
 
 class GitHubClient:
@@ -347,52 +352,6 @@ def list_open_items(
     return items
 
 
-def add_item(
-    client: GitHubClient,
-    project_id: str,
-    content_id: str,
-    status_field_id: Optional[str],
-    status_option_id: Optional[str],
-) -> None:
-    if client.dry_run:
-        print(f"  [dry-run] would add {content_id}")
-        return
-
-    data = client.graphql(
-        """
-        mutation($projectId: ID!, $contentId: ID!) {
-          addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
-            item { id }
-          }
-        }
-        """,
-        {"projectId": project_id, "contentId": content_id},
-    )
-    item_id = data["addProjectV2ItemById"]["item"]["id"]
-
-    if status_field_id and status_option_id:
-        client.graphql(
-            """
-            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-              updateProjectV2ItemFieldValue(input: {
-                projectId: $projectId
-                itemId: $itemId
-                fieldId: $fieldId
-                value: { singleSelectOptionId: $optionId }
-              }) {
-                projectV2Item { id }
-              }
-            }
-            """,
-            {
-                "projectId": project_id,
-                "itemId": item_id,
-                "fieldId": status_field_id,
-                "optionId": status_option_id,
-            },
-        )
-
-
 def set_single_select(
     client: GitHubClient,
     project_id: str,
@@ -426,12 +385,53 @@ def set_single_select(
     )
 
 
+def add_item(
+    client: GitHubClient,
+    project_id: str,
+    content_id: str,
+    status_field_id: Optional[str],
+    status_option_id: Optional[str],
+) -> None:
+    if client.dry_run:
+        print(f"  [dry-run] would add {content_id}")
+        return
+
+    data = client.graphql(
+        """
+        mutation($projectId: ID!, $contentId: ID!) {
+          addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+            item { id }
+          }
+        }
+        """,
+        {"projectId": project_id, "contentId": content_id},
+    )
+    item_id = data["addProjectV2ItemById"]["item"]["id"]
+
+    if status_field_id and status_option_id:
+        set_single_select(
+            client, project_id, item_id, status_field_id, status_option_id
+        )
+
+
 def highest_priority_name(names: List[str]) -> Optional[str]:
     """Return the highest known Priority name, or None if none are ranked."""
     ranked = [name for name in names if name in PRIORITY_RANK]
     if not ranked:
         return None
     return max(ranked, key=lambda name: PRIORITY_RANK[name])
+
+
+def remember_highest_priority(
+    store: Dict[str, str], issue_id: str, priority_name: str
+) -> None:
+    """Keep the highest-ranked Priority if the same issue is seen twice."""
+    existing = store.get(issue_id)
+    winner = highest_priority_name(
+        [name for name in (existing, priority_name) if name]
+    )
+    if winner:
+        store[issue_id] = winner
 
 
 def list_board_items_for_review_priority(
@@ -459,7 +459,8 @@ def list_board_items_for_review_priority(
                   id
                   number
                   repository { nameWithOwner }
-                  closingIssuesReferences(first: 10) {
+                  closingIssuesReferences(first: __CLOSING_LIMIT__) {
+                    pageInfo { hasNextPage }
                     nodes { id }
                   }
                 }
@@ -470,6 +471,7 @@ def list_board_items_for_review_priority(
       }
     }
     """
+    query = query.replace("__CLOSING_LIMIT__", str(CLOSING_ISSUES_PAGE_SIZE))
     collected: List[Dict[str, Any]] = []
     cursor = None
     while True:
@@ -482,22 +484,23 @@ def list_board_items_for_review_priority(
     return collected
 
 
-def ensure_review_priority(
+def backfill_review_priority(
     client: GitHubClient,
     fields: ProjectFields,
     stats: SyncStats,
 ) -> None:
     """Fill empty PR Review priority from linked issues' Priority.
 
-    Only writes when Review priority is unset so a human override sticks.
-    If the PR has no closing issue on the board with Priority, the field is
-    left empty for manual review. Several linked issues use the highest rank.
+    Best-effort: only writes when Review priority is unset so a human
+    override sticks. If the PR has no closing issue on the board with
+    Priority, the field is left empty for manual review. Several linked
+    issues use the highest rank.
     """
     if not fields.review_priority_field_id or not fields.review_priority_options:
         print("Review priority field missing on project; skipping review-priority sync")
         return
 
-    print("\n=== Ensuring Review priority on PRs from linked issues ===")
+    print("\n=== Backfilling Review priority on PRs from linked issues ===")
     items = list_board_items_for_review_priority(client, fields.project_id)
 
     issue_priority: Dict[str, str] = {}
@@ -508,7 +511,7 @@ def ensure_review_priority(
         issue_id = content.get("id")
         priority_name = (node.get("priority") or {}).get("name")
         if issue_id and priority_name:
-            issue_priority[issue_id] = priority_name
+            remember_highest_priority(issue_priority, issue_id, priority_name)
 
     for node in items:
         content = node.get("content") or {}
@@ -517,10 +520,18 @@ def ensure_review_priority(
         current = (node.get("reviewPriority") or {}).get("name")
         if current:
             continue
-        closing = (content.get("closingIssuesReferences") or {}).get("nodes") or []
+        closing = content.get("closingIssuesReferences") or {}
+        repo = (content.get("repository") or {}).get("nameWithOwner") or "unknown"
+        number = content.get("number")
+        label = f"{repo}#{number}" if number is not None else repo
+        if (closing.get("pageInfo") or {}).get("hasNextPage"):
+            print(
+                f"  warning: closing issues truncated at "
+                f"{CLOSING_ISSUES_PAGE_SIZE} for {label}"
+            )
         parent_priorities = [
             issue_priority[ref["id"]]
-            for ref in closing
+            for ref in closing.get("nodes") or []
             if ref.get("id") in issue_priority
         ]
         target = highest_priority_name(parent_priorities)
@@ -528,11 +539,12 @@ def ensure_review_priority(
             continue
         option_id = fields.review_priority_options.get(target)
         if not option_id:
+            stats.review_priority_unmapped += 1
+            print(
+                f"  skip {label}: no Review priority option named '{target}'"
+            )
             continue
         item_id = node["id"]
-        repo = (content.get("repository") or {}).get("nameWithOwner") or "unknown"
-        number = content.get("number")
-        label = f"{repo}#{number}" if number is not None else repo
         try:
             set_single_select(
                 client,
@@ -565,6 +577,7 @@ def format_summary(stats: SyncStats, dry_run: bool) -> str:
         f"- Failed: **{stats.items_failed}**",
         f"- Review priority set: **{stats.review_priority_set}**",
         f"- Review priority failed: **{stats.review_priority_failed}**",
+        f"- Review priority unmapped: **{stats.review_priority_unmapped}**",
     ]
     if stats.errors:
         lines.extend(["", "### Errors", ""])
@@ -705,7 +718,7 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
                     print(f"  ! {msg}")
                     stats.errors.append(msg)
 
-    ensure_review_priority(client, fields, stats)
+    backfill_review_priority(client, fields, stats)
     return stats
 
 

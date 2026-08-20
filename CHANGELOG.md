@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Project board sync**: Fill empty **Review priority** on pull requests
+  from the linked closing issue's **Priority** (highest rank when several
+  issues are linked). Existing Review priority values are left alone so
+  reviewers can still override them; PRs without a parent Priority stay
+  empty.
+
 - **Stale review alerts**: Added `reusable_stale_reviews.yml` and
   `ci_stale_reviews.yml` to detect and flag PRs with review requests
   pending beyond a configurable business-day threshold. Applies a
@@ -20,12 +26,6 @@
   Baseline Level 1 compliance (OSPS-VM-02.01) across all org repositories.
 
 ### Changed
-
-- **Project board sync**: Fill empty **Review priority** on pull requests
-  from the linked closing issue's **Priority** (highest rank when several
-  issues are linked). Existing Review priority values are left alone so
-  reviewers can still override them; PRs without a parent Priority stay
-  empty.
 
 - **Project board sync**: Run the Compliance Automation planning board
   sync every 5 minutes instead of once daily. GitHub Actions does not
