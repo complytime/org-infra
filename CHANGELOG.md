@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Evidence Locker MVP reviewers**: Assign `evidence-locker-mvp-reviewers`
+  team members to open issues and pull requests whose milestone is
+  Evidence Locker MVP. Membership is read from `peribolos.yaml` so the
+  reviewer pool can change without editing the workflow. See
+  `docs/MILESTONE_REVIEWERS.md`.
+
 - **Stale review alerts**: Added `reusable_stale_reviews.yml` and
   `ci_stale_reviews.yml` to detect and flag PRs with review requests
   pending beyond a configurable business-day threshold. Applies a

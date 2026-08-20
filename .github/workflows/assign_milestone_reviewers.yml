@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Assign members of complytime/evidence-locker-mvp-reviewers to open
+# issues and pull requests whose milestone is Evidence Locker MVP.
+# Team membership is read from complytime/.github peribolos.yaml.
+# See docs/MILESTONE_REVIEWERS.md.
+
+name: Assign Evidence Locker MVP Reviewers
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview assignments without applying them"
+        required: false
+        type: boolean
+        default: true
+  schedule:
+    # GitHub Actions does not honor intervals shorter than 5 minutes.
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: assign-milestone-reviewers
+  cancel-in-progress: false
+
+jobs:
+  assign-reviewers:
+    if: github.repository_owner == 'complytime'
+    name: Assign milestone reviewers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout org-infra
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SYNC_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }} # zizmor: ignore[github-app]
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Assign reviewers
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: |
+          set -euo pipefail
+          ARGS=(--config milestone-reviewers-config.yml)
+          if [ "$DRY_RUN" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+          python3 scripts/assign-milestone-reviewers.py "${ARGS[@]}"

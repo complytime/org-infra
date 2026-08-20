@@ -1,0 +1,16 @@
+# Assign reviewers from a peribolos team to open issues and pull requests
+# whose milestone title matches. Membership changes in peribolos.yaml;
+# this file only names the team and the milestone titles to match.
+#
+# See docs/MILESTONE_REVIEWERS.md.
+
+org: complytime
+peribolos_repo: ".github"
+peribolos_path: peribolos.yaml
+peribolos_ref: main
+team: evidence-locker-mvp-reviewers
+milestone_titles:
+  - Evidence Locker MVP
+  - Internal Evidence Locker MVP
+# Archived repositories are always skipped. Add names here to skip others.
+exclude_repos: []
