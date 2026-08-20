@@ -12,6 +12,11 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "pre-commit"
     directory: "/"
@@ -20,6 +25,11 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "pip"
     directory: "/"
@@ -29,3 +39,8 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
