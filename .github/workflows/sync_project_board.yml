@@ -22,6 +22,18 @@ on:
         required: false
         type: string
         default: ''
+      backfill_org:
+        description: >-
+          When to walk existing board items to fix Organization.
+          auto skips that listing when this tick already set Organization on
+          new items; always forces a full backfill; never skips it.
+        required: false
+        type: choice
+        options:
+          - auto
+          - always
+          - never
+        default: auto
   schedule:
     # Fastest GitHub Actions interval. Cron of every 1 minute is valid YAML
     # but GitHub will not honor intervals shorter than 5 minutes.
@@ -66,13 +78,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PROJECT_SYNC_TOKEN }}
           DRY_RUN: ${{ inputs.dry_run || false }}
           ORGS: ${{ inputs.orgs || '' }}
+          BACKFILL_ORG: ${{ inputs.backfill_org || 'auto' }}
         run: |
           if [ -z "$GITHUB_TOKEN" ]; then
             echo "::error::PROJECT_SYNC_TOKEN secret is not configured. See docs/PROJECT_BOARD_SYNC.md"
             exit 1
           fi
 
-          ARGS=(--config project-sync-config.yml)
+          ARGS=(--config project-sync-config.yml --backfill-org "$BACKFILL_ORG")
           if [ "$DRY_RUN" = "true" ]; then
             ARGS+=(--dry-run)
           fi
