@@ -252,6 +252,22 @@ def get_project(client: GitHubClient, owner: str, number: int) -> ProjectFields:
     return fields
 
 
+def _paginate_project_item_nodes(
+    client: GitHubClient, project_id: str, query: str
+) -> List[Dict[str, Any]]:
+    """Walk ProjectV2 item pages until exhausted."""
+    collected: List[Dict[str, Any]] = []
+    cursor = None
+    while True:
+        data = client.graphql(query, {"projectId": project_id, "cursor": cursor})
+        items = data["node"]["items"]
+        collected.extend(items["nodes"])
+        if not items["pageInfo"]["hasNextPage"]:
+            break
+        cursor = items["pageInfo"]["endCursor"]
+    return collected
+
+
 def existing_content_ids(client: GitHubClient, project_id: str) -> Set[str]:
     """Return node IDs of issues/PRs already on the project."""
     query = """
@@ -272,18 +288,11 @@ def existing_content_ids(client: GitHubClient, project_id: str) -> Set[str]:
     }
     """
     ids: Set[str] = set()
-    cursor = None
-    while True:
-        data = client.graphql(query, {"projectId": project_id, "cursor": cursor})
-        items = data["node"]["items"]
-        for node in items["nodes"]:
-            content = node.get("content") or {}
-            content_id = content.get("id")
-            if content_id:
-                ids.add(content_id)
-        if not items["pageInfo"]["hasNextPage"]:
-            break
-        cursor = items["pageInfo"]["endCursor"]
+    for node in _paginate_project_item_nodes(client, project_id, query):
+        content = node.get("content") or {}
+        content_id = content.get("id")
+        if content_id:
+            ids.add(content_id)
     return ids
 
 
@@ -443,16 +452,7 @@ def list_board_priority_items(
       }
     }
     """
-    collected: List[Dict[str, Any]] = []
-    cursor = None
-    while True:
-        data = client.graphql(query, {"projectId": project_id, "cursor": cursor})
-        items = data["node"]["items"]
-        collected.extend(items["nodes"])
-        if not items["pageInfo"]["hasNextPage"]:
-            break
-        cursor = items["pageInfo"]["endCursor"]
-    return collected
+    return _paginate_project_item_nodes(client, project_id, query)
 
 
 def _copy_priority_field(
@@ -592,18 +592,17 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
     link_repos = bool(sync_cfg.get("link_repositories", True))
 
     fields = get_project(client, owner, number)
-    project_id = fields.project_id
-    status_field_id = fields.status_field_id
-    status_options = fields.status_options
-    status_option_id = status_options.get(default_status) if status_options else None
-    if default_status and status_field_id and not status_option_id:
+    status_option_id = (
+        fields.status_options.get(default_status) if fields.status_options else None
+    )
+    if default_status and fields.status_field_id and not status_option_id:
         print(
             f"Warning: Status option '{default_status}' not found; "
             "items will be added without a Status value"
         )
 
-    print(f"Project {owner}/{number} id={project_id}")
-    on_board = existing_content_ids(client, project_id)
+    print(f"Project {owner}/{number} id={fields.project_id}")
+    on_board = existing_content_ids(client, fields.project_id)
     print(f"Existing board items with content: {len(on_board)}")
 
     for org_cfg in config.get("organizations", []):
@@ -640,7 +639,7 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
                 else:
                     try:
                         linked = link_repository(
-                            client, project_id, repo["node_id"]
+                            client, fields.project_id, repo["node_id"]
                         )
                         if linked:
                             stats.repos_linked += 1
@@ -683,9 +682,9 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
                 try:
                     add_item(
                         client,
-                        project_id,
+                        fields.project_id,
                         node_id,
-                        status_field_id,
+                        fields.status_field_id,
                         status_option_id,
                     )
                     stats.items_added += 1

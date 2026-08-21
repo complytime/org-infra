@@ -242,11 +242,7 @@ class TestSyncErrorHandling:
         monkeypatch.setattr(
             sync,
             "get_project",
-            lambda *_a, **_k: sync.ProjectFields(
-                project_id="PROJECT",
-                status_field_id="STATUS_FIELD",
-                status_options={"Backlog": "OPT"},
-            ),
+            lambda *_a, **_k: _priority_fields(),
         )
         monkeypatch.setattr(sync, "existing_content_ids", lambda *_a, **_k: set())
         monkeypatch.setattr(
@@ -467,6 +463,18 @@ class TestListBoardPriorityItems:
         assert client.graphql.call_args_list[0].args[1]["cursor"] is None
         assert client.graphql.call_args_list[1].args[1]["cursor"] == "c1"
 
+    def test_empty_board_returns_no_items(self):
+        client = MagicMock()
+        client.graphql.return_value = {
+            "node": {
+                "items": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "nodes": [],
+                }
+            }
+        }
+        assert sync.list_board_priority_items(client, "PROJECT_ID") == []
+
     def test_extracts_priority_fields_and_closing_issues(self):
         client = MagicMock()
         client.graphql.return_value = {
@@ -644,6 +652,33 @@ class TestPriorityInherit:
                         "__typename": "PullRequest",
                         "id": "PR_2",
                         "closingIssuesReferences": {"nodes": []},
+                    },
+                },
+            ],
+        )
+        set_mock = MagicMock()
+        monkeypatch.setattr(sync, "set_single_select", set_mock)
+        stats = sync.SyncStats()
+        sync.ensure_pr_priority_from_issues(client, _priority_fields(), stats)
+        set_mock.assert_not_called()
+        assert stats.priority_set == 0
+
+    def test_skips_when_linked_issue_is_not_on_board(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        monkeypatch.setattr(
+            sync,
+            "list_board_priority_items",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_PR",
+                    "priority": None,
+                    "reviewPriority": None,
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_1",
+                        "closingIssuesReferences": {"nodes": [{"id": "I_OFFBOARD"}]},
                     },
                 },
             ],
