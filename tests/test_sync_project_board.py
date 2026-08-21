@@ -401,6 +401,110 @@ class TestLinkRepository:
         assert sync.link_repository(client, "P", "R") is False
 
 
+class TestSetSingleSelect:
+    def test_set_single_select_calls_graphql_with_correct_variables(self):
+        client = MagicMock(dry_run=False)
+        sync.set_single_select(client, "PROJECT", "ITEM", "FIELD", "OPT")
+        client.graphql.assert_called_once()
+        _query, variables = client.graphql.call_args.args
+        assert variables == {
+            "projectId": "PROJECT",
+            "itemId": "ITEM",
+            "fieldId": "FIELD",
+            "optionId": "OPT",
+        }
+
+    def test_set_single_select_dry_run_skips_mutation(self):
+        client = MagicMock(dry_run=True)
+        sync.set_single_select(client, "PROJECT", "ITEM", "FIELD", "OPT")
+        client.graphql.assert_not_called()
+
+
+class TestListBoardPriorityItems:
+    def test_paginates_multiple_pages(self):
+        client = MagicMock()
+        client.graphql.side_effect = [
+            {
+                "node": {
+                    "items": {
+                        "pageInfo": {"hasNextPage": True, "endCursor": "c1"},
+                        "nodes": [
+                            {
+                                "id": "PVTI_1",
+                                "priority": {"name": "High"},
+                                "reviewPriority": None,
+                                "content": {"__typename": "Issue", "id": "I_1"},
+                            }
+                        ],
+                    }
+                }
+            },
+            {
+                "node": {
+                    "items": {
+                        "pageInfo": {"hasNextPage": False, "endCursor": "c2"},
+                        "nodes": [
+                            {
+                                "id": "PVTI_2",
+                                "priority": None,
+                                "reviewPriority": {"name": "Low"},
+                                "content": {
+                                    "__typename": "PullRequest",
+                                    "id": "PR_1",
+                                    "closingIssuesReferences": {
+                                        "nodes": [{"id": "I_1"}]
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                }
+            },
+        ]
+        items = sync.list_board_priority_items(client, "PROJECT_ID")
+        assert [item["id"] for item in items] == ["PVTI_1", "PVTI_2"]
+        assert client.graphql.call_count == 2
+        assert client.graphql.call_args_list[0].args[1]["cursor"] is None
+        assert client.graphql.call_args_list[1].args[1]["cursor"] == "c1"
+
+    def test_extracts_priority_fields_and_closing_issues(self):
+        client = MagicMock()
+        client.graphql.return_value = {
+            "node": {
+                "items": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "nodes": [
+                        {
+                            "id": "PVTI_ISSUE",
+                            "priority": {"name": "Urgent"},
+                            "reviewPriority": None,
+                            "content": {"__typename": "Issue", "id": "I_1"},
+                        },
+                        {
+                            "id": "PVTI_PR",
+                            "priority": None,
+                            "reviewPriority": {"name": "High"},
+                            "content": {
+                                "__typename": "PullRequest",
+                                "id": "PR_1",
+                                "closingIssuesReferences": {
+                                    "nodes": [{"id": "I_1"}, {"id": "I_2"}]
+                                },
+                            },
+                        },
+                    ],
+                }
+            }
+        }
+        items = sync.list_board_priority_items(client, "PROJECT_ID")
+        assert items[0]["priority"]["name"] == "Urgent"
+        assert items[1]["reviewPriority"]["name"] == "High"
+        assert [
+            node["id"]
+            for node in items[1]["content"]["closingIssuesReferences"]["nodes"]
+        ] == ["I_1", "I_2"]
+
+
 def _priority_fields() -> sync.ProjectFields:
     return sync.ProjectFields(
         project_id="PROJECT",
@@ -430,6 +534,9 @@ class TestPriorityInherit:
     def test_highest_priority_empty_when_no_known_values(self):
         assert sync.highest_priority([]) is None
         assert sync.highest_priority([None, "unknown"]) is None
+
+    def test_highest_priority_ignores_unknown_in_mixed_list(self):
+        assert sync.highest_priority(["NotReal", "Low"]) == "Low"
 
     def test_copies_issue_priority_onto_empty_pr_fields(
         self, monkeypatch: pytest.MonkeyPatch

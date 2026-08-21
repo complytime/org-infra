@@ -457,7 +457,7 @@ def list_board_priority_items(
 
 def _copy_priority_field(
     client: GitHubClient,
-    fields: ProjectFields,
+    project_id: str,
     item_id: str,
     option_name: str,
     field_id: Optional[str],
@@ -470,7 +470,7 @@ def _copy_priority_field(
     if not field_id or not option_id:
         return
     try:
-        set_single_select(client, fields.project_id, item_id, field_id, option_id)
+        set_single_select(client, project_id, item_id, field_id, option_id)
         stats.priority_set += 1
         print(f"  priority {label} -> {option_name}")
     except SYNC_EXCEPTIONS as exc:
@@ -526,7 +526,7 @@ def ensure_pr_priority_from_issues(
         if not current_priority:
             _copy_priority_field(
                 client,
-                fields,
+                fields.project_id,
                 item_id,
                 wanted,
                 fields.priority_field_id,
@@ -537,7 +537,7 @@ def ensure_pr_priority_from_issues(
         if not current_review:
             _copy_priority_field(
                 client,
-                fields,
+                fields.project_id,
                 item_id,
                 wanted,
                 fields.review_priority_field_id,
