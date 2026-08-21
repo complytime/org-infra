@@ -23,8 +23,16 @@ delayed under GitHub load:
    cannot be linked (GitHub restriction) but their issues/PRs still sync.
 3. Collects open issues and open PRs
 4. Adds any missing items to the board with **Status = Backlog**
+5. Copies **Priority** (and empty **Review priority**) onto PRs from linked
+   issues (`Fixes` / `Closes` / Development sidebar). Uses the issue's project
+   Priority; if several issues are linked, the highest rank wins
+   (Urgent > High > Medium > Low). PRs with no linked issue, or whose issues
+   have no Priority, stay unset — there is no default. Values already set on
+   the PR are left alone.
 
 The workflow lives only in `org-infra` (it is **not** synced out to consumer repos).
+A new PR is picked up on the next 5-minute tick (GitHub does not let this
+org-infra workflow subscribe to `pull_request` events in other repositories).
 
 | File | Role |
 |---|---|
