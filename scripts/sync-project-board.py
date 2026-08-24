@@ -5,9 +5,11 @@
 
 Discovers repositories across one or more organizations, optionally links
 them to the target project, and adds any open issues/PRs that are not
-already on the board. PRs inherit Priority from linked issues when that
-field is empty. Designed for cross-org boards where a single GitHub App
-installation token is insufficient (use a PAT with multi-org access).
+already on the board. Newly added items (and any existing items missing a
+value) get Organization set from the source GitHub org. PRs inherit Priority
+from linked issues when that field is empty. Designed for cross-org boards
+where a single GitHub App installation token is insufficient (use a PAT with
+multi-org access).
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests
 import yaml
@@ -27,9 +29,23 @@ GITHUB_API = "https://api.github.com"
 GITHUB_GRAPHQL = f"{GITHUB_API}/graphql"
 DEFAULT_CONFIG = "project-sync-config.yml"
 
+# Map GitHub repository owner login → Organization single-select option name
+# on the Compliance Automation planning board.
+OWNER_TO_ORGANIZATION = {
+    "Agentic-SSDLC": "Agentic-SSDLC",
+    "complytime": "complytime",
+    # Not in project-sync-config.yml yet; maps to complytime when labs repos
+    # land on the board (manual add or future sync scope).
+    "complytime-labs": "complytime",
+    "unbound-force": "unbound-force",
+}
+
 # Expected failure modes while iterating orgs/repos (HTTP + explicit RuntimeError).
 # Keeps programming bugs (TypeError, KeyError, …) from being swallowed per item.
 SYNC_EXCEPTIONS = (requests.RequestException, RuntimeError)
+
+# Project Priority / Review priority option names, highest first.
+PRIORITY_RANK = {"Urgent": 4, "High": 3, "Medium": 2, "Low": 1}
 
 
 @dataclass
@@ -43,26 +59,11 @@ class SyncStats:
     items_already_on_board: int = 0
     items_added: int = 0
     items_failed: int = 0
+    organization_set: int = 0
+    organization_failed: int = 0
     priority_set: int = 0
     priority_failed: int = 0
     errors: List[str] = field(default_factory=list)
-
-
-# Project Priority / Review priority option names, highest first.
-PRIORITY_RANK = {"Urgent": 4, "High": 3, "Medium": 2, "Low": 1}
-
-
-@dataclass
-class ProjectFields:
-    """Resolved project id plus single-select field metadata."""
-
-    project_id: str
-    status_field_id: Optional[str]
-    status_options: Dict[str, str]
-    priority_field_id: Optional[str] = None
-    priority_options: Dict[str, str] = field(default_factory=dict)
-    review_priority_field_id: Optional[str] = None
-    review_priority_options: Dict[str, str] = field(default_factory=dict)
 
 
 class GitHubClient:
@@ -156,6 +157,16 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional space-separated org filter (defaults to all configured orgs)",
     )
+    parser.add_argument(
+        "--backfill-org",
+        choices=("auto", "always", "never"),
+        default="auto",
+        help=(
+            "When to walk existing board items to fix Organization. "
+            "auto skips that extra listing when this tick already set "
+            "Organization on newly added items (default: auto)"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -203,8 +214,37 @@ def list_org_repos(
     return selected
 
 
+@dataclass
+class ProjectFields:
+    """Resolved project id plus single-select field metadata."""
+
+    project_id: str
+    status_field_id: Optional[str]
+    status_options: Dict[str, str]
+    organization_field_id: Optional[str]
+    organization_options: Dict[str, str]
+    priority_field_id: Optional[str] = None
+    priority_options: Dict[str, str] = field(default_factory=dict)
+    review_priority_field_id: Optional[str] = None
+    review_priority_options: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class AddItemResult:
+    """Outcome of adding a project item and optionally setting Organization.
+
+    ``item_id`` is None in dry-run mode (no mutation, so no board item id).
+    Organization field updates are best-effort: a failure is recorded on this
+    result instead of raising, so the caller can still treat the add as success.
+    """
+
+    item_id: Optional[str]
+    organization_set: bool = False
+    organization_error: Optional[str] = None
+
+
 def get_project(client: GitHubClient, owner: str, number: int) -> ProjectFields:
-    """Return project id and Status / Priority / Review priority metadata."""
+    """Return project id and Status / Organization / Priority field metadata."""
     data = client.graphql(
         """
         query($owner: String!, $number: Int!) {
@@ -234,6 +274,8 @@ def get_project(client: GitHubClient, owner: str, number: int) -> ProjectFields:
         project_id=project["id"],
         status_field_id=None,
         status_options={},
+        organization_field_id=None,
+        organization_options={},
     )
     for node in project["fields"]["nodes"]:
         if not node:
@@ -243,6 +285,9 @@ def get_project(client: GitHubClient, owner: str, number: int) -> ProjectFields:
         if name == "Status":
             fields.status_field_id = node["id"]
             fields.status_options = options
+        elif name == "Organization":
+            fields.organization_field_id = node["id"]
+            fields.organization_options = options
         elif name == "Priority":
             fields.priority_field_id = node["id"]
             fields.priority_options = options
@@ -381,16 +426,41 @@ def set_single_select(
     )
 
 
+def organization_option_for_owner(
+    owner_login: str, organization_options: Dict[str, str]
+) -> Optional[Tuple[str, str]]:
+    """Return (option_name, option_id) for a repository owner, if mapped."""
+    option_name = OWNER_TO_ORGANIZATION.get(owner_login)
+    if not option_name:
+        return None
+    option_id = organization_options.get(option_name)
+    if not option_id:
+        return None
+    return option_name, option_id
+
+
 def add_item(
     client: GitHubClient,
     project_id: str,
     content_id: str,
     status_field_id: Optional[str],
     status_option_id: Optional[str],
-) -> None:
+    organization_field_id: Optional[str] = None,
+    organization_option_id: Optional[str] = None,
+) -> AddItemResult:
+    """Add content to the project and set Status / Organization.
+
+    Returns an ``AddItemResult``. In dry-run mode ``item_id`` is None.
+    Organization updates are best-effort: if ``set_single_select`` fails after
+    the item was added, the result still includes the item id so the caller
+    can record a successful add.
+    """
     if client.dry_run:
         print(f"  [dry-run] would add {content_id}")
-        return
+        return AddItemResult(
+            item_id=None,
+            organization_set=bool(organization_field_id and organization_option_id),
+        )
 
     data = client.graphql(
         """
@@ -408,6 +478,118 @@ def add_item(
         set_single_select(
             client, project_id, item_id, status_field_id, status_option_id
         )
+
+    organization_set = False
+    organization_error: Optional[str] = None
+    if organization_field_id and organization_option_id:
+        try:
+            set_single_select(
+                client,
+                project_id,
+                item_id,
+                organization_field_id,
+                organization_option_id,
+            )
+            organization_set = True
+        except SYNC_EXCEPTIONS as exc:
+            organization_error = str(exc)
+
+    return AddItemResult(
+        item_id=item_id,
+        organization_set=organization_set,
+        organization_error=organization_error,
+    )
+
+
+def list_board_items_with_org_metadata(
+    client: GitHubClient, project_id: str
+) -> List[Dict[str, Any]]:
+    """Return all board items with Organization value and content repository owner."""
+    query = """
+    query($projectId: ID!, $cursor: String) {
+      node(id: $projectId) {
+        ... on ProjectV2 {
+          items(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              organization: fieldValueByName(name: "Organization") {
+                ... on ProjectV2ItemFieldSingleSelectValue { name }
+              }
+              content {
+                ... on Issue {
+                  id
+                  repository { owner { login } nameWithOwner }
+                }
+                ... on PullRequest {
+                  id
+                  repository { owner { login } nameWithOwner }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    """
+    return _paginate_project_item_nodes(client, project_id, query)
+
+
+def ensure_organizations(
+    client: GitHubClient,
+    fields: ProjectFields,
+    stats: SyncStats,
+) -> None:
+    """Set Organization on board items that are missing or incorrect."""
+    if not fields.organization_field_id or not fields.organization_options:
+        print("Organization field missing on project; skipping organization sync")
+        return
+
+    print("\n=== Ensuring Organization on existing board items ===")
+    for node in list_board_items_with_org_metadata(client, fields.project_id):
+        content = node.get("content") or {}
+        repo = content.get("repository") or {}
+        owner_login = (repo.get("owner") or {}).get("login")
+        if not owner_login:
+            continue
+        mapped = organization_option_for_owner(owner_login, fields.organization_options)
+        if not mapped:
+            continue
+        option_name, option_id = mapped
+        current = (node.get("organization") or {}).get("name")
+        if current == option_name:
+            continue
+        item_id = node["id"]
+        label = repo.get("nameWithOwner") or owner_login
+        try:
+            set_single_select(
+                client,
+                fields.project_id,
+                item_id,
+                fields.organization_field_id,
+                option_id,
+            )
+            stats.organization_set += 1
+            print(f"  org {label} -> {option_name}")
+        except SYNC_EXCEPTIONS as exc:
+            stats.organization_failed += 1
+            msg = f"Failed setting Organization on {label}: {exc}"
+            print(f"  ! {msg}")
+            stats.errors.append(msg)
+
+
+def should_run_organization_backfill(backfill_org: str, stats: SyncStats) -> bool:
+    """Decide whether to paginate the board to fix Organization values.
+
+    ``auto`` skips the extra listing when this tick already added items and no
+    add-time Organization update failed. Quiet ticks still backfill so
+    manually added items are corrected within one schedule interval.
+    """
+    if backfill_org == "always":
+        return True
+    if backfill_org == "never":
+        return False
+    return stats.items_added == 0 or stats.organization_failed > 0
 
 
 def highest_priority(names: List[Optional[str]]) -> Optional[str]:
@@ -560,6 +742,8 @@ def format_summary(stats: SyncStats, dry_run: bool) -> str:
         f"- Already on board: **{stats.items_already_on_board}**",
         f"- Added: **{stats.items_added}**",
         f"- Failed: **{stats.items_failed}**",
+        f"- Organization set/updated: **{stats.organization_set}**",
+        f"- Organization failed: **{stats.organization_failed}**",
         f"- Priority copied from linked issues: **{stats.priority_set}**",
         f"- Priority copy failed: **{stats.priority_failed}**",
     ]
@@ -579,7 +763,12 @@ def write_summary(stats: SyncStats, dry_run: bool) -> None:
             handle.write(summary)
 
 
-def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> SyncStats:
+def sync(
+    config: Dict[str, Any],
+    client: GitHubClient,
+    org_filter: Set[str],
+    backfill_org: str = "auto",
+) -> SyncStats:
     stats = SyncStats()
     project_cfg = config["project"]
     sync_cfg = config.get("sync", {})
@@ -592,17 +781,23 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
     link_repos = bool(sync_cfg.get("link_repositories", True))
 
     fields = get_project(client, owner, number)
-    status_option_id = (
-        fields.status_options.get(default_status) if fields.status_options else None
-    )
-    if default_status and fields.status_field_id and not status_option_id:
+    project_id = fields.project_id
+    status_field_id = fields.status_field_id
+    status_options = fields.status_options
+    status_option_id = status_options.get(default_status) if status_options else None
+    if default_status and status_field_id and not status_option_id:
         print(
             f"Warning: Status option '{default_status}' not found; "
             "items will be added without a Status value"
         )
+    if not fields.organization_field_id:
+        print(
+            "Warning: Organization field not found; "
+            "items will be added without an Organization value"
+        )
 
-    print(f"Project {owner}/{number} id={fields.project_id}")
-    on_board = existing_content_ids(client, fields.project_id)
+    print(f"Project {owner}/{number} id={project_id}")
+    on_board = existing_content_ids(client, project_id)
     print(f"Existing board items with content: {len(on_board)}")
 
     for org_cfg in config.get("organizations", []):
@@ -611,6 +806,13 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
             continue
         exclude = set(org_cfg.get("exclude_repos") or [])
         print(f"\n=== {org} (exclude={sorted(exclude) or 'none'}) ===")
+        org_mapped = organization_option_for_owner(org, fields.organization_options)
+        organization_option_id = org_mapped[1] if org_mapped else None
+        if fields.organization_field_id and not organization_option_id:
+            print(
+                f"  Warning: no Organization option mapped for '{org}'; "
+                "new items will omit Organization"
+            )
         try:
             repos = list_org_repos(
                 client, org, exclude=exclude, skip_archived=skip_archived
@@ -639,7 +841,7 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
                 else:
                     try:
                         linked = link_repository(
-                            client, fields.project_id, repo["node_id"]
+                            client, project_id, repo["node_id"]
                         )
                         if linked:
                             stats.repos_linked += 1
@@ -680,22 +882,43 @@ def sync(config: Dict[str, Any], client: GitHubClient, org_filter: Set[str]) -> 
                     continue
 
                 try:
-                    add_item(
+                    result = add_item(
                         client,
-                        fields.project_id,
+                        project_id,
                         node_id,
-                        fields.status_field_id,
+                        status_field_id,
                         status_option_id,
+                        fields.organization_field_id,
+                        organization_option_id,
                     )
                     stats.items_added += 1
                     on_board.add(node_id)
                     print(f"  + {label}")
+                    if result.organization_set:
+                        stats.organization_set += 1
+                    if result.organization_error:
+                        stats.organization_failed += 1
+                        msg = (
+                            f"Failed setting Organization on {full_name} "
+                            f"{label}: {result.organization_error}"
+                        )
+                        print(f"  ! {msg}")
+                        stats.errors.append(msg)
                 except SYNC_EXCEPTIONS as exc:
                     stats.items_failed += 1
                     msg = f"Failed adding {full_name} {label}: {exc}"
                     print(f"  ! {msg}")
                     stats.errors.append(msg)
 
+    if should_run_organization_backfill(backfill_org, stats):
+        ensure_organizations(client, fields, stats)
+    else:
+        reason = (
+            "--backfill-org never"
+            if backfill_org == "never"
+            else "newly added items already have Organization"
+        )
+        print(f"\nSkipping Organization backfill ({reason})")
     ensure_pr_priority_from_issues(client, fields, stats)
     return stats
 
@@ -719,7 +942,7 @@ def main() -> int:
         return 2
     org_filter = {part for part in args.orgs.split() if part}
     client = GitHubClient(token=token, dry_run=args.dry_run)
-    stats = sync(config, client, org_filter)
+    stats = sync(config, client, org_filter, backfill_org=args.backfill_org)
     write_summary(stats, dry_run=args.dry_run)
     return 1 if stats.items_failed or stats.errors else 0
 

@@ -22,8 +22,16 @@ delayed under GitHub load:
 2. Links same-org repositories to project `#14` (idempotent). Cross-org repos
    cannot be linked (GitHub restriction) but their issues/PRs still sync.
 3. Collects open issues and open PRs
-4. Adds any missing items to the board with **Status = Backlog**
-5. Copies **Priority** (and empty **Review priority**) onto PRs from linked
+4. Adds any missing items to the board with **Status = Backlog** and
+   **Organization** set from the source GitHub org (`Agentic-SSDLC`,
+   `complytime`, or `unbound-force`). Organization updates are best-effort:
+   a field-write failure does not undo the board add.
+5. Backfills **Organization** on existing board items that are unset or
+   incorrect (for example items added manually). Default `--backfill-org auto`
+   skips that extra board listing when this tick already set Organization on
+   newly added items. Quiet ticks still backfill. Pass `--backfill-org always`
+   (or the workflow input) to force a full walk.
+6. Copies **Priority** (and empty **Review priority**) onto PRs from linked
    issues (`Fixes` / `Closes` / Development sidebar). Uses the issue's project
    Priority; if several issues are linked, the highest rank wins
    (Urgent > High > Medium > Low). PRs with no linked issue, or whose issues
@@ -39,6 +47,13 @@ org-infra workflow subscribe to `pull_request` events in other repositories).
 | `project-sync-config.yml` | Orgs, exclusions, and project target |
 | `scripts/sync-project-board.py` | Discovery + GraphQL mutations |
 | `.github/workflows/sync_project_board.yml` | Schedule + manual trigger |
+| `scripts/report-sprint-velocity.py` | End-of-sprint velocity averages |
+| `.github/workflows/report_sprint_velocity.yml` | Manual velocity report |
+
+See [Sprint velocity report](SPRINT_VELOCITY.md) for completed-sprint averages
+(size, organization, milestone). That report is read-only and is meant to be
+run after a sprint closes; it is useful to run now so the pipeline is in place
+before history exists.
 
 ## Why a PAT (not the sync GitHub App)
 
@@ -91,6 +106,7 @@ Optional: set `orgs` to a single org (for example `complytime`) to stage the rol
 export GITHUB_TOKEN="$(gh auth token)"   # needs project write for apply mode
 pip install -r requirements.txt
 python scripts/sync-project-board.py --config project-sync-config.yml --dry-run
+python scripts/sync-project-board.py --config project-sync-config.yml --backfill-org always
 ```
 
 ## Changing scope

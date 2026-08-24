@@ -37,6 +37,42 @@ def _minimal_config(**overrides: Any) -> Dict[str, Any]:
     return config
 
 
+def _org_fields(**overrides: Any) -> sync.ProjectFields:
+    fields = sync.ProjectFields(
+        project_id="PROJECT",
+        status_field_id="STATUS_FIELD",
+        status_options={"Backlog": "OPT"},
+        organization_field_id="ORG_FIELD",
+        organization_options={
+            "Agentic-SSDLC": "ORG_A",
+            "complytime": "ORG_C",
+            "unbound-force": "ORG_U",
+        },
+    )
+    for key, value in overrides.items():
+        setattr(fields, key, value)
+    return fields
+
+
+def _priority_fields() -> sync.ProjectFields:
+    return _org_fields(
+        priority_field_id="PRI_FIELD",
+        priority_options={
+            "Urgent": "PRI_U",
+            "High": "PRI_H",
+            "Medium": "PRI_M",
+            "Low": "PRI_L",
+        },
+        review_priority_field_id="REV_FIELD",
+        review_priority_options={
+            "Urgent": "REV_U",
+            "High": "REV_H",
+            "Medium": "REV_M",
+            "Low": "REV_L",
+        },
+    )
+
+
 class TestLoadAndValidateConfig:
     def test_load_config_reads_yaml(self, tmp_path: Path):
         path = tmp_path / "cfg.yml"
@@ -164,6 +200,8 @@ class TestFormatAndWriteSummary:
         assert "skipped/already linked: 2" in text
         assert "**5**" in text
         assert "`boom`" in text
+        assert "Organization set/updated" in text
+        assert "Priority copied from linked issues" in text
 
     def test_write_summary_appends_step_summary(self, tmp_path: Path, monkeypatch):
         summary_path = tmp_path / "summary.md"
@@ -239,12 +277,9 @@ class TestGitHubClientErrors:
 
 class TestSyncErrorHandling:
     def _project_mocks(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            sync,
-            "get_project",
-            lambda *_a, **_k: _priority_fields(),
-        )
+        monkeypatch.setattr(sync, "get_project", lambda *_a, **_k: _org_fields())
         monkeypatch.setattr(sync, "existing_content_ids", lambda *_a, **_k: set())
+        monkeypatch.setattr(sync, "ensure_organizations", lambda *_a, **_k: None)
         monkeypatch.setattr(
             sync, "ensure_pr_priority_from_issues", lambda *_a, **_k: None
         )
@@ -416,6 +451,293 @@ class TestSetSingleSelect:
         client.graphql.assert_not_called()
 
 
+class TestOrganizationMapping:
+    def test_organization_option_for_owner_maps_known_orgs(self):
+        options = {
+            "Agentic-SSDLC": "A",
+            "complytime": "C",
+            "unbound-force": "U",
+        }
+        assert sync.organization_option_for_owner("complytime", options) == (
+            "complytime",
+            "C",
+        )
+        assert sync.organization_option_for_owner("complytime-labs", options) == (
+            "complytime",
+            "C",
+        )
+        assert sync.organization_option_for_owner("unknown", options) is None
+
+    def test_add_item_sets_status_and_organization(self):
+        client = MagicMock(dry_run=False)
+        client.graphql.side_effect = [
+            {"addProjectV2ItemById": {"item": {"id": "ITEM_1"}}},
+            {"updateProjectV2ItemFieldValue": {"projectV2Item": {"id": "ITEM_1"}}},
+            {"updateProjectV2ItemFieldValue": {"projectV2Item": {"id": "ITEM_1"}}},
+        ]
+        result = sync.add_item(
+            client,
+            "PROJECT",
+            "CONTENT",
+            "STATUS_FIELD",
+            "STATUS_OPT",
+            "ORG_FIELD",
+            "ORG_OPT",
+        )
+        assert result.item_id == "ITEM_1"
+        assert result.organization_set is True
+        assert result.organization_error is None
+        assert client.graphql.call_count == 3
+        # Second call sets Status; third sets Organization
+        status_vars = client.graphql.call_args_list[1].args[1]
+        org_vars = client.graphql.call_args_list[2].args[1]
+        assert status_vars["fieldId"] == "STATUS_FIELD"
+        assert status_vars["optionId"] == "STATUS_OPT"
+        assert org_vars["fieldId"] == "ORG_FIELD"
+        assert org_vars["optionId"] == "ORG_OPT"
+
+    def test_add_item_org_failure_is_best_effort(self):
+        client = MagicMock(dry_run=False)
+        client.graphql.side_effect = [
+            {"addProjectV2ItemById": {"item": {"id": "ITEM_1"}}},
+            {"updateProjectV2ItemFieldValue": {"projectV2Item": {"id": "ITEM_1"}}},
+            RuntimeError("INSUFFICIENT_SCOPES"),
+        ]
+        result = sync.add_item(
+            client,
+            "PROJECT",
+            "CONTENT",
+            "STATUS_FIELD",
+            "STATUS_OPT",
+            "ORG_FIELD",
+            "ORG_OPT",
+        )
+        assert result.item_id == "ITEM_1"
+        assert result.organization_set is False
+        assert result.organization_error == "INSUFFICIENT_SCOPES"
+
+    def test_add_item_dry_run_returns_no_item_id(self):
+        client = MagicMock(dry_run=True)
+        result = sync.add_item(
+            client,
+            "PROJECT",
+            "CONTENT",
+            "STATUS_FIELD",
+            "STATUS_OPT",
+            "ORG_FIELD",
+            "ORG_OPT",
+        )
+        assert result.item_id is None
+        assert result.organization_set is True
+        client.graphql.assert_not_called()
+
+    def test_ensure_organizations_updates_missing_values(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        fields = _org_fields()
+        monkeypatch.setattr(
+            sync,
+            "list_board_items_with_org_metadata",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_1",
+                    "organization": None,
+                    "content": {
+                        "id": "I_1",
+                        "repository": {
+                            "nameWithOwner": "complytime/demo",
+                            "owner": {"login": "complytime"},
+                        },
+                    },
+                },
+                {
+                    "id": "PVTI_2",
+                    "organization": {"name": "unbound-force"},
+                    "content": {
+                        "id": "I_2",
+                        "repository": {
+                            "nameWithOwner": "unbound-force/gaze",
+                            "owner": {"login": "unbound-force"},
+                        },
+                    },
+                },
+            ],
+        )
+        set_calls = []
+
+        def _set(*args, **kwargs):
+            set_calls.append((args, kwargs))
+
+        monkeypatch.setattr(sync, "set_single_select", _set)
+        stats = sync.SyncStats()
+        sync.ensure_organizations(client, fields, stats)
+        assert stats.organization_set == 1
+        assert len(set_calls) == 1
+        assert set_calls[0][0][2] == "PVTI_1"
+        assert set_calls[0][0][4] == "ORG_C"
+
+    def test_list_board_items_with_org_metadata_paginates(self):
+        client = MagicMock()
+        client.graphql.side_effect = [
+            {
+                "node": {
+                    "items": {
+                        "pageInfo": {"hasNextPage": True, "endCursor": "c1"},
+                        "nodes": [{"id": "PVTI_1", "organization": None, "content": {}}],
+                    }
+                }
+            },
+            {
+                "node": {
+                    "items": {
+                        "pageInfo": {"hasNextPage": False, "endCursor": "c2"},
+                        "nodes": [{"id": "PVTI_2", "organization": None, "content": {}}],
+                    }
+                }
+            },
+        ]
+        items = sync.list_board_items_with_org_metadata(client, "PROJECT_ID")
+        assert [node["id"] for node in items] == ["PVTI_1", "PVTI_2"]
+        assert client.graphql.call_count == 2
+        assert client.graphql.call_args_list[1].args[1]["cursor"] == "c1"
+
+    @pytest.mark.parametrize(
+        "mode,items_added,organization_failed,expected",
+        [
+            ("always", 3, 0, True),
+            ("never", 0, 1, False),
+            ("auto", 0, 0, True),
+            ("auto", 2, 0, False),
+            ("auto", 2, 1, True),
+        ],
+    )
+    def test_should_run_organization_backfill(
+        self,
+        mode: str,
+        items_added: int,
+        organization_failed: int,
+        expected: bool,
+    ):
+        stats = sync.SyncStats(
+            items_added=items_added, organization_failed=organization_failed
+        )
+        assert sync.should_run_organization_backfill(mode, stats) is expected
+
+
+class TestSyncOrganizationStats:
+    def _project_mocks(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            sync,
+            "get_project",
+            lambda *_a, **_k: _org_fields(
+                organization_options={"complytime": "ORG_C"}
+            ),
+        )
+        monkeypatch.setattr(sync, "existing_content_ids", lambda *_a, **_k: set())
+        monkeypatch.setattr(sync, "link_repository", MagicMock(return_value=True))
+        monkeypatch.setattr(
+            sync, "ensure_pr_priority_from_issues", lambda *_a, **_k: None
+        )
+        monkeypatch.setattr(
+            sync,
+            "list_org_repos",
+            MagicMock(
+                return_value=[
+                    {
+                        "name": "demo",
+                        "full_name": "complytime/demo",
+                        "node_id": "R_1",
+                        "archived": False,
+                    }
+                ]
+            ),
+        )
+
+    def test_org_set_failure_still_counts_item_as_added(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        self._project_mocks(monkeypatch)
+        ensure = MagicMock()
+        monkeypatch.setattr(sync, "ensure_organizations", ensure)
+        monkeypatch.setattr(
+            sync,
+            "list_open_items",
+            MagicMock(
+                return_value=[{"number": 7, "title": "work", "node_id": "I_7"}]
+            ),
+        )
+        monkeypatch.setattr(
+            sync,
+            "add_item",
+            MagicMock(
+                return_value=sync.AddItemResult(
+                    item_id="PVTI_7",
+                    organization_set=False,
+                    organization_error="INSUFFICIENT_SCOPES",
+                )
+            ),
+        )
+        stats = sync.sync(
+            _minimal_config(),
+            MagicMock(dry_run=False),
+            org_filter={"complytime"},
+            backfill_org="never",
+        )
+        assert stats.items_added == 1
+        assert stats.items_failed == 0
+        assert stats.organization_set == 0
+        assert stats.organization_failed == 1
+        assert any("Failed setting Organization" in err for err in stats.errors)
+        ensure.assert_not_called()
+
+    def test_auto_backfill_skipped_when_new_items_have_org(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        self._project_mocks(monkeypatch)
+        ensure = MagicMock()
+        monkeypatch.setattr(sync, "ensure_organizations", ensure)
+        monkeypatch.setattr(
+            sync,
+            "list_open_items",
+            MagicMock(
+                return_value=[{"number": 8, "title": "more", "node_id": "I_8"}]
+            ),
+        )
+        monkeypatch.setattr(
+            sync,
+            "add_item",
+            MagicMock(
+                return_value=sync.AddItemResult(
+                    item_id="PVTI_8", organization_set=True
+                )
+            ),
+        )
+        stats = sync.sync(
+            _minimal_config(),
+            MagicMock(dry_run=False),
+            org_filter={"complytime"},
+        )
+        assert stats.items_added == 1
+        assert stats.organization_set == 1
+        assert stats.organization_failed == 0
+        ensure.assert_not_called()
+
+    def test_auto_backfill_runs_when_no_items_added(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        self._project_mocks(monkeypatch)
+        ensure = MagicMock()
+        monkeypatch.setattr(sync, "ensure_organizations", ensure)
+        monkeypatch.setattr(sync, "list_open_items", MagicMock(return_value=[]))
+        sync.sync(
+            _minimal_config(),
+            MagicMock(dry_run=False),
+            org_filter={"complytime"},
+        )
+        ensure.assert_called_once()
+
+
 class TestListBoardPriorityItems:
     def test_paginates_multiple_pages(self):
         client = MagicMock()
@@ -511,28 +833,6 @@ class TestListBoardPriorityItems:
             node["id"]
             for node in items[1]["content"]["closingIssuesReferences"]["nodes"]
         ] == ["I_1", "I_2"]
-
-
-def _priority_fields() -> sync.ProjectFields:
-    return sync.ProjectFields(
-        project_id="PROJECT",
-        status_field_id="STATUS_FIELD",
-        status_options={"Backlog": "OPT"},
-        priority_field_id="PRI_FIELD",
-        priority_options={
-            "Urgent": "PRI_U",
-            "High": "PRI_H",
-            "Medium": "PRI_M",
-            "Low": "PRI_L",
-        },
-        review_priority_field_id="REV_FIELD",
-        review_priority_options={
-            "Urgent": "REV_U",
-            "High": "REV_H",
-            "Medium": "REV_M",
-            "Low": "REV_L",
-        },
-    )
 
 
 class TestPriorityInherit:
@@ -765,4 +1065,5 @@ class TestPriorityInherit:
         assert stats.priority_set == 0
         assert stats.priority_failed == 1
         assert any("Failed copying Priority" in err for err in stats.errors)
+
 
