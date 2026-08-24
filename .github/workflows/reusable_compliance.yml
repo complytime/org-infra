@@ -80,7 +80,7 @@ jobs:
           make build-ampel-provider
 
       - name: Install snappy
-        uses: carabiner-dev/actions/install/snappy@36a39ef667efe7112df8b1a534a4e37f35fad6fd
+        uses: carabiner-dev/actions/install/snappy@32587e82f960d49b36101e8c45d1956e511965d3
         with:
           install-dir: ${{ env.CARABINER_INSTALL_DIR }}
 
