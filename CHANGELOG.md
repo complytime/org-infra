@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Project board review-status advance**: The Compliance Automation
+  planning board sync moves items from Ready for Review to In Review when
+  a non-author human comments or submits a PR review after the Status
+  change. See `docs/PROJECT_BOARD_SYNC.md`.
+
 - **Stale review alerts**: Added `reusable_stale_reviews.yml` and
   `ci_stale_reviews.yml` to detect and flag PRs with review requests
   pending beyond a configurable business-day threshold. Applies a
