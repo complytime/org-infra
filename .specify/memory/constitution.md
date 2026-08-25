@@ -190,6 +190,7 @@ Repositories SHOULD define Go-specific lint rules (e.g., via `.golangci.yml`) an
 
 - **Reusable workflows**: MUST be prefixed with `reusable_` and have a clear, descriptive name reflecting their function (e.g., `reusable_vuln_scan.yml`).
 - **Consumer workflows**: Workflows that call reusable workflows MUST be prefixed with `ci_` (e.g., `ci_security.yml`).
+- **Org-infra-only workflows**: Workflows that run only in `org-infra` (not synced to consumer repos, not `workflow_call`) SHOULD use a verb prefix such as `sync_` or `report_` rather than `ci_` or `reusable_` (e.g., `sync_labels.yml`, `sync_project_board.yml`, `report_sprint_velocity.yml`).
 
 #### Security
 

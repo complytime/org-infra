@@ -46,6 +46,7 @@ org-infra workflow subscribe to `pull_request` events in other repositories).
 |---|---|
 | `project-sync-config.yml` | Orgs, exclusions, and project target |
 | `scripts/sync-project-board.py` | Discovery + GraphQL mutations |
+| `scripts/lib/github_client.py` | Shared REST/GraphQL client |
 | `.github/workflows/sync_project_board.yml` | Schedule + manual trigger |
 | `scripts/report-sprint-velocity.py` | End-of-sprint velocity averages |
 | `.github/workflows/report_sprint_velocity.yml` | Manual velocity report |

@@ -5,9 +5,14 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
+from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock
 
+import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
@@ -224,6 +229,16 @@ class TestAverages:
 
 
 class TestMarkdownPlaceholder:
+    def test_date_assumptions(self):
+        """Hardcoded dates below must keep the open-sprint window the tests rely on."""
+        sprint1_start = date(2026, 8, 17)
+        sprint1_end = sprint1_start + timedelta(days=16)
+        generated = date(2026, 8, 24)
+        assert sprint1_start.weekday() == 0, "Aug 17 2026 must be Monday"
+        assert generated.weekday() == 0, "Aug 24 2026 must be Monday"
+        assert sprint1_start <= generated < sprint1_end
+        assert date(2026, 9, 2) >= sprint1_end
+
     def test_explains_averages_will_appear_later(self):
         built = report.build_report(
             project_title="Compliance Automation planning",
@@ -286,6 +301,70 @@ class TestMarkdownPlaceholder:
         assert payload["averages"]["stories"] == 0.5
 
 
+class TestSanitizeMarkdown:
+    def test_neutralizes_workflow_commands_and_table_breaks(self):
+        dirty = "CA Sprint 1 | ::set-output name=x::pwned\n# heading"
+        clean = report.sanitize_md(dirty)
+        assert "::set-output" not in clean
+        assert "\n" not in clean
+        assert "|" not in clean.replace("\\|", "")
+        built = report.build_report(
+            project_title=dirty,
+            project_url="https://example.test",
+            generated_at="2026-08-24 11:00 UTC",
+            iterations=[_iteration(dirty, "2026-08-17", completed=True)],
+            item_nodes=[_item(iteration=dirty, organization=dirty)],
+        )
+        markdown = report.render_markdown(built)
+        assert "::set-output" not in markdown
+        assert report.md_cell(dirty) in markdown
+
+
+class TestNormalize:
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            ("Done", True),
+            ("Done ✔️", True),
+            ("Done (legacy)", True),
+            ("In progress 📋", False),
+            ("Backlog", False),
+            ("", False),
+            (None, False),
+        ],
+    )
+    def test_is_done_status(self, name: str | None, expected: bool):
+        assert report.is_done_status(name) is expected
+
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            ("XS", "XS"),
+            ("S", "S"),
+            ("M", "M"),
+            ("L", "L"),
+            ("XL", "XL"),
+            ("Huge", "Unsized"),
+            ("", "Unsized"),
+            (None, "Unsized"),
+        ],
+    )
+    def test_normalize_size(self, name: str | None, expected: str):
+        assert report.normalize_size(name) == expected
+
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            ("complytime", "complytime"),
+            ("Evidence Locker MVP", "Evidence Locker MVP"),
+            ("", "Unset"),
+            (None, "Unset"),
+        ],
+    )
+    def test_normalize_label(self, name: str | None, expected: str):
+        assert report.normalize_label(name) == expected
+
+
 class TestLoadProjectTarget:
     def test_reads_owner_and_number(self, tmp_path: Path):
         path = tmp_path / "cfg.yml"
@@ -294,3 +373,134 @@ class TestLoadProjectTarget:
             encoding="utf-8",
         )
         assert report.load_project_target(path) == ("complytime", 14)
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            None,
+            [],
+            "nope",
+            {},
+            {"project": "x"},
+            {"project": {"owner": "", "number": 14}},
+            {"project": {"owner": "complytime"}},
+            {"project": {"owner": "complytime", "number": "14"}},
+            {"project": {"owner": "complytime", "number": True}},
+        ],
+    )
+    def test_rejects_invalid(self, tmp_path: Path, payload: Any):
+        path = tmp_path / "cfg.yml"
+        path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+        with pytest.raises(ValueError):
+            report.load_project_target(path)
+
+    def test_missing_file_raises(self, tmp_path: Path):
+        with pytest.raises(FileNotFoundError):
+            report.load_project_target(tmp_path / "missing.yml")
+
+
+class TestFetchItems:
+    def test_paginates_until_exhausted(self):
+        client = MagicMock()
+        client.graphql.side_effect = [
+            {
+                "organization": {
+                    "projectV2": {
+                        "items": {
+                            "pageInfo": {"hasNextPage": True, "endCursor": "c1"},
+                            "nodes": [{"id": "a"}],
+                        }
+                    }
+                }
+            },
+            {
+                "organization": {
+                    "projectV2": {
+                        "items": {
+                            "pageInfo": {"hasNextPage": False, "endCursor": "c2"},
+                            "nodes": [{"id": "b"}],
+                        }
+                    }
+                }
+            },
+        ]
+        items = report.fetch_items(client, "complytime", 14)
+        assert [i["id"] for i in items] == ["a", "b"]
+        assert client.graphql.call_count == 2
+        assert client.graphql.call_args_list[1].args[1]["cursor"] == "c1"
+
+
+class TestParseArgsAndMain:
+    def test_parse_args_json_and_output(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["report-sprint-velocity.py", "--json", "--output", "out.md"],
+        )
+        args = report.parse_args()
+        assert args.json is True
+        assert args.output == "out.md"
+
+    def test_main_requires_token(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.setattr(sys, "argv", ["report-sprint-velocity.py"])
+        with pytest.raises(SystemExit, match="GITHUB_TOKEN"):
+            report.main()
+
+    def test_main_missing_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("GITHUB_TOKEN", "tok")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["report-sprint-velocity.py", "--config", str(tmp_path / "missing.yml")],
+        )
+        with pytest.raises(FileNotFoundError):
+            report.main()
+
+    def test_main_json_mode(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ):
+        path = tmp_path / "cfg.yml"
+        path.write_text(
+            yaml.safe_dump({"project": {"owner": "complytime", "number": 14}}),
+            encoding="utf-8",
+        )
+        client = MagicMock()
+        client.graphql.return_value = {
+            "organization": {
+                "projectV2": {
+                    "title": "Compliance Automation planning",
+                    "url": "https://example.test/projects/14",
+                    "fields": {
+                        "nodes": [
+                            {
+                                "configuration": {
+                                    "completedIterations": [],
+                                    "iterations": [
+                                        {
+                                            "title": "CA Sprint 1",
+                                            "startDate": "2026-08-17",
+                                            "duration": 16,
+                                        }
+                                    ],
+                                }
+                            }
+                        ]
+                    },
+                }
+            }
+        }
+        monkeypatch.setenv("GITHUB_TOKEN", "tok")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["report-sprint-velocity.py", "--config", str(path), "--json"],
+        )
+        monkeypatch.setattr(report, "GitHubClient", lambda *a, **k: client)
+        monkeypatch.setattr(report, "fetch_items", lambda *_a, **_k: [_item()])
+        report.main()
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["project_title"] == "Compliance Automation planning"
+        assert payload["averages"] is None
+        assert payload["current"][0]["issues"] == 1
+

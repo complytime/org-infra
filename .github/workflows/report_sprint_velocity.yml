@@ -3,6 +3,8 @@
 # Report completed-sprint velocity from the Compliance Automation planning
 # board (issues Done per Iteration, then averages across completed sprints).
 #
+# Internal-only (not synced to consumer repos). Verb-prefixed like
+# sync_project_board.yml / sync_labels.yml, not ci_* or reusable_*.
 # Uses PROJECT_SYNC_TOKEN (project read). See docs/SPRINT_VELOCITY.md.
 
 name: Report sprint velocity

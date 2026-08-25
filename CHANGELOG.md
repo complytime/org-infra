@@ -7,7 +7,8 @@
 - **Sprint velocity report**: Manual workflow that counts Done issues per
   completed Iteration on the Compliance Automation planning board, then
   averages those counts (including by Size, Organization, and Milestone).
-  The open sprint is listed separately and is not in the mean. See
+  The open sprint is listed separately and is not in the mean. Board sync
+  and this report share `scripts/lib/github_client.py`. See
   `docs/SPRINT_VELOCITY.md`.
 
 - **Stale review alerts**: Added `reusable_stale_reviews.yml` and

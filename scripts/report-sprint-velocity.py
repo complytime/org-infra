@@ -18,22 +18,18 @@ import argparse
 import json
 import os
 import sys
-import time
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Iterable, Sequence
 
-import requests
-import yaml
+from lib.github_client import GitHubClient
+from lib.project_config import load_project_target
 
-GITHUB_API = "https://api.github.com"
-GITHUB_GRAPHQL = f"{GITHUB_API}/graphql"
 DEFAULT_CONFIG = "project-sync-config.yml"
 SIZE_ORDER = ("XS", "S", "M", "L", "XL")
 UNSIZED = "Unsized"
-UNSET = "Unset"
 UNSET = "Unset"
 
 FIELDS_QUERY = """
@@ -132,12 +128,12 @@ class SprintStats:
     iteration: IterationInfo
     issues: int = 0
     stories: int = 0
-    sizes: Dict[str, int] = field(default_factory=Counter)
-    organizations: Dict[str, int] = field(default_factory=Counter)
-    milestones: Dict[str, int] = field(default_factory=Counter)
-    story_sizes: Dict[str, int] = field(default_factory=Counter)
-    story_organizations: Dict[str, int] = field(default_factory=Counter)
-    story_milestones: Dict[str, int] = field(default_factory=Counter)
+    sizes: dict[str, int] = field(default_factory=Counter)
+    organizations: dict[str, int] = field(default_factory=Counter)
+    milestones: dict[str, int] = field(default_factory=Counter)
+    story_sizes: dict[str, int] = field(default_factory=Counter)
+    story_organizations: dict[str, int] = field(default_factory=Counter)
+    story_milestones: dict[str, int] = field(default_factory=Counter)
 
 
 @dataclass
@@ -147,52 +143,9 @@ class VelocityReport:
     project_title: str
     project_url: str
     generated_at: str
-    completed: List[SprintStats]
-    current: List[SprintStats]
+    completed: list[SprintStats]
+    current: list[SprintStats]
     done_without_iteration: int
-
-
-class GitHubClient:
-    """Minimal GraphQL client with retries."""
-
-    def __init__(self, token: str) -> None:
-        self.session = requests.Session()
-        self.session.headers.update(
-            {
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "User-Agent": "complytime-sprint-velocity-report",
-            }
-        )
-
-    def graphql(self, query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        last: Optional[requests.Response] = None
-        for attempt in range(5):
-            last = self.session.request(
-                "POST",
-                GITHUB_GRAPHQL,
-                json={"query": query, "variables": variables or {}},
-                timeout=60,
-            )
-            if last.status_code in (403, 429) and "rate limit" in last.text.lower():
-                reset = last.headers.get("X-RateLimit-Reset")
-                sleep_for = 30
-                if reset and reset.isdigit():
-                    sleep_for = max(5, int(reset) - int(time.time()) + 1)
-                time.sleep(min(sleep_for, 120))
-                continue
-            if last.status_code >= 500:
-                time.sleep(2**attempt)
-                continue
-            last.raise_for_status()
-            payload = last.json()
-            if payload.get("errors"):
-                raise RuntimeError(f"GraphQL errors: {payload['errors']}")
-            return payload["data"]
-        assert last is not None
-        last.raise_for_status()
-        raise RuntimeError("GraphQL request failed")
 
 
 def parse_args() -> argparse.Namespace:
@@ -220,24 +173,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_project_target(path: Path) -> Tuple[str, int]:
-    """Read project owner/number from the board-sync config."""
-    with path.open(encoding="utf-8") as handle:
-        config = yaml.safe_load(handle)
-    if not isinstance(config, dict):
-        raise ValueError("Config must be a mapping")
-    project = config.get("project")
-    if not isinstance(project, dict):
-        raise ValueError("Config is missing project")
-    owner = project.get("owner")
-    number = project.get("number")
-    if not isinstance(owner, str) or not owner:
-        raise ValueError("project.owner must be a non-empty string")
-    if not isinstance(number, int):
-        raise ValueError("project.number must be an integer")
-    return owner, number
-
-
 def is_story(title: str, labels: Sequence[str]) -> bool:
     """User stories use the [Story] title prefix and/or type:story."""
     if title.startswith("[Story]"):
@@ -245,30 +180,30 @@ def is_story(title: str, labels: Sequence[str]) -> bool:
     return any(label.lower() == "type:story" for label in labels)
 
 
-def is_done_status(name: Optional[str]) -> bool:
+def is_done_status(name: str | None) -> bool:
     return bool(name) and name.startswith("Done")
 
 
-def normalize_size(name: Optional[str]) -> str:
+def normalize_size(name: str | None) -> str:
     if name in SIZE_ORDER:
         return name
     return UNSIZED
 
 
-def normalize_label(name: Optional[str]) -> str:
+def normalize_label(name: str | None) -> str:
     if name:
         return name
     return UNSET
 
 
-def _field_name(node: Dict[str, Any]) -> str:
+def _field_name(node: dict[str, Any]) -> str:
     field = node.get("field") or {}
     return field.get("name") or ""
 
 
-def parse_iterations(fields_nodes: Iterable[Dict[str, Any]]) -> List[IterationInfo]:
+def parse_iterations(fields_nodes: Iterable[dict[str, Any]]) -> list[IterationInfo]:
     """Read Iteration options; completedIterations are closed sprints."""
-    found: List[IterationInfo] = []
+    found: list[IterationInfo] = []
     for node in fields_nodes:
         config = node.get("configuration")
         if not config:
@@ -294,7 +229,7 @@ def parse_iterations(fields_nodes: Iterable[Dict[str, Any]]) -> List[IterationIn
     return found
 
 
-def parse_done_issue(item: Dict[str, Any]) -> Optional[DoneIssue]:
+def parse_done_issue(item: dict[str, Any]) -> DoneIssue | None:
     """Return a Done issue with an Iteration, otherwise None."""
     content = item.get("content") or {}
     if content.get("__typename") != "Issue":
@@ -337,7 +272,7 @@ def parse_done_issue(item: Dict[str, Any]) -> Optional[DoneIssue]:
     )
 
 
-def count_done_without_iteration(items: Iterable[Dict[str, Any]]) -> int:
+def count_done_without_iteration(items: Iterable[dict[str, Any]]) -> int:
     """Done issues that never got an Iteration — excluded from velocity."""
     count = 0
     for item in items:
@@ -375,9 +310,9 @@ def empty_stats(iteration: IterationInfo) -> SprintStats:
 
 def bucket_sprints(
     iterations: Sequence[IterationInfo], issues: Sequence[DoneIssue]
-) -> Tuple[List[SprintStats], List[SprintStats]]:
+) -> tuple[list[SprintStats], list[SprintStats]]:
     """Group Done issues onto known iterations. Empty completed sprints stay 0."""
-    by_title: Dict[str, SprintStats] = {it.title: empty_stats(it) for it in iterations}
+    by_title: dict[str, SprintStats] = {it.title: empty_stats(it) for it in iterations}
     for issue in issues:
         stats = by_title.get(issue.iteration)
         if stats is None:
@@ -398,13 +333,13 @@ def bucket_sprints(
     return completed, current
 
 
-def mean(values: Sequence[int]) -> Optional[float]:
+def mean(values: Sequence[int]) -> float | None:
     if not values:
         return None
     return sum(values) / len(values)
 
 
-def fmt_mean(value: Optional[float]) -> str:
+def fmt_mean(value: float | None) -> str:
     if value is None:
         return "—"
     if abs(value - round(value)) < 1e-9:
@@ -412,7 +347,7 @@ def fmt_mean(value: Optional[float]) -> str:
     return f"{value:.1f}"
 
 
-def _union_keys(counters: Sequence[Dict[str, int]], extra: Sequence[str] = ()) -> List[str]:
+def _union_keys(counters: Sequence[dict[str, int]], extra: Sequence[str] = ()) -> list[str]:
     keys = set(extra)
     for counter in counters:
         keys.update(counter)
@@ -423,22 +358,42 @@ def _union_keys(counters: Sequence[Dict[str, int]], extra: Sequence[str] = ()) -
 
 def breakdown_average(
     sprints: Sequence[SprintStats], attr: str
-) -> List[Tuple[str, List[int], float]]:
+) -> list[tuple[str, list[int], float]]:
     """Per-key counts across sprints, missing keys treated as 0."""
     counters = [getattr(s, attr) for s in sprints]
     extra = SIZE_ORDER + (UNSIZED,) if attr in {"sizes", "story_sizes"} else ()
-    rows: List[Tuple[str, List[int], float]] = []
+    rows: list[tuple[str, list[int], float]] = []
     for key in _union_keys(counters, extra):
         series = [int(c.get(key, 0)) for c in counters]
         avg = mean(series)
-        assert avg is not None
+        if avg is None:
+            raise RuntimeError("breakdown_average requires at least one sprint")
         rows.append((key, series, avg))
     return rows
 
 
+def sanitize_md(value: str) -> str:
+    """Neutralize user-controlled strings for markdown / Actions summaries.
+
+    GitHub issue titles, sprint names, and project fields can contain pipes,
+    newlines, or ``::workflow-command`` sequences. Those would otherwise
+    break tables or inject into ``GITHUB_STEP_SUMMARY``.
+    """
+    text = str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    text = text.replace("::", "∶∶")
+    text = text.replace("|", "\\|")
+    text = text.replace("`", "'")
+    return text
+
+
+def md_cell(value: str) -> str:
+    """Table cell for a user-controlled string (code span + sanitization)."""
+    return f"`{sanitize_md(value)}`"
+
+
 def sprint_label(stats: SprintStats) -> str:
     it = stats.iteration
-    return f"{it.title} ({it.start_date}, {it.duration}d)"
+    return f"{sanitize_md(it.title)} ({it.start_date}, {it.duration}d)"
 
 
 def _report_date(generated_at: str) -> date:
@@ -454,7 +409,7 @@ def iteration_is_active(iteration: IterationInfo, today: date) -> bool:
     return start <= today < end
 
 
-def visible_open_sprints(report: VelocityReport) -> List[SprintStats]:
+def visible_open_sprints(report: VelocityReport) -> list[SprintStats]:
     """Hide future empty iterations; keep the active sprint and any with Done work."""
     today = _report_date(report.generated_at)
     return [
@@ -471,29 +426,30 @@ def _md_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
     return "\n".join([line, sep, body])
 
 
-def _sprint_headers(sprints: Sequence[SprintStats]) -> List[str]:
-    return [s.iteration.title for s in sprints] + ["Average"]
+def _sprint_headers(sprints: Sequence[SprintStats]) -> list[str]:
+    return [md_cell(s.iteration.title) for s in sprints] + ["Average"]
 
 
 def render_breakdown_table(
     sprints: Sequence[SprintStats], attr: str, first_col: str
 ) -> str:
     headers = [first_col, *_sprint_headers(sprints)]
-    rows: List[List[str]] = []
+    rows: list[list[str]] = []
     for key, series, avg in breakdown_average(sprints, attr):
         if sum(series) == 0 and key == UNSIZED:
             continue
-        rows.append([key, *[str(n) for n in series], fmt_mean(avg)])
+        rows.append([md_cell(key), *[str(n) for n in series], fmt_mean(avg)])
     if not rows:
         return ""
     return _md_table(headers, rows)
 
 
 def render_markdown(report: VelocityReport) -> str:
-    lines: List[str] = [
-        f"# Sprint velocity — {report.project_title}",
+    title = sanitize_md(report.project_title)
+    lines: list[str] = [
+        f"# Sprint velocity — {title}",
         "",
-        f"Generated {report.generated_at}. Source: [{report.project_title}]({report.project_url}).",
+        f"Generated {report.generated_at}. Source: [{title}]({report.project_url}).",
         "",
         "Averages use **completed** Iterations only. The open sprint is listed",
         "separately so in-progress Done items do not pull the mean down.",
@@ -535,7 +491,7 @@ def render_markdown(report: VelocityReport) -> str:
         headers = ["Sprint", "Start", "Days", "Done issues", "Stories"]
         rows = [
             [
-                s.iteration.title,
+                md_cell(s.iteration.title),
                 s.iteration.start_date,
                 str(s.iteration.duration),
                 str(s.issues),
@@ -608,8 +564,8 @@ def render_markdown(report: VelocityReport) -> str:
     return "\n".join(lines)
 
 
-def report_to_json(report: VelocityReport) -> Dict[str, Any]:
-    def sprint_obj(stats: SprintStats) -> Dict[str, Any]:
+def report_to_json(report: VelocityReport) -> dict[str, Any]:
+    def sprint_obj(stats: SprintStats) -> dict[str, Any]:
         return {
             "title": stats.iteration.title,
             "start_date": stats.iteration.start_date,
@@ -622,7 +578,7 @@ def report_to_json(report: VelocityReport) -> Dict[str, Any]:
             "milestones": dict(stats.milestones),
         }
 
-    averages: Optional[Dict[str, Any]] = None
+    averages: dict[str, Any] | None = None
     if report.completed:
         averages = {
             "sprint_count": len(report.completed),
@@ -651,9 +607,9 @@ def report_to_json(report: VelocityReport) -> Dict[str, Any]:
     }
 
 
-def fetch_items(client: GitHubClient, owner: str, number: int) -> List[Dict[str, Any]]:
-    items: List[Dict[str, Any]] = []
-    cursor: Optional[str] = None
+def fetch_items(client: GitHubClient, owner: str, number: int) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    cursor: str | None = None
     while True:
         data = client.graphql(
             ITEMS_QUERY, {"owner": owner, "number": number, "cursor": cursor}
@@ -672,7 +628,7 @@ def build_report(
     project_url: str,
     generated_at: str,
     iterations: Sequence[IterationInfo],
-    item_nodes: Sequence[Dict[str, Any]],
+    item_nodes: Sequence[dict[str, Any]],
 ) -> VelocityReport:
     issues = []
     for node in item_nodes:
@@ -696,7 +652,7 @@ def main() -> None:
     if not token:
         raise SystemExit("GITHUB_TOKEN is required")
     owner, number = load_project_target(Path(args.config))
-    client = GitHubClient(token)
+    client = GitHubClient(token, user_agent="complytime-sprint-velocity-report")
     meta = client.graphql(FIELDS_QUERY, {"owner": owner, "number": number})
     project = meta["organization"]["projectV2"]
     iterations = parse_iterations(project["fields"]["nodes"])

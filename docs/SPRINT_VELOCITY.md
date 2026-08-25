@@ -103,5 +103,7 @@ config change is required when that happens; run the same workflow again.
 | File | Role |
 |---|---|
 | `scripts/report-sprint-velocity.py` | GraphQL read + markdown/JSON report |
+| `scripts/lib/github_client.py` | Shared REST/GraphQL client |
+| `scripts/lib/project_config.py` | Shared project owner/number config |
 | `.github/workflows/report_sprint_velocity.yml` | Manual GitHub Actions trigger |
 | `project-sync-config.yml` | Project owner and number |
