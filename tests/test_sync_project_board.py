@@ -37,6 +37,42 @@ def _minimal_config(**overrides: Any) -> Dict[str, Any]:
     return config
 
 
+def _org_fields(**overrides: Any) -> sync.ProjectFields:
+    fields = sync.ProjectFields(
+        project_id="PROJECT",
+        status_field_id="STATUS_FIELD",
+        status_options={"Backlog": "OPT"},
+        organization_field_id="ORG_FIELD",
+        organization_options={
+            "Agentic-SSDLC": "ORG_A",
+            "complytime": "ORG_C",
+            "unbound-force": "ORG_U",
+        },
+    )
+    for key, value in overrides.items():
+        setattr(fields, key, value)
+    return fields
+
+
+def _priority_fields() -> sync.ProjectFields:
+    return _org_fields(
+        priority_field_id="PRI_FIELD",
+        priority_options={
+            "Urgent": "PRI_U",
+            "High": "PRI_H",
+            "Medium": "PRI_M",
+            "Low": "PRI_L",
+        },
+        review_priority_field_id="REV_FIELD",
+        review_priority_options={
+            "Urgent": "REV_U",
+            "High": "REV_H",
+            "Medium": "REV_M",
+            "Low": "REV_L",
+        },
+    )
+
+
 class TestLoadAndValidateConfig:
     def test_load_config_reads_yaml(self, tmp_path: Path):
         path = tmp_path / "cfg.yml"
@@ -164,6 +200,8 @@ class TestFormatAndWriteSummary:
         assert "skipped/already linked: 2" in text
         assert "**5**" in text
         assert "`boom`" in text
+        assert "Organization set/updated" in text
+        assert "Priority copied from linked issues" in text
 
     def test_write_summary_appends_step_summary(self, tmp_path: Path, monkeypatch):
         summary_path = tmp_path / "summary.md"
@@ -239,23 +277,12 @@ class TestGitHubClientErrors:
 
 class TestSyncErrorHandling:
     def _project_mocks(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            sync,
-            "get_project",
-            lambda *_a, **_k: sync.ProjectFields(
-                project_id="PROJECT",
-                status_field_id="STATUS_FIELD",
-                status_options={"Backlog": "OPT"},
-                organization_field_id="ORG_FIELD",
-                organization_options={
-                    "Agentic-SSDLC": "ORG_A",
-                    "complytime": "ORG_C",
-                    "unbound-force": "ORG_U",
-                },
-            ),
-        )
+        monkeypatch.setattr(sync, "get_project", lambda *_a, **_k: _org_fields())
         monkeypatch.setattr(sync, "existing_content_ids", lambda *_a, **_k: set())
         monkeypatch.setattr(sync, "ensure_organizations", lambda *_a, **_k: None)
+        monkeypatch.setattr(
+            sync, "ensure_pr_priority_from_issues", lambda *_a, **_k: None
+        )
 
     def test_per_org_request_errors_are_recorded(self, monkeypatch: pytest.MonkeyPatch):
         self._project_mocks(monkeypatch)
@@ -405,6 +432,25 @@ class TestLinkRepository:
         assert sync.link_repository(client, "P", "R") is False
 
 
+class TestSetSingleSelect:
+    def test_set_single_select_calls_graphql_with_correct_variables(self):
+        client = MagicMock(dry_run=False)
+        sync.set_single_select(client, "PROJECT", "ITEM", "FIELD", "OPT")
+        client.graphql.assert_called_once()
+        _query, variables = client.graphql.call_args.args
+        assert variables == {
+            "projectId": "PROJECT",
+            "itemId": "ITEM",
+            "fieldId": "FIELD",
+            "optionId": "OPT",
+        }
+
+    def test_set_single_select_dry_run_skips_mutation(self):
+        client = MagicMock(dry_run=True)
+        sync.set_single_select(client, "PROJECT", "ITEM", "FIELD", "OPT")
+        client.graphql.assert_not_called()
+
+
 class TestOrganizationMapping:
     def test_organization_option_for_owner_maps_known_orgs(self):
         options = {
@@ -489,17 +535,7 @@ class TestOrganizationMapping:
         self, monkeypatch: pytest.MonkeyPatch
     ):
         client = MagicMock(dry_run=False)
-        fields = sync.ProjectFields(
-            project_id="PROJECT",
-            status_field_id="STATUS_FIELD",
-            status_options={"Backlog": "OPT"},
-            organization_field_id="ORG_FIELD",
-            organization_options={
-                "Agentic-SSDLC": "ORG_A",
-                "complytime": "ORG_C",
-                "unbound-force": "ORG_U",
-            },
-        )
+        fields = _org_fields()
         monkeypatch.setattr(
             sync,
             "list_board_items_with_org_metadata",
@@ -594,16 +630,15 @@ class TestSyncOrganizationStats:
         monkeypatch.setattr(
             sync,
             "get_project",
-            lambda *_a, **_k: sync.ProjectFields(
-                project_id="PROJECT",
-                status_field_id="STATUS_FIELD",
-                status_options={"Backlog": "OPT"},
-                organization_field_id="ORG_FIELD",
-                organization_options={"complytime": "ORG_C"},
+            lambda *_a, **_k: _org_fields(
+                organization_options={"complytime": "ORG_C"}
             ),
         )
         monkeypatch.setattr(sync, "existing_content_ids", lambda *_a, **_k: set())
         monkeypatch.setattr(sync, "link_repository", MagicMock(return_value=True))
+        monkeypatch.setattr(
+            sync, "ensure_pr_priority_from_issues", lambda *_a, **_k: None
+        )
         monkeypatch.setattr(
             sync,
             "list_org_repos",
@@ -701,5 +736,334 @@ class TestSyncOrganizationStats:
             org_filter={"complytime"},
         )
         ensure.assert_called_once()
+
+
+class TestListBoardPriorityItems:
+    def test_paginates_multiple_pages(self):
+        client = MagicMock()
+        client.graphql.side_effect = [
+            {
+                "node": {
+                    "items": {
+                        "pageInfo": {"hasNextPage": True, "endCursor": "c1"},
+                        "nodes": [
+                            {
+                                "id": "PVTI_1",
+                                "priority": {"name": "High"},
+                                "reviewPriority": None,
+                                "content": {"__typename": "Issue", "id": "I_1"},
+                            }
+                        ],
+                    }
+                }
+            },
+            {
+                "node": {
+                    "items": {
+                        "pageInfo": {"hasNextPage": False, "endCursor": "c2"},
+                        "nodes": [
+                            {
+                                "id": "PVTI_2",
+                                "priority": None,
+                                "reviewPriority": {"name": "Low"},
+                                "content": {
+                                    "__typename": "PullRequest",
+                                    "id": "PR_1",
+                                    "closingIssuesReferences": {
+                                        "nodes": [{"id": "I_1"}]
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                }
+            },
+        ]
+        items = sync.list_board_priority_items(client, "PROJECT_ID")
+        assert [item["id"] for item in items] == ["PVTI_1", "PVTI_2"]
+        assert client.graphql.call_count == 2
+        assert client.graphql.call_args_list[0].args[1]["cursor"] is None
+        assert client.graphql.call_args_list[1].args[1]["cursor"] == "c1"
+
+    def test_empty_board_returns_no_items(self):
+        client = MagicMock()
+        client.graphql.return_value = {
+            "node": {
+                "items": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "nodes": [],
+                }
+            }
+        }
+        assert sync.list_board_priority_items(client, "PROJECT_ID") == []
+
+    def test_extracts_priority_fields_and_closing_issues(self):
+        client = MagicMock()
+        client.graphql.return_value = {
+            "node": {
+                "items": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "nodes": [
+                        {
+                            "id": "PVTI_ISSUE",
+                            "priority": {"name": "Urgent"},
+                            "reviewPriority": None,
+                            "content": {"__typename": "Issue", "id": "I_1"},
+                        },
+                        {
+                            "id": "PVTI_PR",
+                            "priority": None,
+                            "reviewPriority": {"name": "High"},
+                            "content": {
+                                "__typename": "PullRequest",
+                                "id": "PR_1",
+                                "closingIssuesReferences": {
+                                    "nodes": [{"id": "I_1"}, {"id": "I_2"}]
+                                },
+                            },
+                        },
+                    ],
+                }
+            }
+        }
+        items = sync.list_board_priority_items(client, "PROJECT_ID")
+        assert items[0]["priority"]["name"] == "Urgent"
+        assert items[1]["reviewPriority"]["name"] == "High"
+        assert [
+            node["id"]
+            for node in items[1]["content"]["closingIssuesReferences"]["nodes"]
+        ] == ["I_1", "I_2"]
+
+
+class TestPriorityInherit:
+    def test_highest_priority_picks_urgent_over_low(self):
+        assert sync.highest_priority(["Low", "Urgent", None, "Medium"]) == "Urgent"
+
+    def test_highest_priority_empty_when_no_known_values(self):
+        assert sync.highest_priority([]) is None
+        assert sync.highest_priority([None, "unknown"]) is None
+
+    def test_highest_priority_ignores_unknown_in_mixed_list(self):
+        assert sync.highest_priority(["NotReal", "Low"]) == "Low"
+
+    def test_copies_issue_priority_onto_empty_pr_fields(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        monkeypatch.setattr(
+            sync,
+            "list_board_priority_items",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_ISSUE",
+                    "priority": {"name": "High"},
+                    "reviewPriority": None,
+                    "content": {"__typename": "Issue", "id": "I_1"},
+                },
+                {
+                    "id": "PVTI_PR",
+                    "priority": None,
+                    "reviewPriority": None,
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_1",
+                        "closingIssuesReferences": {"nodes": [{"id": "I_1"}]},
+                    },
+                },
+            ],
+        )
+        set_calls = []
+
+        def _set(*args, **_kwargs):
+            set_calls.append(args)
+
+        monkeypatch.setattr(sync, "set_single_select", _set)
+        stats = sync.SyncStats()
+        sync.ensure_pr_priority_from_issues(client, _priority_fields(), stats)
+        assert stats.priority_set == 2
+        assert stats.priority_failed == 0
+        field_ids = {call[3] for call in set_calls}
+        option_ids = {call[4] for call in set_calls}
+        assert field_ids == {"PRI_FIELD", "REV_FIELD"}
+        assert option_ids == {"PRI_H", "REV_H"}
+
+    def test_does_not_overwrite_existing_pr_priority(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        monkeypatch.setattr(
+            sync,
+            "list_board_priority_items",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_ISSUE",
+                    "priority": {"name": "High"},
+                    "reviewPriority": None,
+                    "content": {"__typename": "Issue", "id": "I_1"},
+                },
+                {
+                    "id": "PVTI_PR",
+                    "priority": {"name": "Medium"},
+                    "reviewPriority": {"name": "Medium"},
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_1",
+                        "closingIssuesReferences": {"nodes": [{"id": "I_1"}]},
+                    },
+                },
+            ],
+        )
+        set_mock = MagicMock()
+        monkeypatch.setattr(sync, "set_single_select", set_mock)
+        stats = sync.SyncStats()
+        sync.ensure_pr_priority_from_issues(client, _priority_fields(), stats)
+        set_mock.assert_not_called()
+        assert stats.priority_set == 0
+
+    def test_skips_pr_with_no_linked_issue_priority(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        monkeypatch.setattr(
+            sync,
+            "list_board_priority_items",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_ISSUE",
+                    "priority": None,
+                    "reviewPriority": None,
+                    "content": {"__typename": "Issue", "id": "I_1"},
+                },
+                {
+                    "id": "PVTI_PR",
+                    "priority": None,
+                    "reviewPriority": None,
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_1",
+                        "closingIssuesReferences": {"nodes": [{"id": "I_1"}]},
+                    },
+                },
+                {
+                    "id": "PVTI_ORPHAN",
+                    "priority": None,
+                    "reviewPriority": None,
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_2",
+                        "closingIssuesReferences": {"nodes": []},
+                    },
+                },
+            ],
+        )
+        set_mock = MagicMock()
+        monkeypatch.setattr(sync, "set_single_select", set_mock)
+        stats = sync.SyncStats()
+        sync.ensure_pr_priority_from_issues(client, _priority_fields(), stats)
+        set_mock.assert_not_called()
+        assert stats.priority_set == 0
+
+    def test_skips_when_linked_issue_is_not_on_board(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        monkeypatch.setattr(
+            sync,
+            "list_board_priority_items",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_PR",
+                    "priority": None,
+                    "reviewPriority": None,
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_1",
+                        "closingIssuesReferences": {"nodes": [{"id": "I_OFFBOARD"}]},
+                    },
+                },
+            ],
+        )
+        set_mock = MagicMock()
+        monkeypatch.setattr(sync, "set_single_select", set_mock)
+        stats = sync.SyncStats()
+        sync.ensure_pr_priority_from_issues(client, _priority_fields(), stats)
+        set_mock.assert_not_called()
+        assert stats.priority_set == 0
+
+    def test_uses_highest_priority_when_multiple_issues_linked(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        monkeypatch.setattr(
+            sync,
+            "list_board_priority_items",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_A",
+                    "priority": {"name": "Low"},
+                    "content": {"__typename": "Issue", "id": "I_A"},
+                },
+                {
+                    "id": "PVTI_B",
+                    "priority": {"name": "Urgent"},
+                    "content": {"__typename": "Issue", "id": "I_B"},
+                },
+                {
+                    "id": "PVTI_PR",
+                    "priority": None,
+                    "reviewPriority": None,
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_1",
+                        "closingIssuesReferences": {
+                            "nodes": [{"id": "I_A"}, {"id": "I_B"}]
+                        },
+                    },
+                },
+            ],
+        )
+        set_calls = []
+        monkeypatch.setattr(
+            sync, "set_single_select", lambda *args, **_k: set_calls.append(args)
+        )
+        stats = sync.SyncStats()
+        sync.ensure_pr_priority_from_issues(client, _priority_fields(), stats)
+        assert {call[4] for call in set_calls} == {"PRI_U", "REV_U"}
+
+    def test_field_write_failure_is_best_effort(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        monkeypatch.setattr(
+            sync,
+            "list_board_priority_items",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_ISSUE",
+                    "priority": {"name": "Medium"},
+                    "content": {"__typename": "Issue", "id": "I_1"},
+                },
+                {
+                    "id": "PVTI_PR",
+                    "priority": None,
+                    "reviewPriority": {"name": "Medium"},
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_1",
+                        "closingIssuesReferences": {"nodes": [{"id": "I_1"}]},
+                    },
+                },
+            ],
+        )
+        monkeypatch.setattr(
+            sync,
+            "set_single_select",
+            MagicMock(side_effect=RuntimeError("INSUFFICIENT_SCOPES")),
+        )
+        stats = sync.SyncStats()
+        sync.ensure_pr_priority_from_issues(client, _priority_fields(), stats)
+        assert stats.priority_set == 0
+        assert stats.priority_failed == 1
+        assert any("Failed copying Priority" in err for err in stats.errors)
 
 

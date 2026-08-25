@@ -31,14 +31,29 @@ delayed under GitHub load:
    skips that extra board listing when this tick already set Organization on
    newly added items. Quiet ticks still backfill. Pass `--backfill-org always`
    (or the workflow input) to force a full walk.
+6. Copies **Priority** (and empty **Review priority**) onto PRs from linked
+   issues (`Fixes` / `Closes` / Development sidebar). Uses the issue's project
+   Priority; if several issues are linked, the highest rank wins
+   (Urgent > High > Medium > Low). PRs with no linked issue, or whose issues
+   have no Priority, stay unset — there is no default. Values already set on
+   the PR are left alone.
 
 The workflow lives only in `org-infra` (it is **not** synced out to consumer repos).
+A new PR is picked up on the next 5-minute tick (GitHub does not let this
+org-infra workflow subscribe to `pull_request` events in other repositories).
 
 | File | Role |
 |---|---|
 | `project-sync-config.yml` | Orgs, exclusions, and project target |
 | `scripts/sync-project-board.py` | Discovery + GraphQL mutations |
 | `.github/workflows/sync_project_board.yml` | Schedule + manual trigger |
+| `scripts/report-sprint-velocity.py` | End-of-sprint velocity averages |
+| `.github/workflows/report_sprint_velocity.yml` | Manual velocity report |
+
+See [Sprint velocity report](SPRINT_VELOCITY.md) for completed-sprint averages
+(size, organization, milestone). That report is read-only and is meant to be
+run after a sprint closes; it is useful to run now so the pipeline is in place
+before history exists.
 
 ## Why a PAT (not the sync GitHub App)
 

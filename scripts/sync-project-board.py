@@ -6,9 +6,10 @@
 Discovers repositories across one or more organizations, optionally links
 them to the target project, and adds any open issues/PRs that are not
 already on the board. Newly added items (and any existing items missing a
-value) get Organization set from the source GitHub org. Designed for
-cross-org boards where a single GitHub App installation token is
-insufficient (use a PAT with multi-org access).
+value) get Organization set from the source GitHub org. PRs inherit Priority
+from linked issues when that field is empty. Designed for cross-org boards
+where a single GitHub App installation token is insufficient (use a PAT with
+multi-org access).
 """
 
 from __future__ import annotations
@@ -43,6 +44,9 @@ OWNER_TO_ORGANIZATION = {
 # Keeps programming bugs (TypeError, KeyError, …) from being swallowed per item.
 SYNC_EXCEPTIONS = (requests.RequestException, RuntimeError)
 
+# Project Priority / Review priority option names, highest first.
+PRIORITY_RANK = {"Urgent": 4, "High": 3, "Medium": 2, "Low": 1}
+
 
 @dataclass
 class SyncStats:
@@ -57,6 +61,8 @@ class SyncStats:
     items_failed: int = 0
     organization_set: int = 0
     organization_failed: int = 0
+    priority_set: int = 0
+    priority_failed: int = 0
     errors: List[str] = field(default_factory=list)
 
 
@@ -210,13 +216,17 @@ def list_org_repos(
 
 @dataclass
 class ProjectFields:
-    """Resolved project id plus Status / Organization single-select metadata."""
+    """Resolved project id plus single-select field metadata."""
 
     project_id: str
     status_field_id: Optional[str]
     status_options: Dict[str, str]
     organization_field_id: Optional[str]
     organization_options: Dict[str, str]
+    priority_field_id: Optional[str] = None
+    priority_options: Dict[str, str] = field(default_factory=dict)
+    review_priority_field_id: Optional[str] = None
+    review_priority_options: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -234,7 +244,7 @@ class AddItemResult:
 
 
 def get_project(client: GitHubClient, owner: str, number: int) -> ProjectFields:
-    """Return project id and Status / Organization field metadata."""
+    """Return project id and Status / Organization / Priority field metadata."""
     data = client.graphql(
         """
         query($owner: String!, $number: Int!) {
@@ -260,29 +270,47 @@ def get_project(client: GitHubClient, owner: str, number: int) -> ProjectFields:
     if not project:
         raise RuntimeError(f"Project #{number} not found in org {owner}")
 
-    status_field_id = None
-    status_options: Dict[str, str] = {}
-    organization_field_id = None
-    organization_options: Dict[str, str] = {}
+    fields = ProjectFields(
+        project_id=project["id"],
+        status_field_id=None,
+        status_options={},
+        organization_field_id=None,
+        organization_options={},
+    )
     for node in project["fields"]["nodes"]:
         if not node:
             continue
         name = node.get("name")
+        options = {opt["name"]: opt["id"] for opt in node.get("options", [])}
         if name == "Status":
-            status_field_id = node["id"]
-            status_options = {opt["name"]: opt["id"] for opt in node.get("options", [])}
+            fields.status_field_id = node["id"]
+            fields.status_options = options
         elif name == "Organization":
-            organization_field_id = node["id"]
-            organization_options = {
-                opt["name"]: opt["id"] for opt in node.get("options", [])
-            }
-    return ProjectFields(
-        project_id=project["id"],
-        status_field_id=status_field_id,
-        status_options=status_options,
-        organization_field_id=organization_field_id,
-        organization_options=organization_options,
-    )
+            fields.organization_field_id = node["id"]
+            fields.organization_options = options
+        elif name == "Priority":
+            fields.priority_field_id = node["id"]
+            fields.priority_options = options
+        elif name == "Review priority":
+            fields.review_priority_field_id = node["id"]
+            fields.review_priority_options = options
+    return fields
+
+
+def _paginate_project_item_nodes(
+    client: GitHubClient, project_id: str, query: str
+) -> List[Dict[str, Any]]:
+    """Walk ProjectV2 item pages until exhausted."""
+    collected: List[Dict[str, Any]] = []
+    cursor = None
+    while True:
+        data = client.graphql(query, {"projectId": project_id, "cursor": cursor})
+        items = data["node"]["items"]
+        collected.extend(items["nodes"])
+        if not items["pageInfo"]["hasNextPage"]:
+            break
+        cursor = items["pageInfo"]["endCursor"]
+    return collected
 
 
 def existing_content_ids(client: GitHubClient, project_id: str) -> Set[str]:
@@ -305,18 +333,11 @@ def existing_content_ids(client: GitHubClient, project_id: str) -> Set[str]:
     }
     """
     ids: Set[str] = set()
-    cursor = None
-    while True:
-        data = client.graphql(query, {"projectId": project_id, "cursor": cursor})
-        items = data["node"]["items"]
-        for node in items["nodes"]:
-            content = node.get("content") or {}
-            content_id = content.get("id")
-            if content_id:
-                ids.add(content_id)
-        if not items["pageInfo"]["hasNextPage"]:
-            break
-        cursor = items["pageInfo"]["endCursor"]
+    for node in _paginate_project_item_nodes(client, project_id, query):
+        content = node.get("content") or {}
+        content_id = content.get("id")
+        if content_id:
+            ids.add(content_id)
     return ids
 
 
@@ -511,16 +532,7 @@ def list_board_items_with_org_metadata(
       }
     }
     """
-    collected: List[Dict[str, Any]] = []
-    cursor = None
-    while True:
-        data = client.graphql(query, {"projectId": project_id, "cursor": cursor})
-        items = data["node"]["items"]
-        collected.extend(items["nodes"])
-        if not items["pageInfo"]["hasNextPage"]:
-            break
-        cursor = items["pageInfo"]["endCursor"]
-    return collected
+    return _paginate_project_item_nodes(client, project_id, query)
 
 
 def ensure_organizations(
@@ -580,6 +592,143 @@ def should_run_organization_backfill(backfill_org: str, stats: SyncStats) -> boo
     return stats.items_added == 0 or stats.organization_failed > 0
 
 
+def highest_priority(names: List[Optional[str]]) -> Optional[str]:
+    """Return the highest named Priority among known options, if any."""
+    ranked = [name for name in names if name in PRIORITY_RANK]
+    if not ranked:
+        return None
+    return max(ranked, key=lambda name: PRIORITY_RANK[name])
+
+
+def list_board_priority_items(
+    client: GitHubClient, project_id: str
+) -> List[Dict[str, Any]]:
+    """Return board items with Priority, Review priority, and linked issues."""
+    query = """
+    query($projectId: ID!, $cursor: String) {
+      node(id: $projectId) {
+        ... on ProjectV2 {
+          items(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              priority: fieldValueByName(name: "Priority") {
+                ... on ProjectV2ItemFieldSingleSelectValue { name }
+              }
+              reviewPriority: fieldValueByName(name: "Review priority") {
+                ... on ProjectV2ItemFieldSingleSelectValue { name }
+              }
+              content {
+                __typename
+                ... on Issue { id }
+                ... on PullRequest {
+                  id
+                  closingIssuesReferences(first: 20) {
+                    nodes { id }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    """
+    return _paginate_project_item_nodes(client, project_id, query)
+
+
+def _copy_priority_field(
+    client: GitHubClient,
+    project_id: str,
+    item_id: str,
+    option_name: str,
+    field_id: Optional[str],
+    options: Dict[str, str],
+    stats: SyncStats,
+    label: str,
+) -> None:
+    """Copy a named priority onto one single-select field when it is mapped."""
+    option_id = options.get(option_name)
+    if not field_id or not option_id:
+        return
+    try:
+        set_single_select(client, project_id, item_id, field_id, option_id)
+        stats.priority_set += 1
+        print(f"  priority {label} -> {option_name}")
+    except SYNC_EXCEPTIONS as exc:
+        stats.priority_failed += 1
+        msg = f"Failed copying Priority onto {label}: {exc}"
+        print(f"  ! {msg}")
+        stats.errors.append(msg)
+
+
+def ensure_pr_priority_from_issues(
+    client: GitHubClient,
+    fields: ProjectFields,
+    stats: SyncStats,
+) -> None:
+    """Set empty PR Priority / Review priority from linked issues.
+
+    Uses ``closingIssuesReferences`` (Fixes/Closes and Development links).
+    Does not default a value when there is no linked issue, or when linked
+    issues have no Priority. Does not overwrite a value already set on the PR.
+    If several linked issues have Priority, the highest rank wins.
+    """
+    if not fields.priority_field_id and not fields.review_priority_field_id:
+        print("Priority fields missing on project; skipping PR priority copy")
+        return
+
+    print("\n=== Copying Priority from linked issues onto PRs ===")
+    issue_priority: Dict[str, Optional[str]] = {}
+    pr_nodes: List[Dict[str, Any]] = []
+    for node in list_board_priority_items(client, fields.project_id):
+        content = node.get("content") or {}
+        content_id = content.get("id")
+        if not content_id:
+            continue
+        current = (node.get("priority") or {}).get("name")
+        typename = content.get("__typename")
+        if typename == "Issue":
+            issue_priority[content_id] = current
+            continue
+        if typename == "PullRequest":
+            pr_nodes.append(node)
+
+    for node in pr_nodes:
+        content = node.get("content") or {}
+        linked = content.get("closingIssuesReferences") or {}
+        linked_ids = [item.get("id") for item in linked.get("nodes") or []]
+        wanted = highest_priority([issue_priority.get(cid) for cid in linked_ids])
+        if not wanted:
+            continue
+        item_id = node["id"]
+        current_priority = (node.get("priority") or {}).get("name")
+        current_review = (node.get("reviewPriority") or {}).get("name")
+        pr_id = content.get("id") or item_id
+        if not current_priority:
+            _copy_priority_field(
+                client,
+                fields.project_id,
+                item_id,
+                wanted,
+                fields.priority_field_id,
+                fields.priority_options,
+                stats,
+                f"Priority {pr_id}",
+            )
+        if not current_review:
+            _copy_priority_field(
+                client,
+                fields.project_id,
+                item_id,
+                wanted,
+                fields.review_priority_field_id,
+                fields.review_priority_options,
+                stats,
+                f"Review priority {pr_id}",
+            )
+
+
 def format_summary(stats: SyncStats, dry_run: bool) -> str:
     """Format the job summary markdown (pure; no I/O)."""
     lines = [
@@ -595,6 +744,8 @@ def format_summary(stats: SyncStats, dry_run: bool) -> str:
         f"- Failed: **{stats.items_failed}**",
         f"- Organization set/updated: **{stats.organization_set}**",
         f"- Organization failed: **{stats.organization_failed}**",
+        f"- Priority copied from linked issues: **{stats.priority_set}**",
+        f"- Priority copy failed: **{stats.priority_failed}**",
     ]
     if stats.errors:
         lines.extend(["", "### Errors", ""])
@@ -768,6 +919,7 @@ def sync(
             else "newly added items already have Organization"
         )
         print(f"\nSkipping Organization backfill ({reason})")
+    ensure_pr_priority_from_issues(client, fields, stats)
     return stats
 
 
