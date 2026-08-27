@@ -28,6 +28,11 @@
 
 ### Changed
 
+- **Project board sync**: Harden copying Priority / Review priority from
+  linked issues: keep the highest rank when an issue appears twice on the
+  board, warn when closing-issue refs are truncated, and log unmapped
+  option names. (#536)
+
 - **Project board sync**: Run the Compliance Automation planning board
   sync every 5 minutes instead of once daily. GitHub Actions does not
   honor a 1-minute cron; 5 minutes is the documented minimum. Concurrent
