@@ -319,6 +319,40 @@ class TestSanitizeMarkdown:
         assert "::set-output" not in markdown
         assert report.md_cell(dirty) in markdown
 
+    def test_sanitize_md_url_keeps_https_project_links(self):
+        url = "https://github.com/orgs/complytime/projects/14"
+        assert report.sanitize_md_url(url) == url
+
+    def test_sanitize_md_url_encodes_parentheses_that_break_markdown_links(self):
+        dirty = "https://example.test/x) [injected](https://evil.example"
+        clean = report.sanitize_md_url(dirty)
+        assert ")" not in clean
+        assert "(" not in clean
+        built = report.build_report(
+            project_title="Compliance Automation planning",
+            project_url=dirty,
+            generated_at="2026-08-24 11:00 UTC",
+            iterations=[_iteration("CA Sprint 1", "2026-08-17", completed=True)],
+            item_nodes=[_item()],
+        )
+        markdown = report.render_markdown(built)
+        assert "](https://evil.example" not in markdown
+        assert clean in markdown
+
+    def test_sanitize_md_url_rejects_non_http_schemes(self):
+        assert report.sanitize_md_url("javascript:alert(1)") == "#"
+        assert report.sanitize_md_url("not-a-url") == "#"
+        built = report.build_report(
+            project_title="Compliance Automation planning",
+            project_url="javascript:alert(1)",
+            generated_at="2026-08-24 11:00 UTC",
+            iterations=[_iteration("CA Sprint 1", "2026-08-17", completed=True)],
+            item_nodes=[_item()],
+        )
+        markdown = report.render_markdown(built)
+        assert "javascript:" not in markdown
+        assert "](#)" in markdown
+
 
 class TestNormalize:
     @pytest.mark.parametrize(

@@ -28,6 +28,9 @@
 
 ### Changed
 
+- **Constitution**: v1.3.0 documents the org-infra-only workflow naming
+  convention (`sync_` / `report_` prefixes).
+
 - **Project board sync**: Harden copying Priority / Review priority from
   linked issues: keep the highest rank when an issue appears twice on the
   board, warn when closing-issue refs are truncated, and log unmapped

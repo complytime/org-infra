@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Sequence
+from urllib.parse import urlparse
 
 from lib.github_client import GitHubClient
 from lib.project_config import load_project_target
@@ -386,6 +387,21 @@ def sanitize_md(value: str) -> str:
     return text
 
 
+def sanitize_md_url(value: str) -> str:
+    """Keep markdown link targets from breaking out of ``[](url)``.
+
+    Only ``http``/``https`` URLs are emitted. Parentheses that would close
+    the link, whitespace, and ``::workflow-command`` sequences are encoded
+    or neutralized. Invalid or non-http(s) values become ``#``.
+    """
+    text = str(value).replace("\r", "").replace("\n", "").strip()
+    text = text.replace("::", "∶∶")
+    parsed = urlparse(text)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return "#"
+    return text.replace("(", "%28").replace(")", "%29").replace(" ", "%20")
+
+
 def md_cell(value: str) -> str:
     """Table cell for a user-controlled string (code span + sanitization)."""
     return f"`{sanitize_md(value)}`"
@@ -446,10 +462,11 @@ def render_breakdown_table(
 
 def render_markdown(report: VelocityReport) -> str:
     title = sanitize_md(report.project_title)
+    source_url = sanitize_md_url(report.project_url)
     lines: list[str] = [
         f"# Sprint velocity — {title}",
         "",
-        f"Generated {report.generated_at}. Source: [{title}]({report.project_url}).",
+        f"Generated {report.generated_at}. Source: [{title}]({source_url}).",
         "",
         "Averages use **completed** Iterations only. The open sprint is listed",
         "separately so in-progress Done items do not pull the mean down.",

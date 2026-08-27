@@ -1,6 +1,6 @@
 <!--
 Sync Impact Report:
-Version: 1.0.2 → 1.1.0 → 1.2.0 (Agent-optimized wording, repo-agnostic refactor, RFC 2119 normalization, org-infra alignment)
+Version: 1.0.2 → 1.1.0 → 1.2.0 → 1.3.0 (Agent-optimized wording, repo-agnostic refactor, RFC 2119 normalization, org-infra alignment, org-infra-only workflow naming)
 Modified Principles:
   - III. Incremental Improvement: Reframed from human-motivational to agent-enforceable MUST rules
   - IV. Code is Written for Humans First → IV. Readability First: Retitled and tightened intro
@@ -15,6 +15,7 @@ Other Changes:
   - Normalized all directives across Contribution Workflow, Coding Standards, and Governance to RFC 2119
   - Tightened vague language ("sensible defaults", "one sitting", etc.)
   - Added "code agents" to Governance applicability statement
+  - YAML / GitHub Actions: org-infra-only workflows SHOULD use a verb prefix (`sync_`, `report_`)
 Templates requiring updates:
   ⚠ plan-template.md - Constitution Check gates should reflect retitled Principle IV (Readability First)
   ✅ spec-template.md - No changes needed (generic template)
@@ -267,4 +268,4 @@ This constitution is the org-wide shared reference for all ComplyTime repositori
 
 Repository-level constitutions are incremental -- they extend, not replace, this document. In case of conflict, this org-wide constitution takes precedence.
 
-**Version**: 1.2.0 | **Ratified**: 2026-02-25 | **Last Amended**: 2026-03-18
+**Version**: 1.3.0 | **Ratified**: 2026-02-25 | **Last Amended**: 2026-08-27
