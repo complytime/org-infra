@@ -202,6 +202,7 @@ class TestFormatAndWriteSummary:
         assert "`boom`" in text
         assert "Organization set/updated" in text
         assert "Priority copied from linked issues" in text
+        assert "Priority option unmapped" in text
 
     def test_write_summary_appends_step_summary(self, tmp_path: Path, monkeypatch):
         summary_path = tmp_path / "summary.md"
@@ -784,6 +785,9 @@ class TestListBoardPriorityItems:
         assert client.graphql.call_count == 2
         assert client.graphql.call_args_list[0].args[1]["cursor"] is None
         assert client.graphql.call_args_list[1].args[1]["cursor"] == "c1"
+        query = client.graphql.call_args_list[0].args[0]
+        assert f"first: {sync.CLOSING_ISSUES_PAGE_SIZE}" in query
+        assert "pageInfo { hasNextPage }" in query
 
     def test_empty_board_returns_no_items(self):
         client = MagicMock()
@@ -1065,5 +1069,163 @@ class TestPriorityInherit:
         assert stats.priority_set == 0
         assert stats.priority_failed == 1
         assert any("Failed copying Priority" in err for err in stats.errors)
+
+    def test_remember_highest_priority_keeps_max_rank_on_duplicates(self):
+        store: dict[str, str] = {}
+        sync.remember_highest_priority(store, "I_1", "Low")
+        sync.remember_highest_priority(store, "I_1", "Urgent")
+        sync.remember_highest_priority(store, "I_1", "Medium")
+        assert store["I_1"] == "Urgent"
+
+    def test_uses_highest_when_issue_appears_twice(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        monkeypatch.setattr(
+            sync,
+            "list_board_priority_items",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_I1_LOW",
+                    "priority": {"name": "Low"},
+                    "content": {"__typename": "Issue", "id": "I_1"},
+                },
+                {
+                    "id": "PVTI_I1_HIGH",
+                    "priority": {"name": "High"},
+                    "content": {"__typename": "Issue", "id": "I_1"},
+                },
+                {
+                    "id": "PVTI_PR",
+                    "priority": None,
+                    "reviewPriority": None,
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_1",
+                        "number": 4,
+                        "repository": {"nameWithOwner": "complytime/demo"},
+                        "closingIssuesReferences": {"nodes": [{"id": "I_1"}]},
+                    },
+                },
+            ],
+        )
+        set_calls = []
+        monkeypatch.setattr(
+            sync, "set_single_select", lambda *args, **_k: set_calls.append(args)
+        )
+        stats = sync.SyncStats()
+        sync.ensure_pr_priority_from_issues(client, _priority_fields(), stats)
+        assert {call[4] for call in set_calls} == {"PRI_H", "REV_H"}
+
+    def test_logs_unmapped_option(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ):
+        client = MagicMock(dry_run=False)
+        monkeypatch.setattr(
+            sync,
+            "list_board_priority_items",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_ISSUE",
+                    "priority": {"name": "High"},
+                    "content": {"__typename": "Issue", "id": "I_1"},
+                },
+                {
+                    "id": "PVTI_PR",
+                    "priority": None,
+                    "reviewPriority": None,
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_1",
+                        "number": 5,
+                        "repository": {"nameWithOwner": "complytime/demo"},
+                        "closingIssuesReferences": {"nodes": [{"id": "I_1"}]},
+                    },
+                },
+            ],
+        )
+        fields = _priority_fields()
+        fields.priority_options = {"Low": "PRI_L"}
+        fields.review_priority_options = {"Low": "REV_L"}
+        set_fn = MagicMock()
+        monkeypatch.setattr(sync, "set_single_select", set_fn)
+        stats = sync.SyncStats()
+        sync.ensure_pr_priority_from_issues(client, fields, stats)
+        set_fn.assert_not_called()
+        assert stats.priority_unmapped == 2
+        assert stats.priority_set == 0
+        captured = capsys.readouterr()
+        assert "no option named 'High'" in captured.out
+
+    def test_warns_when_closing_issues_truncated(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ):
+        client = MagicMock(dry_run=False)
+        monkeypatch.setattr(
+            sync,
+            "list_board_priority_items",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_ISSUE",
+                    "priority": {"name": "Medium"},
+                    "content": {"__typename": "Issue", "id": "I_1"},
+                },
+                {
+                    "id": "PVTI_PR",
+                    "priority": None,
+                    "reviewPriority": None,
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_1",
+                        "number": 6,
+                        "repository": {"nameWithOwner": "complytime/demo"},
+                        "closingIssuesReferences": {
+                            "pageInfo": {"hasNextPage": True},
+                            "nodes": [{"id": "I_1"}],
+                        },
+                    },
+                },
+            ],
+        )
+        monkeypatch.setattr(sync, "set_single_select", lambda *_a, **_k: None)
+        stats = sync.SyncStats()
+        sync.ensure_pr_priority_from_issues(client, _priority_fields(), stats)
+        captured = capsys.readouterr()
+        assert "closing issues truncated" in captured.out
+        assert stats.priority_set == 2
+
+    def test_dry_run_does_not_write(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ):
+        client = MagicMock(dry_run=True)
+        monkeypatch.setattr(
+            sync,
+            "list_board_priority_items",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_ISSUE",
+                    "priority": {"name": "High"},
+                    "content": {"__typename": "Issue", "id": "I_1"},
+                },
+                {
+                    "id": "PVTI_PR",
+                    "priority": None,
+                    "reviewPriority": None,
+                    "content": {
+                        "__typename": "PullRequest",
+                        "id": "PR_1",
+                        "number": 11,
+                        "repository": {"nameWithOwner": "complytime/demo"},
+                        "closingIssuesReferences": {"nodes": [{"id": "I_1"}]},
+                    },
+                },
+            ],
+        )
+        stats = sync.SyncStats()
+        sync.ensure_pr_priority_from_issues(client, _priority_fields(), stats)
+        client.graphql.assert_not_called()
+        assert stats.priority_set == 2
+        captured = capsys.readouterr()
+        assert "[dry-run] would set field" in captured.out
 
 

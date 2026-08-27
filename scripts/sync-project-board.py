@@ -63,7 +63,12 @@ class SyncStats:
     organization_failed: int = 0
     priority_set: int = 0
     priority_failed: int = 0
+    priority_unmapped: int = 0
     errors: List[str] = field(default_factory=list)
+
+
+# How many closing-issue refs to fetch per PR. Warn when GitHub has more.
+CLOSING_ISSUES_PAGE_SIZE = 20
 
 
 class GitHubClient:
@@ -600,6 +605,15 @@ def highest_priority(names: List[Optional[str]]) -> Optional[str]:
     return max(ranked, key=lambda name: PRIORITY_RANK[name])
 
 
+def remember_highest_priority(
+    store: Dict[str, str], issue_id: str, priority_name: str
+) -> None:
+    """Keep the highest-ranked Priority if the same issue is seen twice."""
+    winner = highest_priority([store.get(issue_id), priority_name])
+    if winner:
+        store[issue_id] = winner
+
+
 def list_board_priority_items(
     client: GitHubClient, project_id: str
 ) -> List[Dict[str, Any]]:
@@ -623,7 +637,10 @@ def list_board_priority_items(
                 ... on Issue { id }
                 ... on PullRequest {
                   id
-                  closingIssuesReferences(first: 20) {
+                  number
+                  repository { nameWithOwner }
+                  closingIssuesReferences(first: __CLOSING_LIMIT__) {
+                    pageInfo { hasNextPage }
                     nodes { id }
                   }
                 }
@@ -634,6 +651,7 @@ def list_board_priority_items(
       }
     }
     """
+    query = query.replace("__CLOSING_LIMIT__", str(CLOSING_ISSUES_PAGE_SIZE))
     return _paginate_project_item_nodes(client, project_id, query)
 
 
@@ -648,8 +666,12 @@ def _copy_priority_field(
     label: str,
 ) -> None:
     """Copy a named priority onto one single-select field when it is mapped."""
+    if not field_id:
+        return
     option_id = options.get(option_name)
-    if not field_id or not option_id:
+    if not option_id:
+        stats.priority_unmapped += 1
+        print(f"  skip {label}: no option named '{option_name}'")
         return
     try:
         set_single_select(client, project_id, item_id, field_id, option_id)
@@ -679,7 +701,7 @@ def ensure_pr_priority_from_issues(
         return
 
     print("\n=== Copying Priority from linked issues onto PRs ===")
-    issue_priority: Dict[str, Optional[str]] = {}
+    issue_priority: Dict[str, str] = {}
     pr_nodes: List[Dict[str, Any]] = []
     for node in list_board_priority_items(client, fields.project_id):
         content = node.get("content") or {}
@@ -689,7 +711,8 @@ def ensure_pr_priority_from_issues(
         current = (node.get("priority") or {}).get("name")
         typename = content.get("__typename")
         if typename == "Issue":
-            issue_priority[content_id] = current
+            if current:
+                remember_highest_priority(issue_priority, content_id, current)
             continue
         if typename == "PullRequest":
             pr_nodes.append(node)
@@ -697,6 +720,14 @@ def ensure_pr_priority_from_issues(
     for node in pr_nodes:
         content = node.get("content") or {}
         linked = content.get("closingIssuesReferences") or {}
+        repo = (content.get("repository") or {}).get("nameWithOwner") or "unknown"
+        number = content.get("number")
+        label = f"{repo}#{number}" if number is not None else repo
+        if (linked.get("pageInfo") or {}).get("hasNextPage"):
+            print(
+                f"  warning: closing issues truncated at "
+                f"{CLOSING_ISSUES_PAGE_SIZE} for {label}"
+            )
         linked_ids = [item.get("id") for item in linked.get("nodes") or []]
         wanted = highest_priority([issue_priority.get(cid) for cid in linked_ids])
         if not wanted:
@@ -704,7 +735,6 @@ def ensure_pr_priority_from_issues(
         item_id = node["id"]
         current_priority = (node.get("priority") or {}).get("name")
         current_review = (node.get("reviewPriority") or {}).get("name")
-        pr_id = content.get("id") or item_id
         if not current_priority:
             _copy_priority_field(
                 client,
@@ -714,7 +744,7 @@ def ensure_pr_priority_from_issues(
                 fields.priority_field_id,
                 fields.priority_options,
                 stats,
-                f"Priority {pr_id}",
+                f"Priority {label}",
             )
         if not current_review:
             _copy_priority_field(
@@ -725,7 +755,7 @@ def ensure_pr_priority_from_issues(
                 fields.review_priority_field_id,
                 fields.review_priority_options,
                 stats,
-                f"Review priority {pr_id}",
+                f"Review priority {label}",
             )
 
 
@@ -746,6 +776,7 @@ def format_summary(stats: SyncStats, dry_run: bool) -> str:
         f"- Organization failed: **{stats.organization_failed}**",
         f"- Priority copied from linked issues: **{stats.priority_set}**",
         f"- Priority copy failed: **{stats.priority_failed}**",
+        f"- Priority option unmapped: **{stats.priority_unmapped}**",
     ]
     if stats.errors:
         lines.extend(["", "### Errors", ""])
