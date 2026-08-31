@@ -175,7 +175,7 @@ jobs:
           steps.cooldown.outputs.cooled_down == 'true'
         id: review
         # SHA pinned to a merged main commit; no version tag exists yet (staged rollout per AGENTS.md).
-        uses: unbound-force/unbound-force/council-review-action@7836c070a63f3eeeab78ebd48c5dd5921ae486e2 # main (merged #336) # zizmor: ignore[ref-version-mismatch]
+        uses: unbound-force/unbound-force/council-review-action@7708badad18804f4bcb88b535261ac289d733394 # main (merged #336) # zizmor: ignore[ref-version-mismatch]
         with:
           model: ${{ inputs.model }}
           diff-path: pr-diff.patch
