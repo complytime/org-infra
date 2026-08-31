@@ -138,6 +138,23 @@ Revisit this configuration when:
 - Stale review alerts are firing frequently -- see
   [Stale Review Alerts](#stale-review-alerts) for threshold tuning.
 
+## Milestone-based reviewer assignment
+
+GitHub CODEOWNERS cannot select reviewers by milestone. For the
+**Evidence Locker MVP** milestone, org-infra runs a scheduled workflow
+that assigns the `evidence-locker-mvp-reviewers` team instead.
+
+- **Membership**: `complytime/.github` `peribolos.yaml` team
+  `evidence-locker-mvp-reviewers` (currently `@hbraswelrh`,
+  `@sedonnel`, `@trevor-vaughan`). Edit that list to change reviewers.
+- **Issues**: members are added as assignees.
+- **Pull requests**: members are requested as reviewers.
+- **Native GitHub code review assignment** is not enabled on this team;
+  every current member is requested/assigned.
+
+See [Evidence Locker MVP Reviewer Assignment](MILESTONE_REVIEWERS.md)
+for the workflow, dry-run, and local testing.
+
 ## Stale Review Alerts
 
 Even with Load Balance, a review request can silently stall if the assigned
