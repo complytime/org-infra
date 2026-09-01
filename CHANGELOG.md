@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Sprint velocity report**: Manual workflow that counts Done issues per
+  completed Iteration on the Compliance Automation planning board, then
+  averages those counts (including by Size, Organization, and Milestone).
+  The open sprint is listed separately and is not in the mean. Board sync
+  and this report share `scripts/lib/github_client.py`. See
+  `docs/SPRINT_VELOCITY.md`.
+
 - **Stale review alerts**: Added `reusable_stale_reviews.yml` and
   `ci_stale_reviews.yml` to detect and flag PRs with review requests
   pending beyond a configurable business-day threshold. Applies a
@@ -20,6 +27,9 @@
   Baseline Level 1 compliance (OSPS-VM-02.01) across all org repositories.
 
 ### Changed
+
+- **Constitution**: v1.3.0 documents the org-infra-only workflow naming
+  convention (`sync_` / `report_` prefixes).
 
 - **Project board sync**: Harden copying Priority / Review priority from
   linked issues: keep the highest rank when an issue appears twice on the

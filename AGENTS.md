@@ -5,7 +5,7 @@ CI/CD infrastructure hub for ComplyTime. Syncs reusable workflows, lint configs,
 ## Structure
 
 ```text
-.github/workflows/      # Reusable (reusable_*) and consumer (ci_*) workflows
+.github/workflows/      # reusable_* (callable), ci_* (consumer), sync_*/report_* (org-infra only)
 scripts/                 # sync-org-repositories.py (Python, GitPython + PyYAML + requests)
 tests/                   # pytest unit tests for sync script
 compliance/              # Ampel policy definitions (branch protection rules)

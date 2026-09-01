@@ -7,6 +7,7 @@ for general policies.
 ## Repository-Specific Notes
 
 - Reusable workflows are prefixed with `reusable_` and consumer workflows with `ci_`.
+- Org-infra-only workflows (not synced) use a verb prefix such as `sync_` or `report_` (`sync_labels.yml`, `report_sprint_velocity.yml`).
 - All workflow changes MUST follow the Principle of Least Privilege for permissions.
 - Write permissions must be avoided. When necessary, they are defined in the minimal possible scope.
 - Prefer defining explicit permissions per Job.

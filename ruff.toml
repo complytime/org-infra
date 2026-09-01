@@ -12,7 +12,7 @@ select = [
     #"PLE",  # pylint-error
     #"SIM",  # flake8-simplify
     #"T10",  # flake8-debugger
-    #"UP",   # pyupgrade
+    #"UP",   # pyupgrade — existing scripts use typing.Dict/List; leave off to avoid churn
     #"W",    # pycodestyle
     #"YTT",  # flake8-2020
 ]

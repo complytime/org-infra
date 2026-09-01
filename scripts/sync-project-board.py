@@ -17,16 +17,15 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests
-import yaml
 
-GITHUB_API = "https://api.github.com"
-GITHUB_GRAPHQL = f"{GITHUB_API}/graphql"
+from lib.github_client import GitHubClient
+from lib.project_config import load_config, parse_project_target
+
 DEFAULT_CONFIG = "project-sync-config.yml"
 
 # Map GitHub repository owner login → Organization single-select option name
@@ -71,80 +70,6 @@ class SyncStats:
 CLOSING_ISSUES_PAGE_SIZE = 20
 
 
-class GitHubClient:
-    """Thin GitHub REST + GraphQL client."""
-
-    def __init__(self, token: str, dry_run: bool = False) -> None:
-        self.dry_run = dry_run
-        self.session = requests.Session()
-        self.session.headers.update(
-            {
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "User-Agent": "complytime-project-board-sync",
-            }
-        )
-
-    def _request(
-        self,
-        method: str,
-        url: str,
-        *,
-        params: Optional[Dict[str, Any]] = None,
-        json_body: Optional[Dict[str, Any]] = None,
-        max_retries: int = 5,
-    ) -> requests.Response:
-        for attempt in range(max_retries):
-            response = self.session.request(
-                method, url, params=params, json=json_body, timeout=60
-            )
-            if response.status_code in (403, 429) and "rate limit" in response.text.lower():
-                reset = response.headers.get("X-RateLimit-Reset")
-                sleep_for = 30
-                if reset and reset.isdigit():
-                    sleep_for = max(5, int(reset) - int(time.time()) + 1)
-                print(f"Rate limited; sleeping {sleep_for}s (attempt {attempt + 1})")
-                time.sleep(min(sleep_for, 120))
-                continue
-            if response.status_code >= 500:
-                time.sleep(2 ** attempt)
-                continue
-            return response
-        return response
-
-    def rest_paginate(self, path: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """Paginate a REST collection endpoint."""
-        url = f"{GITHUB_API}{path}"
-        query = dict(params or {})
-        query.setdefault("per_page", 100)
-        items: List[Dict[str, Any]] = []
-        while url:
-            response = self._request("GET", url, params=query)
-            response.raise_for_status()
-            payload = response.json()
-            if isinstance(payload, list):
-                items.extend(payload)
-            else:
-                raise RuntimeError(f"Unexpected REST payload for {path}: {type(payload)}")
-            # Subsequent pages already encode query in Link URL
-            query = None
-            url = response.links.get("next", {}).get("url")
-        return items
-
-    def graphql(self, query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        response = self._request(
-            "POST",
-            GITHUB_GRAPHQL,
-            json_body={"query": query, "variables": variables or {}},
-        )
-        response.raise_for_status()
-        payload = response.json()
-        if payload.get("errors"):
-            raise RuntimeError(f"GraphQL errors: {payload['errors']}")
-        return payload["data"]
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -175,22 +100,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_config(path: Path) -> Dict[str, Any]:
-    with path.open(encoding="utf-8") as handle:
-        return yaml.safe_load(handle)
-
-
 def validate_config(config: Any) -> Dict[str, Any]:
     """Validate required sync config shape; return the config on success."""
-    if not isinstance(config, dict):
-        raise ValueError("Config must be a mapping")
-    project = config.get("project")
-    if not isinstance(project, dict):
-        raise ValueError("Config missing 'project' mapping")
-    if not project.get("owner"):
-        raise ValueError("Config project requires 'owner'")
-    if "number" not in project:
-        raise ValueError("Config project requires 'number'")
+    parse_project_target(config)
     organizations = config.get("organizations")
     if not isinstance(organizations, list) or not organizations:
         raise ValueError("Config requires a non-empty 'organizations' list")
@@ -972,7 +884,11 @@ def main() -> int:
         print(f"Invalid config: {exc}", file=sys.stderr)
         return 2
     org_filter = {part for part in args.orgs.split() if part}
-    client = GitHubClient(token=token, dry_run=args.dry_run)
+    client = GitHubClient(
+        token=token,
+        dry_run=args.dry_run,
+        user_agent="complytime-project-board-sync",
+    )
     stats = sync(config, client, org_filter, backfill_org=args.backfill_org)
     write_summary(stats, dry_run=args.dry_run)
     return 1 if stats.items_failed or stats.errors else 0
