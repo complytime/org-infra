@@ -34,7 +34,9 @@ delayed under GitHub load:
 6. Copies **Priority** (and empty **Review priority**) onto PRs from linked
    issues (`Fixes` / `Closes` / Development sidebar). Uses the issue's project
    Priority; if several issues are linked, the highest rank wins
-   (Urgent > High > Medium > Low). PRs with no linked issue, or whose issues
+   (Urgent > High > Medium > Low). If the same issue appears twice on the
+   board, the highest Priority is kept. Warns when a PR has more closing
+   issues than one GraphQL page. PRs with no linked issue, or whose issues
    have no Priority, stay unset — there is no default. Values already set on
    the PR are left alone.
 7. Moves items in **Ready for Review** to **In Review** when a non-author
@@ -53,6 +55,7 @@ org-infra workflow subscribe to `pull_request` events in other repositories).
 |---|---|
 | `project-sync-config.yml` | Orgs, exclusions, and project target |
 | `scripts/sync-project-board.py` | Discovery + GraphQL mutations |
+| `scripts/lib/github_client.py` | Shared REST/GraphQL client |
 | `.github/workflows/sync_project_board.yml` | Schedule + manual trigger |
 | `scripts/report-sprint-velocity.py` | End-of-sprint velocity averages |
 | `.github/workflows/report_sprint_velocity.yml` | Manual velocity report |

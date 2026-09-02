@@ -18,17 +18,16 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests
-import yaml
 
-GITHUB_API = "https://api.github.com"
-GITHUB_GRAPHQL = f"{GITHUB_API}/graphql"
+from lib.github_client import GitHubClient
+from lib.project_config import load_config, parse_project_target
+
 DEFAULT_CONFIG = "project-sync-config.yml"
 
 # Map GitHub repository owner login → Organization single-select option name
@@ -81,83 +80,14 @@ class SyncStats:
     organization_failed: int = 0
     priority_set: int = 0
     priority_failed: int = 0
+    priority_unmapped: int = 0
     review_status_set: int = 0
     review_status_failed: int = 0
     errors: List[str] = field(default_factory=list)
 
 
-class GitHubClient:
-    """Thin GitHub REST + GraphQL client."""
-
-    def __init__(self, token: str, dry_run: bool = False) -> None:
-        self.dry_run = dry_run
-        self.session = requests.Session()
-        self.session.headers.update(
-            {
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "User-Agent": "complytime-project-board-sync",
-            }
-        )
-
-    def _request(
-        self,
-        method: str,
-        url: str,
-        *,
-        params: Optional[Dict[str, Any]] = None,
-        json_body: Optional[Dict[str, Any]] = None,
-        max_retries: int = 5,
-    ) -> requests.Response:
-        for attempt in range(max_retries):
-            response = self.session.request(
-                method, url, params=params, json=json_body, timeout=60
-            )
-            if response.status_code in (403, 429) and "rate limit" in response.text.lower():
-                reset = response.headers.get("X-RateLimit-Reset")
-                sleep_for = 30
-                if reset and reset.isdigit():
-                    sleep_for = max(5, int(reset) - int(time.time()) + 1)
-                print(f"Rate limited; sleeping {sleep_for}s (attempt {attempt + 1})")
-                time.sleep(min(sleep_for, 120))
-                continue
-            if response.status_code >= 500:
-                time.sleep(2 ** attempt)
-                continue
-            return response
-        return response
-
-    def rest_paginate(self, path: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """Paginate a REST collection endpoint."""
-        url = f"{GITHUB_API}{path}"
-        query = dict(params or {})
-        query.setdefault("per_page", 100)
-        items: List[Dict[str, Any]] = []
-        while url:
-            response = self._request("GET", url, params=query)
-            response.raise_for_status()
-            payload = response.json()
-            if isinstance(payload, list):
-                items.extend(payload)
-            else:
-                raise RuntimeError(f"Unexpected REST payload for {path}: {type(payload)}")
-            # Subsequent pages already encode query in Link URL
-            query = None
-            url = response.links.get("next", {}).get("url")
-        return items
-
-    def graphql(self, query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        response = self._request(
-            "POST",
-            GITHUB_GRAPHQL,
-            json_body={"query": query, "variables": variables or {}},
-        )
-        response.raise_for_status()
-        payload = response.json()
-        if payload.get("errors"):
-            raise RuntimeError(f"GraphQL errors: {payload['errors']}")
-        return payload["data"]
+# How many closing-issue refs to fetch per PR. Warn when GitHub has more.
+CLOSING_ISSUES_PAGE_SIZE = 20
 
 
 def parse_args() -> argparse.Namespace:
@@ -190,22 +120,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_config(path: Path) -> Dict[str, Any]:
-    with path.open(encoding="utf-8") as handle:
-        return yaml.safe_load(handle)
-
-
 def validate_config(config: Any) -> Dict[str, Any]:
     """Validate required sync config shape; return the config on success."""
-    if not isinstance(config, dict):
-        raise ValueError("Config must be a mapping")
-    project = config.get("project")
-    if not isinstance(project, dict):
-        raise ValueError("Config missing 'project' mapping")
-    if not project.get("owner"):
-        raise ValueError("Config project requires 'owner'")
-    if "number" not in project:
-        raise ValueError("Config project requires 'number'")
+    parse_project_target(config)
     organizations = config.get("organizations")
     if not isinstance(organizations, list) or not organizations:
         raise ValueError("Config requires a non-empty 'organizations' list")
@@ -620,6 +537,15 @@ def highest_priority(names: List[Optional[str]]) -> Optional[str]:
     return max(ranked, key=lambda name: PRIORITY_RANK[name])
 
 
+def remember_highest_priority(
+    store: Dict[str, str], issue_id: str, priority_name: str
+) -> None:
+    """Keep the highest-ranked Priority if the same issue is seen twice."""
+    winner = highest_priority([store.get(issue_id), priority_name])
+    if winner:
+        store[issue_id] = winner
+
+
 def list_board_priority_items(
     client: GitHubClient, project_id: str
 ) -> List[Dict[str, Any]]:
@@ -643,7 +569,10 @@ def list_board_priority_items(
                 ... on Issue { id }
                 ... on PullRequest {
                   id
-                  closingIssuesReferences(first: 20) {
+                  number
+                  repository { nameWithOwner }
+                  closingIssuesReferences(first: __CLOSING_LIMIT__) {
+                    pageInfo { hasNextPage }
                     nodes { id }
                   }
                 }
@@ -654,6 +583,7 @@ def list_board_priority_items(
       }
     }
     """
+    query = query.replace("__CLOSING_LIMIT__", str(CLOSING_ISSUES_PAGE_SIZE))
     return _paginate_project_item_nodes(client, project_id, query)
 
 
@@ -668,8 +598,12 @@ def _copy_priority_field(
     label: str,
 ) -> None:
     """Copy a named priority onto one single-select field when it is mapped."""
+    if not field_id:
+        return
     option_id = options.get(option_name)
-    if not field_id or not option_id:
+    if not option_id:
+        stats.priority_unmapped += 1
+        print(f"  skip {label}: no option named '{option_name}'")
         return
     try:
         set_single_select(client, project_id, item_id, field_id, option_id)
@@ -699,7 +633,7 @@ def ensure_pr_priority_from_issues(
         return
 
     print("\n=== Copying Priority from linked issues onto PRs ===")
-    issue_priority: Dict[str, Optional[str]] = {}
+    issue_priority: Dict[str, str] = {}
     pr_nodes: List[Dict[str, Any]] = []
     for node in list_board_priority_items(client, fields.project_id):
         content = node.get("content") or {}
@@ -709,7 +643,8 @@ def ensure_pr_priority_from_issues(
         current = (node.get("priority") or {}).get("name")
         typename = content.get("__typename")
         if typename == "Issue":
-            issue_priority[content_id] = current
+            if current:
+                remember_highest_priority(issue_priority, content_id, current)
             continue
         if typename == "PullRequest":
             pr_nodes.append(node)
@@ -717,6 +652,14 @@ def ensure_pr_priority_from_issues(
     for node in pr_nodes:
         content = node.get("content") or {}
         linked = content.get("closingIssuesReferences") or {}
+        repo = (content.get("repository") or {}).get("nameWithOwner") or "unknown"
+        number = content.get("number")
+        label = f"{repo}#{number}" if number is not None else repo
+        if (linked.get("pageInfo") or {}).get("hasNextPage"):
+            print(
+                f"  warning: closing issues truncated at "
+                f"{CLOSING_ISSUES_PAGE_SIZE} for {label}"
+            )
         linked_ids = [item.get("id") for item in linked.get("nodes") or []]
         wanted = highest_priority([issue_priority.get(cid) for cid in linked_ids])
         if not wanted:
@@ -724,7 +667,6 @@ def ensure_pr_priority_from_issues(
         item_id = node["id"]
         current_priority = (node.get("priority") or {}).get("name")
         current_review = (node.get("reviewPriority") or {}).get("name")
-        pr_id = content.get("id") or item_id
         if not current_priority:
             _copy_priority_field(
                 client,
@@ -734,7 +676,7 @@ def ensure_pr_priority_from_issues(
                 fields.priority_field_id,
                 fields.priority_options,
                 stats,
-                f"Priority {pr_id}",
+                f"Priority {label}",
             )
         if not current_review:
             _copy_priority_field(
@@ -745,7 +687,7 @@ def ensure_pr_priority_from_issues(
                 fields.review_priority_field_id,
                 fields.review_priority_options,
                 stats,
-                f"Review priority {pr_id}",
+                f"Review priority {label}",
             )
 
 
@@ -1108,6 +1050,7 @@ def format_summary(stats: SyncStats, dry_run: bool) -> str:
         f"- Organization failed: **{stats.organization_failed}**",
         f"- Priority copied from linked issues: **{stats.priority_set}**",
         f"- Priority copy failed: **{stats.priority_failed}**",
+        f"- Priority option unmapped: **{stats.priority_unmapped}**",
         f"- Ready for Review advanced to In Review: **{stats.review_status_set}**",
         f"- Review-status advance failed: **{stats.review_status_failed}**",
     ]
@@ -1313,7 +1256,11 @@ def main() -> int:
         print(f"Invalid config: {exc}", file=sys.stderr)
         return 2
     org_filter = {part for part in args.orgs.split() if part}
-    client = GitHubClient(token=token, dry_run=args.dry_run)
+    client = GitHubClient(
+        token=token,
+        dry_run=args.dry_run,
+        user_agent="complytime-project-board-sync",
+    )
     stats = sync(config, client, org_filter, backfill_org=args.backfill_org)
     write_summary(stats, dry_run=args.dry_run)
     return 1 if stats.items_failed or stats.errors else 0

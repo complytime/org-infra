@@ -61,7 +61,8 @@ org-infra/
 │  │  ├── reusable_vuln_scan.yml            # Vulnerability scanning via OSV-Scanner and Trivy.
 │  │  ├── sync_labels.yml                   # Manual workflow to reconcile repository labels from policy.
 │  │  ├── sync_org_repositories.yml         # Manual, scheduled, and event-based workflow to synchronize files.
-│  │  └── sync_project_board.yml            # Sync open issues/PRs into Compliance Automation planning board.
+│  │  ├── sync_project_board.yml            # Sync open issues/PRs into Compliance Automation planning board.
+│  │  └── report_sprint_velocity.yml        # Manual Done-per-sprint averages from the planning board.
 │  ├── dependabot.yml                       # Dependabot settings for GitHub Actions and Go modules.
 │  ├── dependabot_python.yml                # Dependabot settings for GitHub Actions (Python repos) and pip.
 │  └── pull_request_template.md             # PR template applicable to all repositories.
@@ -71,11 +72,14 @@ org-infra/
 │  ├── LABEL_SYNC.md                        # Documentation for cross-repo label standardization.
 │  ├── LOCAL_TESTING.md                     # Documentation on how to test synchronization locally.
 │  ├── PROJECT_BOARD_SYNC.md                # Compliance Automation project board sync setup.
+│  ├── SPRINT_VELOCITY.md                   # End-of-sprint Done averages from the planning board.
 │  └── SYNC_REPOSITORIES_SETUP.md          # Documentation on how to setup the repository synchronization infrastructure.
 ├── scripts/
+│  ├── lib/                                 # Shared GitHub client and project-config helpers.
 │  ├── sync-labels.py                       # Python script to reconcile labels from labels-policy.json.
 │  ├── sync-org-repositories.py             # Python script to check and ensure consistence among repositories.
 │  ├── sync-project-board.py                # Sync open issues/PRs into the Compliance Automation project board.
+│  ├── report-sprint-velocity.py            # Average Done issues per completed sprint.
 │  └── resolve-go-packages.sh              # Bash: multi-module Go package auto-discovery
 ├── ...                                     # Multiple technology specific configuration files
 ├── labels-policy.json                      # Label create/rename/preserve/delete policy for sync-labels.py
@@ -129,6 +133,7 @@ See [`docs/LOCAL_TESTING.md`](docs/LOCAL_TESTING.md) for detailed setup and trou
 * Reusable workflows are prefixed by `reusable_` and should have a clear, descriptive name reflecting its function.
 * Reusable workflows are generic enough to be consumed by any repository within the organization.
 * Regular workflows consuming reusable workflows are prefixed by `ci_`.
+* Workflows that run only in org-infra (not synced, not reusable) use a verb prefix such as `sync_` or `report_` (`sync_labels.yml`, `sync_project_board.yml`, `report_sprint_velocity.yml`).
 * Workflows must ensure the Principle of Least Privilege.
 * Write permissions must be avoided. When necessary, they are defined in the minimal possible scope.
 * Prefer defining explicit permissions per Job.
