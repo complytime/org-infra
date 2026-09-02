@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Epic issue template**: Added `.github/ISSUE_TEMPLATE/epic.yml` for
+  parent issues that group a set of user stories. Size and sprint live
+  on the child stories, not the epic. Synced to org repos via
+  `sync-config.yml`.
+
 - **Sprint velocity report**: Manual workflow that counts Done issues per
   completed Iteration on the Compliance Automation planning board, then
   averages those counts (including by Size, Organization, and Milestone).
