@@ -29,6 +29,7 @@ org-infra/
 ├── .github/
 │  ├── ISSUE_TEMPLATE/
 │  │  ├── bug_report.yml                    # Issue form to report a Bug.
+│  │  ├── epic.yml                          # Issue form for Epics (a set of stories).
 │  │  ├── feature_request.yml               # Issue form for Features.
 │  │  ├── spike.yml                         # Issue form for time-boxed Spikes.
 │  │  ├── task.yml                          # Issue form for tracked work items.

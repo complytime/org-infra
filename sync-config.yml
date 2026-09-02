@@ -231,6 +231,11 @@ files_to_sync:
     exclude_repos:
       - complytime
 
+  - source: .github/ISSUE_TEMPLATE/epic.yml
+    destination: .github/ISSUE_TEMPLATE/epic.yml
+    exclude_repos:
+      - complytime
+
 # Dependabot configuration
 # Common entries are applied to all repos (unless excluded).
 # Overrides add or replace entries for specific repos (keyed by package-ecosystem).
