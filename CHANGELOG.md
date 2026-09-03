@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Project board review-status advance**: The Compliance Automation
+  planning board sync moves items from Ready for Review to In Review when
+  a non-author human comments or submits a PR review after the Status
+  change. See `docs/PROJECT_BOARD_SYNC.md`.
+
 - **Sprint velocity report**: Manual workflow that counts Done issues per
   completed Iteration on the Compliance Automation planning board, then
   averages those counts (including by Size, Organization, and Milestone).
