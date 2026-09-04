@@ -249,6 +249,11 @@ dependabot:
       commit-message:
         prefix: "ci"
         include: "scope"
+      groups:
+        minor-and-patch:
+          update-types:
+            - "minor"
+            - "patch"
 
     - package-ecosystem: "pre-commit"
       directory: "/"
@@ -257,6 +262,11 @@ dependabot:
       commit-message:
         prefix: "chore"
         include: "scope"
+      groups:
+        minor-and-patch:
+          update-types:
+            - "minor"
+            - "patch"
 
   overrides:
     complyctl:
@@ -269,6 +279,11 @@ dependabot:
         commit-message:
           prefix: "ci"
           include: "scope"
+        groups:
+          minor-and-patch:
+            update-types:
+              - "minor"
+              - "patch"
       - package-ecosystem: "gomod"
         directories:
           - "/"
@@ -278,6 +293,11 @@ dependabot:
         commit-message:
           prefix: "chore"
           include: "scope"
+        groups:
+          minor-and-patch:
+            update-types:
+              - "minor"
+              - "patch"
 
     complytime-collector-components:
       - package-ecosystem: "gomod"
@@ -289,6 +309,11 @@ dependabot:
         commit-message:
           prefix: "chore"
           include: "scope"
+        groups:
+          minor-and-patch:
+            update-types:
+              - "minor"
+              - "patch"
 
     complytime:
       - package-ecosystem: "gomod"
@@ -299,6 +324,11 @@ dependabot:
         commit-message:
           prefix: "chore"
           include: "scope"
+        groups:
+          minor-and-patch:
+            update-types:
+              - "minor"
+              - "patch"
 
     complytime-providers:
       - package-ecosystem: "gomod"
@@ -309,6 +339,11 @@ dependabot:
         commit-message:
           prefix: "chore"
           include: "scope"
+        groups:
+          minor-and-patch:
+            update-types:
+              - "minor"
+              - "patch"
 
     complytime-demos:
       - package-ecosystem: "pip"
@@ -319,6 +354,11 @@ dependabot:
         commit-message:
           prefix: "chore"
           include: "scope"
+        groups:
+          minor-and-patch:
+            update-types:
+              - "minor"
+              - "patch"
 
     website:
       - package-ecosystem: "npm"
@@ -329,6 +369,11 @@ dependabot:
         commit-message:
           prefix: "chore"
           include: "scope"
+        groups:
+          minor-and-patch:
+            update-types:
+              - "minor"
+              - "patch"
       - package-ecosystem: "docker"
         directory: "/.devcontainer"
         schedule:
@@ -336,6 +381,11 @@ dependabot:
         commit-message:
           prefix: "chore"
           include: "scope"
+        groups:
+          minor-and-patch:
+            update-types:
+              - "minor"
+              - "patch"
 
   exclude_repos:
     - .github
