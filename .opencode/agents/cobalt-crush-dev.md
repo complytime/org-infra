@@ -116,7 +116,7 @@ Before submitting for review and after receiving review feedback:
 
 ### Addressing Review Findings
 
-1. **Check for artifacts**: Look in `.uf/artifacts/review-verdict/` for Divisor review reports. Also check recent `/review-council` output.
+1. **Check for artifacts**: Look in `.uf/artifacts/review-verdict/` for Divisor review reports. Also check recent `/uf.review-council` output.
 
 2. **Categorize findings**: Group by persona (Guard, Architect, Adversary, SRE, Testing) and severity (CRITICAL, HIGH, MEDIUM, LOW).
 

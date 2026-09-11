@@ -210,8 +210,7 @@ If no existing tests exist, use these defaults:
 
 ## Quality Criteria
 
-Generated tests MUST satisfy these criteria (derived from the
-reviewer-testing agent rubric):
+Generated tests MUST satisfy these criteria:
 
 ### Assertion Depth
 
