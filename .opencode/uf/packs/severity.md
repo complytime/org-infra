@@ -1,7 +1,7 @@
 ---
 description: "Shared severity level definitions for all Divisor Council personas."
 ---
-<!-- scaffolded by uf vdev -->
+<!-- scaffolded by uf v0.17.0 -->
 
 # Severity Convention Pack
 
@@ -21,7 +21,7 @@ constitutional violation. The change MUST NOT be merged.
 risk — actual breakage or exposure.
 
 | Persona | Examples |
-| --------- | --------- |
+|---------|---------|
 | Adversary | Hardcoded production secret, SQL injection vector, panic in library code |
 | Tester | Missing coverage strategy in spec/plan (Constitution IV violation), test that masks a real failure |
 | Guard | Constitution principle violated without justification, implementation contradicts spec acceptance criteria |
@@ -38,7 +38,7 @@ before merge. Blocks the review.
 Requires action but not an emergency.
 
 | Persona | Examples |
-| --------- | --------- |
+|---------|---------|
 | Adversary | Credentials logged at INFO level, unpinned CI action on mutable tag, unchecked type assertion |
 | Tester | Vague acceptance criteria ("works correctly"), shallow assertions (err == nil only), missing regression test for known bug |
 | Guard | Scope creep beyond spec, acceptance criterion with no corresponding task, undocumented constitution trade-off |
@@ -55,7 +55,7 @@ Mode, auto-fixable.
 but could be better.
 
 | Persona | Examples |
-| --------- | --------- |
+|---------|---------|
 | Adversary | Overly broad file permissions (0o755 → 0o644), missing context in error wrap, redundant file read |
 | Tester | Missing fixture specification, test isolation concern (shared state but no observed failure), convention deviation |
 | Guard | Minor scope addition beyond spec (gold plating), stale cross-reference, metadata inconsistency |
@@ -71,23 +71,51 @@ Non-blocking. In Spec Review Mode, auto-fixable.
 impact.
 
 | Persona | Examples |
-| --------- | --------- |
+|---------|---------|
 | Adversary | Comment suggesting security review for future feature, minor naming inconsistency in error variable |
 | Tester | Minor test naming convention issue, optional observability enhancement in test output |
 | Guard | Minor documentation wording improvement, optional cross-reference addition |
 | SRE | Style improvement in error messages, optional health check enhancement, minor doc gap |
 | Architect | Formatting preference, optional structural improvement, minor comment enhancement |
 
+## Compound Severity Escalation
+
+When multiple findings share a root cause, personas MUST
+assess the **combined** severity rather than classifying
+each finding in isolation. Findings that individually
+appear LOW or MEDIUM can compound into a HIGH or
+CRITICAL finding when they create a single coherent
+attack surface or failure mode.
+
+**Rule**: If two or more findings (a) affect the same
+component or pipeline stage, (b) share a common root
+cause, and (c) together produce a risk greater than any
+individual finding, consolidate them into a single
+finding at the escalated severity. The consolidated
+finding MUST cite each contributing factor.
+
+| Pattern | Individual | Compound |
+|---------|-----------|----------|
+| Unverified binary + privileged CI container | MEDIUM + MEDIUM | HIGH (supply chain attack in privileged context) |
+| Broad permissions + missing input validation + external-facing endpoint | MEDIUM + MEDIUM + MEDIUM | HIGH (unauthenticated access with elevated privileges) |
+| Missing error handling + missing retry + critical data path | MEDIUM + LOW + context | HIGH (silent data loss on transient failure) |
+
+**When NOT to escalate**: Findings that happen to appear
+in the same PR but have independent root causes and
+independent blast radii MUST NOT be artificially
+consolidated. Consolidation applies only when the
+findings are causally linked.
+
 ## Auto-Fix Policy (Spec Review Mode)
 
 | Severity | Action | Rationale |
-| ---------- | -------- | ----------- |
+|----------|--------|-----------|
 | LOW | Auto-fix | Cosmetic; safe to fix without human judgment |
 | MEDIUM | Auto-fix | Quality improvement; deterministic fix |
 | HIGH | Report only | Requires human judgment on intent/scope |
 | CRITICAL | Report only | Requires human judgment; may indicate design issue |
 
-This policy is implemented in `/review-council` Spec
+This policy is implemented in `/uf.review-council` Spec
 Review Mode. The severity definitions above ensure all 5
 personas classify the same type of issue at the same
 level, making the auto-fix boundary predictable.
