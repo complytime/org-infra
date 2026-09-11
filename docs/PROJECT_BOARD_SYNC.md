@@ -46,6 +46,10 @@ delayed under GitHub load:
    Author comments, bots (`[bot]`, `authorAssociation: BOT`), and
    unsubmitted (`PENDING`) reviews are ignored. Detected on the same
    5-minute tick as the rest of the sync.
+8. Clears **Size** on epic issues (GitHub issue type `Epic`, label
+   `type:epic`, or a title starting with `[Epic]`). T-shirt size lives on
+   child stories, not the epic. GitHub cannot hide Size in the board UI, so
+   a value set by hand is undone on the next 5-minute tick.
 
 The workflow lives only in `org-infra` (it is **not** synced out to consumer repos).
 A new PR is picked up on the next 5-minute tick (GitHub does not let this

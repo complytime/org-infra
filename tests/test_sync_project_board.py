@@ -204,6 +204,7 @@ class TestFormatAndWriteSummary:
         assert "Priority copied from linked issues" in text
         assert "Priority option unmapped" in text
         assert "Ready for Review advanced to In Review" in text
+        assert "Size cleared on epics" in text
 
     def test_write_summary_appends_step_summary(self, tmp_path: Path, monkeypatch):
         summary_path = tmp_path / "summary.md"
@@ -231,6 +232,7 @@ class TestSyncErrorHandling:
             sync, "ensure_pr_priority_from_issues", lambda *_a, **_k: None
         )
         monkeypatch.setattr(sync, "advance_ready_for_review", lambda *_a, **_k: None)
+        monkeypatch.setattr(sync, "ensure_epics_have_no_size", lambda *_a, **_k: None)
 
     def test_per_org_request_errors_are_recorded(self, monkeypatch: pytest.MonkeyPatch):
         self._project_mocks(monkeypatch)
@@ -396,6 +398,22 @@ class TestSetSingleSelect:
     def test_set_single_select_dry_run_skips_mutation(self):
         client = MagicMock(dry_run=True)
         sync.set_single_select(client, "PROJECT", "ITEM", "FIELD", "OPT")
+        client.graphql.assert_not_called()
+
+    def test_clear_single_select_calls_graphql_with_correct_variables(self):
+        client = MagicMock(dry_run=False)
+        sync.clear_single_select(client, "PROJECT", "ITEM", "FIELD")
+        client.graphql.assert_called_once()
+        _query, variables = client.graphql.call_args.args
+        assert variables == {
+            "projectId": "PROJECT",
+            "itemId": "ITEM",
+            "fieldId": "FIELD",
+        }
+
+    def test_clear_single_select_dry_run_skips_mutation(self):
+        client = MagicMock(dry_run=True)
+        sync.clear_single_select(client, "PROJECT", "ITEM", "FIELD")
         client.graphql.assert_not_called()
 
 
@@ -588,6 +606,7 @@ class TestSyncOrganizationStats:
             sync, "ensure_pr_priority_from_issues", lambda *_a, **_k: None
         )
         monkeypatch.setattr(sync, "advance_ready_for_review", lambda *_a, **_k: None)
+        monkeypatch.setattr(sync, "ensure_epics_have_no_size", lambda *_a, **_k: None)
         monkeypatch.setattr(
             sync,
             "list_org_repos",
@@ -1678,6 +1697,7 @@ class TestAdvanceReadyForReview:
         monkeypatch.setattr(
             sync, "ensure_pr_priority_from_issues", lambda *_a, **_k: None
         )
+        monkeypatch.setattr(sync, "ensure_epics_have_no_size", lambda *_a, **_k: None)
         monkeypatch.setattr(
             sync, "list_org_repos", MagicMock(return_value=[])
         )
@@ -1693,5 +1713,156 @@ class TestAdvanceReadyForReview:
         sync.sync(config, MagicMock(), org_filter={"complytime"})
         assert captured["ready_prefix"] == "Ready for Review"
         assert captured["in_review_prefix"] == "In Review"
+
+
+class TestEpicSize:
+    def test_is_epic_issue_matches_type_label_and_title(self):
+        assert sync.is_epic_issue(
+            issue_type="Epic", labels=[], title="Plan the work"
+        )
+        assert sync.is_epic_issue(
+            issue_type="epic", labels=["type:epic"], title=""
+        )
+        assert sync.is_epic_issue(
+            issue_type=None, labels=["bug"], title="[Epic] Group stories"
+        )
+        assert not sync.is_epic_issue(
+            issue_type="Story", labels=["type:story"], title="[Story] Do the thing"
+        )
+        assert not sync.is_epic_issue(
+            issue_type=None, labels=[], title="Something epic-adjacent"
+        )
+
+    def test_ensure_epics_have_no_size_clears_sized_epics(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        fields = _org_fields(size_field_id="SIZE_FIELD")
+        monkeypatch.setattr(
+            sync,
+            "list_board_items_with_size_metadata",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_EPIC",
+                    "size": {"name": "L"},
+                    "content": {
+                        "__typename": "Issue",
+                        "number": 424,
+                        "title": "[Epic] Evidence locker",
+                        "issueType": None,
+                        "labels": {"nodes": [{"name": "type:epic"}]},
+                        "repository": {"nameWithOwner": "complytime/nunya"},
+                    },
+                },
+                {
+                    "id": "PVTI_STORY",
+                    "size": {"name": "M"},
+                    "content": {
+                        "__typename": "Issue",
+                        "number": 425,
+                        "title": "[Story] Child work",
+                        "issueType": {"name": "Story"},
+                        "labels": {"nodes": []},
+                        "repository": {"nameWithOwner": "complytime/nunya"},
+                    },
+                },
+                {
+                    "id": "PVTI_EMPTY",
+                    "size": None,
+                    "content": {
+                        "__typename": "Issue",
+                        "number": 426,
+                        "title": "[Epic] Already unsized",
+                        "issueType": {"name": "Epic"},
+                        "labels": {"nodes": []},
+                        "repository": {"nameWithOwner": "complytime/nunya"},
+                    },
+                },
+                {
+                    "id": "PVTI_PR",
+                    "size": {"name": "S"},
+                    "content": {
+                        "__typename": "PullRequest",
+                        "number": 10,
+                        "repository": {"nameWithOwner": "complytime/nunya"},
+                    },
+                },
+            ],
+        )
+        clear_calls = []
+        monkeypatch.setattr(
+            sync, "clear_single_select", lambda *args, **_k: clear_calls.append(args)
+        )
+        stats = sync.SyncStats()
+        sync.ensure_epics_have_no_size(client, fields, stats)
+        assert stats.size_cleared == 1
+        assert stats.size_clear_failed == 0
+        assert len(clear_calls) == 1
+        assert clear_calls[0][2] == "PVTI_EPIC"
+        assert clear_calls[0][3] == "SIZE_FIELD"
+
+    def test_ensure_epics_have_no_size_skips_missing_field(self):
+        client = MagicMock(dry_run=False)
+        fields = _org_fields(size_field_id=None)
+        stats = sync.SyncStats()
+        sync.ensure_epics_have_no_size(client, fields, stats)
+        client.graphql.assert_not_called()
+        assert stats.size_cleared == 0
+
+    def test_ensure_epics_have_no_size_counts_write_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        client = MagicMock(dry_run=False)
+        fields = _org_fields(size_field_id="SIZE_FIELD")
+        monkeypatch.setattr(
+            sync,
+            "list_board_items_with_size_metadata",
+            lambda *_a, **_k: [
+                {
+                    "id": "PVTI_1",
+                    "size": {"name": "XL"},
+                    "content": {
+                        "__typename": "Issue",
+                        "number": 1,
+                        "title": "[Epic] Fail me",
+                        "issueType": {"name": "Epic"},
+                        "labels": {"nodes": []},
+                        "repository": {"nameWithOwner": "complytime/demo"},
+                    },
+                }
+            ],
+        )
+        monkeypatch.setattr(
+            sync,
+            "clear_single_select",
+            MagicMock(side_effect=RuntimeError("denied")),
+        )
+        stats = sync.SyncStats()
+        sync.ensure_epics_have_no_size(client, fields, stats)
+        assert stats.size_cleared == 0
+        assert stats.size_clear_failed == 1
+        assert stats.errors
+
+    def test_sync_always_clears_epic_size(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setattr(sync, "get_project", lambda *_a, **_k: _org_fields())
+        monkeypatch.setattr(sync, "existing_content_ids", lambda *_a, **_k: set())
+        monkeypatch.setattr(sync, "ensure_organizations", lambda *_a, **_k: None)
+        monkeypatch.setattr(
+            sync, "ensure_pr_priority_from_issues", lambda *_a, **_k: None
+        )
+        monkeypatch.setattr(sync, "advance_ready_for_review", lambda *_a, **_k: None)
+        monkeypatch.setattr(
+            sync, "list_org_repos", MagicMock(return_value=[])
+        )
+        clear_epics = MagicMock()
+        monkeypatch.setattr(sync, "ensure_epics_have_no_size", clear_epics)
+        sync.sync(
+            _minimal_config(),
+            MagicMock(dry_run=False),
+            org_filter={"complytime"},
+        )
+        clear_epics.assert_called_once()
 
 

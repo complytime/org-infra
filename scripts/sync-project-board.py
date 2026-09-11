@@ -9,6 +9,7 @@ already on the board. Newly added items (and any existing items missing a
 value) get Organization set from the source GitHub org. PRs inherit Priority
 from linked issues when that field is empty. Items in Ready for Review move
 to In Review when a non-author human comments or submits a PR review.
+Epic issues have Size cleared (t-shirt points live on child stories).
 Designed for cross-org boards where a single GitHub App installation token
 is insufficient (use a PAT with multi-org access).
 """
@@ -64,6 +65,11 @@ COUNTABLE_REVIEW_STATES = frozenset(
     {"APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED"}
 )
 
+SIZE_FIELD_NAME = "Size"
+EPIC_ISSUE_TYPE = "epic"
+EPIC_LABEL = "type:epic"
+EPIC_TITLE_PREFIX = "[epic]"
+
 
 @dataclass
 class SyncStats:
@@ -83,6 +89,8 @@ class SyncStats:
     priority_unmapped: int = 0
     review_status_set: int = 0
     review_status_failed: int = 0
+    size_cleared: int = 0
+    size_clear_failed: int = 0
     errors: List[str] = field(default_factory=list)
 
 
@@ -164,6 +172,7 @@ class ProjectFields:
     priority_options: Dict[str, str] = field(default_factory=dict)
     review_priority_field_id: Optional[str] = None
     review_priority_options: Dict[str, str] = field(default_factory=dict)
+    size_field_id: Optional[str] = None
 
 
 @dataclass
@@ -181,7 +190,7 @@ class AddItemResult:
 
 
 def get_project(client: GitHubClient, owner: str, number: int) -> ProjectFields:
-    """Return project id and Status / Organization / Priority field metadata."""
+    """Return project id and Status / Organization / Priority / Size field metadata."""
     data = client.graphql(
         """
         query($owner: String!, $number: Int!) {
@@ -231,6 +240,8 @@ def get_project(client: GitHubClient, owner: str, number: int) -> ProjectFields:
         elif name == "Review priority":
             fields.review_priority_field_id = node["id"]
             fields.review_priority_options = options
+        elif name == SIZE_FIELD_NAME:
+            fields.size_field_id = node["id"]
     return fields
 
 
@@ -361,6 +372,50 @@ def set_single_select(
             "optionId": option_id,
         },
     )
+
+
+def clear_single_select(
+    client: GitHubClient,
+    project_id: str,
+    item_id: str,
+    field_id: str,
+) -> None:
+    """Clear a project single-select field value."""
+    if client.dry_run:
+        print(f"  [dry-run] would clear field {field_id} on {item_id}")
+        return
+    client.graphql(
+        """
+        mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!) {
+          clearProjectV2ItemFieldValue(input: {
+            projectId: $projectId
+            itemId: $itemId
+            fieldId: $fieldId
+          }) {
+            projectV2Item { id }
+          }
+        }
+        """,
+        {
+            "projectId": project_id,
+            "itemId": item_id,
+            "fieldId": field_id,
+        },
+    )
+
+
+def is_epic_issue(
+    *,
+    issue_type: Optional[str],
+    labels: List[str],
+    title: Optional[str],
+) -> bool:
+    """True when the issue is an epic (type, label, or ``[Epic]`` title)."""
+    if (issue_type or "").strip().lower() == EPIC_ISSUE_TYPE:
+        return True
+    if any((label or "").strip().lower() == EPIC_LABEL for label in labels):
+        return True
+    return (title or "").lstrip().lower().startswith(EPIC_TITLE_PREFIX)
 
 
 def organization_option_for_owner(
@@ -1033,6 +1088,90 @@ def advance_ready_for_review(
             stats.errors.append(msg)
 
 
+def list_board_items_with_size_metadata(
+    client: GitHubClient, project_id: str
+) -> List[Dict[str, Any]]:
+    """Return board items with Size, issue type, labels, and title."""
+    query = """
+    query($projectId: ID!, $cursor: String) {
+      node(id: $projectId) {
+        ... on ProjectV2 {
+          items(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              size: fieldValueByName(name: "Size") {
+                ... on ProjectV2ItemFieldSingleSelectValue { name }
+              }
+              content {
+                __typename
+                ... on Issue {
+                  number
+                  title
+                  issueType { name }
+                  labels(first: 50) { nodes { name } }
+                  repository { nameWithOwner }
+                }
+                ... on PullRequest { number repository { nameWithOwner } }
+              }
+            }
+          }
+        }
+      }
+    }
+    """
+    return _paginate_project_item_nodes(client, project_id, query)
+
+
+def ensure_epics_have_no_size(
+    client: GitHubClient,
+    fields: ProjectFields,
+    stats: SyncStats,
+) -> None:
+    """Clear Size on epic issues. Points live on child stories, not the epic.
+
+    Detects epics by GitHub issue type name Epic, label ``type:epic``, or a
+    title that starts with ``[Epic]``. GitHub cannot hide Size in the board
+    UI, so this undoes a Size set on the next 5-minute tick.
+    """
+    if not fields.size_field_id:
+        print("Size field missing on project; skipping epic Size clear")
+        return
+
+    print("\n=== Clearing Size on epic issues ===")
+    for node in list_board_items_with_size_metadata(client, fields.project_id):
+        content = node.get("content") or {}
+        if content.get("__typename") != "Issue":
+            continue
+        labels = [
+            (lab or {}).get("name") or ""
+            for lab in ((content.get("labels") or {}).get("nodes") or [])
+        ]
+        if not is_epic_issue(
+            issue_type=(content.get("issueType") or {}).get("name"),
+            labels=labels,
+            title=content.get("title"),
+        ):
+            continue
+        size_name = (node.get("size") or {}).get("name")
+        if not size_name:
+            continue
+        repo = (content.get("repository") or {}).get("nameWithOwner") or "item"
+        number = content.get("number")
+        label = f"{repo}#{number}" if number else repo
+        try:
+            clear_single_select(
+                client, fields.project_id, node["id"], fields.size_field_id
+            )
+            stats.size_cleared += 1
+            print(f"  size {label} {size_name} -> (cleared)")
+        except SYNC_EXCEPTIONS as exc:
+            stats.size_clear_failed += 1
+            msg = f"Failed clearing Size on {label}: {exc}"
+            print(f"  ! {msg}")
+            stats.errors.append(msg)
+
+
 def format_summary(stats: SyncStats, dry_run: bool) -> str:
     """Format the job summary markdown (pure; no I/O)."""
     lines = [
@@ -1053,6 +1192,8 @@ def format_summary(stats: SyncStats, dry_run: bool) -> str:
         f"- Priority option unmapped: **{stats.priority_unmapped}**",
         f"- Ready for Review advanced to In Review: **{stats.review_status_set}**",
         f"- Review-status advance failed: **{stats.review_status_failed}**",
+        f"- Size cleared on epics: **{stats.size_cleared}**",
+        f"- Epic Size clear failed: **{stats.size_clear_failed}**",
     ]
     if stats.errors:
         lines.extend(["", "### Errors", ""])
@@ -1235,6 +1376,7 @@ def sync(
         ready_prefix=ready_prefix,
         in_review_prefix=in_review_prefix,
     )
+    ensure_epics_have_no_size(client, fields, stats)
     return stats
 
 
