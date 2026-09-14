@@ -9,6 +9,10 @@
   a non-author human comments or submits a PR review after the Status
   change. See `docs/PROJECT_BOARD_SYNC.md`.
 
+- **Project board epic Size**: The planning board sync clears **Size**
+  (XS–XL) on epic issues. Size belongs on child stories. Epics are matched
+  by issue type `Epic`, label `type:epic`, or a `[Epic]` title.
+
 - **Epic issue template**: Added `.github/ISSUE_TEMPLATE/epic.yml` for
   parent issues that group a set of user stories. Size and sprint live
   on the child stories, not the epic. Synced to org repos via
