@@ -104,7 +104,7 @@ jobs:
         with:
           languages: ${{ inputs.language }}
           queries: ${{ inputs.query-suite }}
-          build-mode: ${{ inputs.build-command != '' && 'manual' || '' }}
+          build-mode: ${{ inputs.build-command != '' && 'manual' || (inputs.language == 'go' && 'autobuild' || 'none') }}
 
       - name: Autobuild
         if: inputs.build-command == '' && inputs.language == 'go'
@@ -126,6 +126,7 @@ jobs:
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           category: "/language:${{ inputs.language }}"
+          output: sarif-results
 
       - name: Fail on Alerts
         if: inputs.fail-on-alert
@@ -134,7 +135,7 @@ jobs:
           LANGUAGE: ${{ inputs.language }}
         run: |
           set -euo pipefail
-          sarif_dir="../results"
+          sarif_dir="sarif-results"
           sarif_file=$(find "${sarif_dir}" -name "*.sarif" -type f 2>/dev/null | head -1)
           if [[ -z "${sarif_file}" ]]; then
             echo "::warning::No SARIF file found — skipping alert check"
