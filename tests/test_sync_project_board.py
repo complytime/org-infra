@@ -1726,6 +1726,9 @@ class TestEpicSize:
         assert sync.is_epic_issue(
             issue_type=None, labels=["bug"], title="[Epic] Group stories"
         )
+        assert sync.is_epic_issue(
+            issue_type=None, labels=["type:epic"], title="Regular title"
+        )
         assert not sync.is_epic_issue(
             issue_type="Story", labels=["type:story"], title="[Story] Do the thing"
         )
