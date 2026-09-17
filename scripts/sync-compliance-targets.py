@@ -46,6 +46,31 @@ EXIT_ERROR = 1
 EXIT_DRIFT = 2
 
 
+class _IndentedDumper(yaml.Dumper):
+    """YAML Dumper that indents sequences under their parent key.
+
+    PyYAML's default Dumper places sequence items at the same column as
+    the parent mapping key ("indentless"), which violates yamllint's
+    ``indentation: spaces: consistent`` rule.  This subclass forces
+    sequence items to be indented, producing::
+
+        targets:
+          - id: example
+
+    instead of the default::
+
+        targets:
+        - id: example
+    """
+
+    def increase_indent(
+        self,
+        flow: bool = False,
+        indentless: bool = False,
+    ) -> None:
+        return super().increase_indent(flow, False)
+
+
 def extract_peribolos_repos(
     peribolos_data: Dict[str, Any],
     org: str,
@@ -300,7 +325,10 @@ def main() -> int:
     try:
         with open(args.output, "w") as f:
             yaml.dump(
-                updated, f, default_flow_style=False, sort_keys=False,
+                updated, f,
+                Dumper=_IndentedDumper,
+                default_flow_style=False,
+                sort_keys=False,
             )
     except OSError as exc:
         print(
