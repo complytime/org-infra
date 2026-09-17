@@ -36,7 +36,7 @@ jobs:
       - name: Checkout org-infra
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Clone .github repository for peribolos.yaml
         # complytime/.github is a public repository; no auth needed.
@@ -84,6 +84,8 @@ jobs:
 
       - name: Create branch and commit
         if: steps.sync.outputs.exit_code == '2'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -93,6 +95,12 @@ jobs:
 
           Automated update to keep .complytime/complytime.yaml aligned
           with the repository inventory in peribolos.yaml."
+
+          # Configure git to authenticate via GITHUB_TOKEN since
+          # persist-credentials is disabled on the checkout step.
+          git config --local \
+            url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
           git push --force-with-lease origin "${SYNC_BRANCH}"
 
       - name: Create or update PR
