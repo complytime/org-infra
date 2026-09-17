@@ -1,57 +1,79 @@
 policies:
-  - url: quay.io/complytime/policies-ampel-branch-protection:latest
-    id: ampel-bp
-
+- url: quay.io/complytime/policies-ampel-branch-protection:latest
+  id: ampel-bp
 complypacks:
-  - url: quay.io/complytime/complypack-ampel-branch-protection:latest
-    id: ampel-bp-pack
-
+- url: quay.io/complytime/complypack-ampel-branch-protection:latest
+  id: ampel-bp-pack
 targets:
-  - id: complytime-complyapi
-    policies:
-      - ampel-bp
-    variables:
-      url: https://github.com/complytime/complyapi
-      specs: builtin:github/branch-rules.yaml
-
-  - id: complytime-complyctl
-    policies:
-      - ampel-bp
-    variables:
-      url: https://github.com/complytime/complyctl
-      specs: builtin:github/branch-rules.yaml
-
-  - id: complytime-complypack
-    policies:
-      - ampel-bp
-    variables:
-      url: https://github.com/complytime/complypack
-      specs: builtin:github/branch-rules.yaml
-
-  - id: complytime-collector-components
-    policies:
-      - ampel-bp
-    variables:
-      url: https://github.com/complytime/complytime-collector-components
-      specs: builtin:github/branch-rules.yaml
-
-  - id: complytime-policies
-    policies:
-      - ampel-bp
-    variables:
-      url: https://github.com/complytime/complytime-policies
-      specs: builtin:github/branch-rules.yaml
-
-  - id: complytime-org-infra
-    policies:
-      - ampel-bp
-    variables:
-      url: https://github.com/complytime/org-infra
-      specs: builtin:github/branch-rules.yaml
-
-  - id: complytime-providers
-    policies:
-      - ampel-bp
-    variables:
-      url: https://github.com/complytime/complytime-providers
-      specs: builtin:github/branch-rules.yaml
+- id: complytime-collector-components
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/complytime-collector-components
+    specs: builtin:github/branch-rules.yaml
+- id: complytime-community
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/community
+    specs: builtin:github/branch-rules.yaml
+- id: complytime-complyapi
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/complyapi
+    specs: builtin:github/branch-rules.yaml
+- id: complytime-complyctl
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/complyctl
+    specs: builtin:github/branch-rules.yaml
+- id: complytime-complypack
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/complypack
+    specs: builtin:github/branch-rules.yaml
+- id: complytime-complytime
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/complytime
+    specs: builtin:github/branch-rules.yaml
+- id: complytime-demos
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/complytime-demos
+    specs: builtin:github/branch-rules.yaml
+- id: complytime-homebrew-tap
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/homebrew-tap
+    specs: builtin:github/branch-rules.yaml
+- id: complytime-org-infra
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/org-infra
+    specs: builtin:github/branch-rules.yaml
+- id: complytime-policies
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/complytime-policies
+    specs: builtin:github/branch-rules.yaml
+- id: complytime-providers
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/complytime-providers
+    specs: builtin:github/branch-rules.yaml
+- id: complytime-website
+  policies:
+  - ampel-bp
+  variables:
+    url: https://github.com/complytime/website
+    specs: builtin:github/branch-rules.yaml
