@@ -589,6 +589,51 @@ class TestMainCLI:
         assert "complytime-new-repo" in target_ids
         assert "complytime-.github" not in target_ids
 
+    def test_output_yaml_has_indented_sequences(self, tmp_path):
+        """Verify that output YAML indents sequences under parent keys.
+
+        PyYAML's default Dumper produces indentless sequences (``- item``
+        at the same column as the parent key), which fails yamllint's
+        ``indentation: spaces: consistent`` rule.  The script must use
+        the custom ``_IndentedDumper`` so sequences are indented, e.g.::
+
+            targets:
+              - id: example
+        """
+        peribolos = {
+            "orgs": {
+                "complytime": {
+                    "repos": {"complyapi": {}, "new-repo": {}},
+                },
+            },
+        }
+        p_path, c_path, o_path = self._write_fixtures(
+            tmp_path, peribolos, SAMPLE_COMPLYTIME,
+        )
+        with patch(
+            "sys.argv",
+            [
+                "sync-compliance-targets.py",
+                "--peribolos", p_path,
+                "--complytime", c_path,
+                "--org", "complytime",
+                "--output", o_path,
+            ],
+        ):
+            sync_ct.main()
+
+        raw = open(o_path).read()
+
+        # No top-level sequence item should start at column 0.
+        # Every ``- `` must be preceded by whitespace (indented).
+        for lineno, line in enumerate(raw.splitlines(), start=1):
+            stripped = line.lstrip()
+            if stripped.startswith("- "):
+                indent = len(line) - len(stripped)
+                assert indent > 0, (
+                    f"Line {lineno} has un-indented sequence item: {line!r}"
+                )
+
     def test_removal_drift_exits_two(self, tmp_path):
         peribolos = {
             "orgs": {
