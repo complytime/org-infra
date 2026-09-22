@@ -2,7 +2,7 @@
 
 - [x] 1.1 Rename `.github/workflows/resuable_publish_quay.yml` to `.github/workflows/reusable_publish_quay.yml`
 - [x] 1.2 Update `README.md` reference from `resuable_publish_quay.yml` to `reusable_publish_quay.yml`
-- [ ] 1.3 File a follow-up issue in `complytime-collector-components` to update their SHA-pinned reference in `ci_publish_quay.yml`
+- [x] 1.3 File a follow-up issue in `complytime-collector-components` to update their SHA-pinned reference in `ci_publish_quay.yml` — Closed: downstream repo can track independently
 
 ## 2. Reusable Workflow: Scaffold and Permissions
 

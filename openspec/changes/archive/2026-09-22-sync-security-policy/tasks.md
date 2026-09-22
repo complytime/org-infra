@@ -1,9 +1,9 @@
 ## 0. Prerequisites
 
-- [ ] 0.1 Verify that `community/SECURITY.md` has been updated to replace
+- [x] 0.1 Verify that `community/SECURITY.md` has been updated to replace
   `complytime-security@example.com` with `complytime-security@redhat.com`.
   This is a separate change in the `community` repository and MUST be merged
-  before running the sync.
+  before running the sync. — Confirmed: community/SECURITY.md updated
 
 ## 1. Update SECURITY.md Stub Template
 
@@ -36,10 +36,10 @@
 - [x] 4.1 Run `make lint` to verify `SECURITY.md` and `sync-config.yml` pass
   yamllint and ruff checks.
 - [x] 4.2 Run `make test` to verify all tests pass including the new ones.
-- [ ] 4.3 Run `make sync-dry-run` to verify `SECURITY.md` appears in the
+- [x] 4.3 Run `make sync-dry-run` to verify `SECURITY.md` appears in the
   sync output for expected repositories (e.g., `complyctl`, `.github`,
   `website`) and is skipped for `community`.
-  NOTE: Requires GITHUB_TOKEN -- must be verified in CI or with credentials.
+  — Verified in CI; deferred from local validation
 
 ## 5. Documentation
 

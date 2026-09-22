@@ -36,7 +36,7 @@ coverage via unit tests.
 - [x] 5.2 Verify zero cross-repo `@sha` or `@main` refs remain for `complytime/org-infra` reusable workflows in `.github/workflows/*.yml`
 - [x] 5.3 Run `make test` to verify all existing and new tests pass
 - [x] 5.4 Run `make lint` to verify all linting passes
-- [ ] 5.5 Run `make sync-dry-run` and verify that dry-run output shows transformed refs for downstream repos (requires GITHUB_TOKEN — deferred to CI)
+- [x] 5.5 Run `make sync-dry-run` and verify that dry-run output shows transformed refs for downstream repos — verified in CI; deferred from local validation
 - [x] 5.6 Update sync script `--help` text to document the `--release-ref` argument usage and purpose
 
 <!-- spec-review: passed -->

@@ -138,7 +138,8 @@
 
 ## 8. Post-Merge
 
-- [ ] 8.1 Tag an org-infra release following the established versioning convention to
+- [x] 8.1 Tag an org-infra release following the established versioning convention to
   make the reusable workflows available to consumer repos via pinned references
+  — Done: v0.8.0 released 2026-09-11
 
 <!-- spec-review: passed -->

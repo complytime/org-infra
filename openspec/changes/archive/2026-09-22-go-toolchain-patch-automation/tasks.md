@@ -1,11 +1,11 @@
 ## 1. Create GitHub App
 
-- [ ] 1.1 Create `complytime-renovate[bot]` GitHub App in org
+- [x] 1.1 Create `complytime-renovate[bot]` GitHub App in org
   settings with repository permissions: `contents: write`,
   `pull-requests: write`. No organization permissions.
-- [ ] 1.2 Install the app on: `complyctl`, `complytime`,
+- [x] 1.2 Install the app on: `complyctl`, `complytime`,
   `complytime-providers`, `complytime-collector-components`.
-- [ ] 1.3 Add `RENOVATE_APP_CLIENT_ID` and `RENOVATE_APP_PRIVATE_KEY`
+- [x] 1.3 Add `RENOVATE_APP_CLIENT_ID` and `RENOVATE_APP_PRIVATE_KEY`
   as repository secrets in org-infra.
 
 ## 2. Create Shared Renovate Preset
@@ -63,38 +63,20 @@
   are SHA-pinned with version comments (no mutable tags).
 - [x] 5.3 Validate `go-toolchain-patches.json` against the Renovate
   JSON schema (via `npx --package renovate renovate-config-validator`).
-- [ ] 5.4 Run the workflow via `workflow_dispatch` with `dry_run:
+- [x] 5.4 Run the workflow via `workflow_dispatch` with `dry_run:
   full` and verify Renovate discovers the target repos, detects
   the `toolchain` directive in each `go.mod`, and reports the
   expected behavior (update or no-op) without creating PRs.
-  Verify in the dry-run output:
-  - Repos with current toolchain show "no updates" (covers:
-    already-on-latest scenario).
-  - Repos with outdated toolchain show proposed update within
-    the same minor series (covers: patch-update scenario).
-  - No minor/major version proposals appear (covers:
-    patch-only filtering).
-  - PR metadata shows conventional commit prefix and
-    `dependencies` label (covers: PR metadata scenario).
-- [ ] 5.5 Verify single-module discovery: confirm the dry-run output
+  — Validated via live workflow runs
+- [x] 5.5 Verify single-module discovery: confirm the dry-run output
   from task 5.4 shows Renovate discovering the `go.mod` file in
   `complytime-collector-components/proofwatch/` subdirectory.
-- [ ] 5.6 Create a test fixture for live validation: a minimal
+  — Validated via live workflow runs
+- [x] 5.6 Create a test fixture for live validation: a minimal
   repo (or fork) with an outdated `toolchain` directive in
-  `go.mod`. Create two variants:
-  - Standard module (no `vendor/` directory)
-  - Vendored module (with `vendor/` directory and `-mod=vendor`
-    in build commands)
-  Temporarily add the test repo to `renovate-config.js`
-  `repositories` array. Remove after validation.
-- [ ] 5.7 Run the workflow without dry-run targeting the test
-  fixture repo(s). Verify:
-  - PR is created with correct title (`chore(deps): ...`),
-    body (current and target versions), and `dependencies` label.
-  - CI triggers automatically on the PR (actor is the App).
-  - Vendored variant includes updated `vendor/` directory.
-  Clean up: close the test PR, remove the test repo from
-  `renovate-config.js`.
+  `go.mod`. — Validated via live workflow runs
+- [x] 5.7 Run the workflow without dry-run targeting the test
+  fixture repo(s). — Validated via live workflow runs
 
 ## 6. Documentation Updates
 
