@@ -1,6 +1,6 @@
 ## 1. Core Script
 
-- [ ] 1.1 Create `scripts/sync-compliance-targets.py` with
+- [x] 1.1 Create `scripts/sync-compliance-targets.py` with
   `# SPDX-License-Identifier: Apache-2.0` header and functions to: parse
   `peribolos.yaml` (extract repo names from `orgs.<org>.repos`), parse
   `complytime.yaml` (extract target repo names from `targets[*].variables.url`),
@@ -19,7 +19,7 @@
 
 ## 2. Unit Tests
 
-- [ ] 2.1 Create `tests/test_sync_compliance_targets.py` with pytest tests
+- [x] 2.1 Create `tests/test_sync_compliance_targets.py` with pytest tests
   using inline dict fixtures (following the pattern in
   `tests/test_sync_org_repositories.py`). Test classes covering:
   (a) peribolos repo extraction (valid data, empty org, missing org key),
@@ -37,7 +37,7 @@
 
 ## 3. Workflow
 
-- [ ] 3.1 Create `.github/workflows/sync_compliance_targets.yml` with a
+- [x] 3.1 Create `.github/workflows/sync_compliance_targets.yml` with a
   header comment block describing the workflow's purpose. Triggers: `schedule`
   (cron `0 22 * * *`) and `workflow_dispatch`. Single job that: checks out
   org-infra with `contents: write` + `pull-requests: write` permissions,
@@ -54,10 +54,10 @@
 
 ## 4. Validation
 
-- [ ] 4.1 Run `make lint` and verify zero lint issues across all new files
+- [x] 4.1 Run `make lint` and verify zero lint issues across all new files
   (`scripts/sync-compliance-targets.py`,
   `tests/test_sync_compliance_targets.py`,
   `.github/workflows/sync_compliance_targets.yml`).
-- [ ] 4.2 Run `make test` and verify all existing and new tests pass.
-- [ ] 4.3 Verify `sync_compliance_targets.yml` does NOT appear in
+- [x] 4.2 Run `make test` and verify all existing and new tests pass.
+- [x] 4.3 Verify `sync_compliance_targets.yml` does NOT appear in
   `sync-config.yml`.
