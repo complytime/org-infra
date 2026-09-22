@@ -87,6 +87,7 @@ jobs:
     permissions:
       contents: write # Required for gh pr merge --auto
       pull-requests: write # Required to approve a PR
+      workflows: write # Required to merge PRs that modify workflow files
     steps:
       - name: Auto-approve if Confident
         id: auto_approve
