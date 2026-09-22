@@ -175,7 +175,7 @@ jobs:
           steps.cooldown.outputs.cooled_down == 'true'
         id: review
         # Release v0.18.0 is pinned by commit SHA for immutable action resolution.
-        uses: unbound-force/unbound-force/council-review-action@d102cb3ac2038d13aeaf1a6f800dbc450fb8aa6d # v0.18.0 # zizmor: ignore[ref-version-mismatch]
+        uses: unbound-force/unbound-force/council-review-action@d102cb3ac2038d13aeaf1a6f800dbc450fb8aa6d # v0.18.0
         with:
           model: ${{ inputs.model }}
           diff-path: pr-diff.patch
