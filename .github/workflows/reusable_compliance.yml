@@ -47,14 +47,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: complytime/complyctl
-          ref: v1.0.0-beta.0
+          ref: v1.0.0
           persist-credentials: false
 
       - name: Checkout complytime-providers
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: complytime/complytime-providers
-          ref: v0.1.0
+          ref: v0.2.1
           path: _providers
           persist-credentials: false
 
@@ -91,8 +91,8 @@ jobs:
 
       - name: Register ampel provider with complyctl
         run: |
-          mkdir -p ~/.complytime/providers
-          cp _providers/bin/complyctl-provider-ampel ~/.complytime/providers/complyctl-provider-ampel
+          mkdir -p ~/.local/share/complytime/providers
+          cp _providers/bin/complyctl-provider-ampel ~/.local/share/complytime/providers/complyctl-provider-ampel
 
       - name: Validate complytime_config_path input
         env:
