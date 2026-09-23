@@ -65,10 +65,22 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
+      - name: Determine Go version
+        id: go-version
+        run: |
+          # Both complyctl and complytime-providers declare their own
+          # minimum Go version.  Install the higher of the two so that
+          # both modules can be built with the same toolchain.
+          V1=$(grep '^go ' go.mod | awk '{print $2}')
+          V2=$(grep '^go ' _providers/go.mod | awk '{print $2}')
+          MAX=$(printf '%s\n' "$V1" "$V2" | sort -V | tail -1)
+          echo "go_version=${MAX}" >> "$GITHUB_OUTPUT"
+          echo "Selected Go ${MAX} (complyctl=${V1}, providers=${V2})"
+
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: "./go.mod"
+          go-version: ${{ steps.go-version.outputs.go_version }}
 
       - name: Build complyctl
         run: |
