@@ -1,0 +1,298 @@
+---
+# Reusable workflow — NOT synced to downstream repos (see sync-config.yml)
+name: Reusable Council Review
+
+# --------------------------------------------------------------------------
+# Reusable workflow for AI council review using OpenCode on Vertex AI via
+# WIF authentication. Downloads the PR diff artifact, authenticates to GCP,
+# delegates review to the council-review-action composite action, and posts
+# inline review comments on the PR.
+#
+# Called by ci_council_review.yml (consumer workflow).
+#
+# Security hardening (#429):
+# - Network egress blocked via step-security/harden-runner; only Vertex AI,
+#   GitHub API, npm registry, and GCP auth endpoints are allowed.
+# - 5-minute cooldown between reviews per PR to prevent token exhaustion.
+# --------------------------------------------------------------------------
+on:
+  workflow_call:
+    inputs:
+      triggering-run-id:
+        description: Run ID of the collect workflow (for artifact download)
+        required: true
+        type: string
+      model:
+        description: Model ID for the AI review
+        required: false
+        type: string
+        default: "google-vertex-anthropic/claude-sonnet-4-6"
+    secrets:
+      GCP_WORKLOAD_IDENTITY_PROVIDER:
+        required: false
+      GCP_PROJECT_ID:
+        required: false
+
+permissions: {}
+
+jobs:
+  review:
+    name: Council Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+      actions: read
+    env:
+      VERTEX_LOCATION: global
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          # Vertex AI may route to regional endpoints for Anthropic models
+          # even when using the global endpoint. Add new regions here if
+          # the model routing changes.
+          allowed-endpoints: >
+            agent.api.stepsecurity.io:443
+            api.github.com:443
+            github.com:443
+            uploads.github.com:443
+            objects.githubusercontent.com:443
+            global-aiplatform.googleapis.com:443
+            us-central1-aiplatform.googleapis.com:443
+            us-east1-aiplatform.googleapis.com:443
+            oauth2.googleapis.com:443
+            iamcredentials.googleapis.com:443
+            sts.googleapis.com:443
+            storage.googleapis.com:443
+            registry.npmjs.org:443
+            nodejs.org:443
+
+      - name: Check WIF credentials
+        id: gate
+        env:
+          HAS_WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}
+        run: |
+          if [[ "${HAS_WIF}" != "true" ]]; then
+            echo "::notice::No WIF credentials — skipping council review"
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "should_review=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        if: steps.gate.outputs.should_review == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download diff artifact
+        if: steps.gate.outputs.should_review == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: council-review-diff
+          run-id: ${{ inputs.triggering-run-id }}
+          github-token: ${{ github.token }}
+
+      - name: Extract PR metadata
+        if: steps.gate.outputs.should_review == 'true'
+        id: meta
+        run: |
+          PR_NUMBER=$(jq -r '.number' pr-meta.json)
+          PR_HEAD_SHA=$(jq -r '.head_sha' pr-meta.json)
+          {
+            echo "pr_number=${PR_NUMBER}"
+            echo "pr_head_sha=${PR_HEAD_SHA}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check cooldown (5-minute minimum between reviews)
+        if: steps.gate.outputs.should_review == 'true'
+        id: cooldown
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          REPO: ${{ github.repository }}
+          COOLDOWN_SECONDS: "300"
+        run: |
+          # Find the most recent actual review comment timestamp.
+          # Filter for "## AI Council Review" to exclude cooldown notices
+          # and non-member notices (which also contain the bot sentinel).
+          LAST_REVIEW=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate --jq '[.[] | select(.body | contains("<!-- council-review-bot -->") and (.body | contains("## AI Council Review"))) | .created_at] | sort | last // empty')
+
+          if [[ -z "${LAST_REVIEW}" ]]; then
+            echo "::notice::No previous council review found — proceeding"
+            echo "cooled_down=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LAST_EPOCH=$(date -d "${LAST_REVIEW}" +%s 2>/dev/null || echo "0")
+          if [[ "${LAST_EPOCH}" == "0" ]]; then
+            echo "::warning::Could not parse last review timestamp '${LAST_REVIEW}' — skipping cooldown"
+            echo "cooled_down=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          NOW_EPOCH=$(date +%s)
+          ELAPSED=$((NOW_EPOCH - LAST_EPOCH))
+
+          if [[ "${ELAPSED}" -lt "${COOLDOWN_SECONDS}" ]]; then
+            REMAINING=$((COOLDOWN_SECONDS - ELAPSED))
+            echo "::notice::Council review cooldown active — last review ${ELAPSED}s ago, ${REMAINING}s remaining. Skipping."
+            # Post a notice comment so the user knows why the review was skipped
+            {
+              echo "<!-- council-review-bot -->"
+              echo "> Council review cooldown active — last review was ${ELAPSED}s ago."
+              echo "> Please wait ${REMAINING}s before requesting another review."
+            } > /tmp/council-review-cooldown.md
+            gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body-file /tmp/council-review-cooldown.md
+            echo "cooled_down=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Cooldown elapsed (${ELAPSED}s since last review) — proceeding"
+            echo "cooled_down=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Authenticate to Google Cloud (WIF)
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          steps.cooldown.outputs.cooled_down == 'true'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Set up gcloud CLI
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          steps.cooldown.outputs.cooled_down == 'true'
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Run council review
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          steps.cooldown.outputs.cooled_down == 'true'
+        id: review
+        # Release v0.18.0 is pinned by commit SHA for immutable action resolution.
+        uses: unbound-force/unbound-force/council-review-action@d102cb3ac2038d13aeaf1a6f800dbc450fb8aa6d # v0.18.0
+        with:
+          model: ${{ inputs.model }}
+          diff-path: pr-diff.patch
+          meta-path: pr-meta.json
+          github-token: ${{ github.token }}
+
+      - name: Clean up previous bot comments
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          steps.cooldown.outputs.cooled_down == 'true' &&
+          steps.review.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate --jq '.[] | select(.body | contains("<!-- council-review-bot -->")) | .id' | \
+          while read -r cid; do
+            [[ -n "${cid}" ]] && gh api "repos/${REPO}/issues/comments/${cid}" --method DELETE || true
+          done
+
+          gh api "repos/${REPO}/pulls/${PR_NUMBER}/comments" \
+            --paginate --jq '.[] | select(.body | contains("<!-- council-review-bot -->")) | .id' | \
+          while read -r cid; do
+            [[ -n "${cid}" ]] && gh api "repos/${REPO}/pulls/comments/${cid}" --method DELETE || true
+          done
+
+          gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
+            --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("council-review-bot"))) | .node_id' | \
+          while read -r nid; do
+            # shellcheck disable=SC2016
+            [[ -n "${nid}" ]] && gh api graphql \
+              -f query='mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: OUTDATED}) { minimizedComment { isMinimized } } }' \
+              -f id="${nid}" || true
+          done
+
+      - name: Post review summary
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          steps.cooldown.outputs.cooled_down == 'true' &&
+          steps.review.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          PR_HEAD_SHA: ${{ steps.meta.outputs.pr_head_sha }}
+          MODEL: ${{ inputs.model }}
+          REPO: ${{ github.repository }}
+          REVIEW_JSON: ${{ steps.review.outputs.review-json }}
+          REVIEW_MODE: ${{ steps.review.outputs.review-mode }}
+        run: |
+          COMMENT_COUNT=0
+          if [[ "${REVIEW_MODE}" == "inline" ]]; then
+            COMMENT_COUNT=$(jq '.inline_comments | length' "${REVIEW_JSON}")
+          fi
+
+          {
+            echo "<!-- council-review-bot -->"
+            echo "## AI Council Review"
+            echo ""
+            if [[ -s "${REVIEW_JSON}" ]]; then
+              jq -r '.summary' "${REVIEW_JSON}"
+            else
+              echo "_Council review produced no output._"
+            fi
+            echo ""
+            echo "---"
+            if [[ "${COMMENT_COUNT}" -gt 0 ]]; then
+              echo "_Model: \`${MODEL}\` | Commit: \`${PR_HEAD_SHA:0:7}\` | Inline comments: ${COMMENT_COUNT}_"
+            else
+              echo "_Model: \`${MODEL}\` | Commit: \`${PR_HEAD_SHA:0:7}\`_"
+            fi
+          } > review_summary.txt
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body-file review_summary.txt
+
+      - name: Post inline comments
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          steps.cooldown.outputs.cooled_down == 'true' &&
+          steps.review.outcome == 'success' &&
+          steps.review.outputs.review-mode == 'inline'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          PR_HEAD_SHA: ${{ steps.meta.outputs.pr_head_sha }}
+          REPO: ${{ github.repository }}
+          REVIEW_JSON: ${{ steps.review.outputs.review-json }}
+        run: |
+          COMMENT_COUNT=$(jq '.inline_comments | length' "${REVIEW_JSON}")
+          if [[ "${COMMENT_COUNT}" -eq 0 ]]; then
+            echo "::notice::No inline comments to post"
+            exit 0
+          fi
+
+          POSTED=0
+          FAILED=0
+          while IFS= read -r comment; do
+            path=$(echo "${comment}" | jq -r '.path')
+            line=$(echo "${comment}" | jq -r '.line')
+            body=$(echo "${comment}" | jq -r '.body')
+            tagged_body=$(printf '<!-- council-review-bot -->\n\n%s' "${body}")
+
+            ERROR_FILE=$(mktemp)
+            if jq -n \
+              --arg commit_id "${PR_HEAD_SHA}" \
+              --arg path "${path}" \
+              --argjson line "${line}" \
+              --arg side "RIGHT" \
+              --arg body "${tagged_body}" \
+              '{commit_id: $commit_id, path: $path, line: $line, side: $side, body: $body}' | \
+            gh api "repos/${REPO}/pulls/${PR_NUMBER}/comments" \
+              --method POST --input - > /dev/null 2>"${ERROR_FILE}"; then
+              POSTED=$((POSTED + 1))
+            else
+              FAILED=$((FAILED + 1))
+              echo "::warning::Failed to post comment on ${path}:${line}: $(cat "${ERROR_FILE}")"
+            fi
+            rm -f "${ERROR_FILE}"
+          done < <(jq -c '.inline_comments[]' "${REVIEW_JSON}")
+          echo "::notice::Posted ${POSTED} inline comments (${FAILED} failed)"

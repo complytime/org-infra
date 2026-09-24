@@ -1,11 +1,18 @@
 # Python dependencies for org-infra scripts
 
 # Git operations
-GitPython>=3.1.40
+GitPython==3.1.62
 
 # YAML parsing
-PyYAML>=6.0.1
+PyYAML==6.0.3
 
 # HTTP requests
-requests>=2.31.0
+requests==2.34.2
+
+# Testing
+pytest==9.1.1
+
+# Linting
+ruff==0.16.8
+yamllint==1.38.0
 

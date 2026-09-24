@@ -6,53 +6,136 @@
 # Repositories to exclude from synchronization
 # org-infra is excluded by default as it's the source repository
 exclude_repos:
-  - cac-content                 # Forked repository for testing transformation from CaC to OSCAL
-  - compliance-to-policy-go     # Forked repository for testing features
-  - complytime-collector-distro # Empty repository
-  - creme-brulee                # Template repository for training purposes
-  - org-infra                   # This repository itself
-  - oscal-content               # Empty repository
-  - oscal-sdk-go                # Forked repository for testing features
+  - org-infra # This repository itself
+  - nunya # Internal tooling (Jira migration)
+  - roadmap # Internal tooling (roadmap scripts)
+  - complyscribe # Archived
 
 # Files and workflows to synchronize
 # Each entry specifies:
 #   - source: Path relative to org-infra repository root
 #   - destination: (optional) Path in target repo, defaults to same as source
 #   - exclude_repos: (optional) List of repositories to skip for this file
+#   - replaces: (optional) List of file paths in the target repo to delete
+#     as superseded when the replacement file is synced
 files_to_sync:
   # GitHub Workflows
   - source: .github/workflows/ci_checks.yml
     destination: .github/workflows/ci_checks.yml
+    exclude_repos:
+      - community
 
   - source: .github/workflows/ci_dependencies.yml
     destination: .github/workflows/ci_dependencies.yml
+    exclude_repos:
+      - community
 
   - source: .github/workflows/ci_scheduled.yml
     destination: .github/workflows/ci_scheduled.yml
+    exclude_repos:
+      - community
 
   - source: .github/workflows/ci_security.yml
     destination: .github/workflows/ci_security.yml
-
-  # Configuration Files
-  - source: .github/dependabot.yml
-    destination: .github/dependabot.yml
     exclude_repos:
-      - complyscribe
-      - complytime-demos
-      - complytime-policies
-      - vagrant-boxes
+      - community
+    vars:
+      enable_trivy_source:
+        default: "false"
+        repos:
+          complyctl: "true"
+          complytime-providers: "true"
+          complytime-collector-components: "true"
+      trivy_ignorefile:
+        default: "''"
 
-  - source: .github/dependabot_python.yml
-    destination: .github/dependabot.yml
+  - source: .github/workflows/ci_council_review_collect.yml
+    destination: .github/workflows/ci_council_review_collect.yml
     exclude_repos:
       - .github
-      - compliance-to-policy-plugins
-      - complybeacon
+      - community
+      # Staged rollout: validate on org-infra first, then widen once:
+      #   - composite action SHA points to merged main (unbound-force#336)
+      #   - security hardening (#429) and cost controls (#430) are in place
+      - complyapi
       - complyctl
+      - complypack
+      - complytime
       - complytime-collector-components
-      - gemara2oscal
-      - vagrant-boxes
+      - complytime-demos
+      - complytime-policies
+      - complytime-providers
+      - homebrew-tap
+      - website
 
+  - source: .github/workflows/ci_council_review.yml
+    destination: .github/workflows/ci_council_review.yml
+    exclude_repos:
+      - .github
+      - community
+      # Staged rollout: validate on org-infra first, then widen once:
+      #   - composite action SHA points to merged main (unbound-force#336)
+      #   - security hardening (#429) and cost controls (#430) are in place
+      - complyapi
+      - complyctl
+      - complypack
+      - complytime
+      - complytime-collector-components
+      - complytime-demos
+      - complytime-policies
+      - complytime-providers
+      - homebrew-tap
+      - website
+
+  # NOTE: reusable_council_review.yml is intentionally NOT synced.
+  # It stays in org-infra and is called cross-repo by downstream
+  # consumers via: complytime/org-infra/.github/workflows/reusable_council_review.yml@SHA
+
+  - source: .github/workflows/ci_crapload.yml
+    destination: .github/workflows/ci_crapload.yml
+    exclude_repos:
+      - .github
+      - complytime
+      - complytime-demos
+      - complytime-policies
+      - community
+
+  - source: .github/workflows/ci_stale_reviews.yml
+    destination: .github/workflows/ci_stale_reviews.yml
+    exclude_repos:
+      - .github
+      - community
+      # Staged rollout: validate on org-infra first, then widen once
+      # confirmed working (#478).
+      - complyapi
+      - complyctl
+      - complypack
+      - complytime
+      - complytime-collector-components
+      - complytime-demos
+      - complytime-policies
+      - complytime-providers
+      - homebrew-tap
+      - website
+
+  # Test workflow: org-infra only (never synced to downstream repos).
+  - source: .github/workflows/ci_test_stale_reviews.yml
+    destination: .github/workflows/ci_test_stale_reviews.yml
+    exclude_repos:
+      - .github
+      - community
+      - complyapi
+      - complyctl
+      - complypack
+      - complytime
+      - complytime-collector-components
+      - complytime-demos
+      - complytime-policies
+      - complytime-providers
+      - homebrew-tap
+      - website
+
+  # Configuration Files
   - source: .mega-linter.yml
     destination: .mega-linter.yml
     exclude_repos:
@@ -67,31 +150,175 @@ files_to_sync:
   - source: .golangci.yml
     destination: .golangci.yml
     exclude_repos:
-      - complyscribe
+      - complytime
       - complytime-demos
       - complytime-policies
-      - vagrant-boxes
+      - community
+      - website
 
   - source: ruff.toml
     destination: ruff.toml
     exclude_repos:
       - .github
-      - compliance-to-policy-plugins
-      - complybeacon
       - complyctl
+      - complypack
+      - complytime
       - complytime-collector-components
-      - gemara2oscal
-      - vagrant-boxes
+      - complytime-policies
+      - complytime-providers
+      - community
+      - website
+
+  # AI Tooling
+  - source: .specify/memory/constitution.md
+    destination: .specify/memory/constitution.md
+    exclude_repos:
+      - .github
+
+  - source: docs/AI_TOOLING.md
+    destination: docs/AI_TOOLING.md
+    exclude_repos:
+      - .github
+      - community
+
+  - source: .agents/skills/.gitkeep
+    destination: .agents/skills/.gitkeep
+    exclude_repos:
+      - .github
+      - community
+
+  - source: .opencode/commands/review-pr.md
+    destination: .opencode/commands/review-pr.md
+    exclude_repos:
+      - .github
+      - community
+
+  # Community Health Files
+  - source: SECURITY.md
+    destination: SECURITY.md
+    exclude_repos:
+      - community
 
   # GitHub Templates
   - source: .github/pull_request_template.md
     destination: .github/pull_request_template.md
 
-  - source: .github/ISSUE_TEMPLATE/bug_report.md
-    destination: .github/ISSUE_TEMPLATE/bug_report.md
+  # Issue forms — synced to all org repos except roadmap (global exclude)
+  # and complytime/complytime (per-file exclude below).
+  - source: .github/ISSUE_TEMPLATE/bug_report.yml
+    destination: .github/ISSUE_TEMPLATE/bug_report.yml
+    exclude_repos:
+      - complytime
 
-  - source: .github/ISSUE_TEMPLATE/feature_request.md
-    destination: .github/ISSUE_TEMPLATE/feature_request.md
+  - source: .github/ISSUE_TEMPLATE/feature_request.yml
+    destination: .github/ISSUE_TEMPLATE/feature_request.yml
+    exclude_repos:
+      - complytime
+
+  - source: .github/ISSUE_TEMPLATE/task.yml
+    destination: .github/ISSUE_TEMPLATE/task.yml
+    exclude_repos:
+      - complytime
+
+  - source: .github/ISSUE_TEMPLATE/user_story.yml
+    destination: .github/ISSUE_TEMPLATE/user_story.yml
+    exclude_repos:
+      - complytime
+
+  - source: .github/ISSUE_TEMPLATE/spike.yml
+    destination: .github/ISSUE_TEMPLATE/spike.yml
+    exclude_repos:
+      - complytime
+
+  - source: .github/ISSUE_TEMPLATE/epic.yml
+    destination: .github/ISSUE_TEMPLATE/epic.yml
+    exclude_repos:
+      - complytime
+
+# Dependabot configuration
+# Common entries are applied to all repos (unless excluded).
+# Overrides add or replace entries for specific repos (keyed by package-ecosystem).
+# Entries in target repos for ecosystems NOT listed here are preserved.
+dependabot:
+  common:
+    - package-ecosystem: "github-actions"
+      directory: "/"
+      schedule:
+        interval: "daily"
+      commit-message:
+        prefix: "ci"
+        include: "scope"
+
+    - package-ecosystem: "pre-commit"
+      directory: "/"
+      schedule:
+        interval: "weekly"
+      commit-message:
+        prefix: "chore"
+        include: "scope"
+
+  overrides:
+    complyctl:
+      - package-ecosystem: "github-actions"
+        directories:
+          - "/"
+          - "/.github/actions/setup-complyctl"
+        schedule:
+          interval: "daily"
+        commit-message:
+          prefix: "ci"
+          include: "scope"
+      - package-ecosystem: "gomod"
+        directories:
+          - "/"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+    complytime-collector-components:
+      - package-ecosystem: "gomod"
+        directories:
+          - "/proofwatch"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+    complytime-providers:
+      - package-ecosystem: "gomod"
+        directory: "/"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+    website:
+      - package-ecosystem: "npm"
+        directory: "/"
+        schedule:
+          interval: "weekly"
+        open-pull-requests-limit: 10
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+      - package-ecosystem: "docker"
+        directory: "/.devcontainer"
+        schedule:
+          interval: "weekly"
+        commit-message:
+          prefix: "chore"
+          include: "scope"
+
+  exclude_repos:
+    - .github
+    - community
 
 # Default branch name for creating PRs
 default_base_branch: main

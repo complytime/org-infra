@@ -1,0 +1,71 @@
+# SpecKit/OpenSpec framework infrastructure (tool-managed)
+.specify/extensions/.cache/
+.specify/extensions/.backup/
+.specify/extensions/*/local-config.yml
+.specify/scripts
+.specify/templates
+
+# OpenCode framework commands (tool-managed via plugin)
+.opencode/commands/speckit.*
+.opencode/commands/opsx-*
+
+# OpenCode framework skills (tool-managed via plugin)
+.opencode/skills/openspec-*/
+.opencode/skills/speckit-workflow/
+
+# OpenCode plugin artifacts (local)
+.opencode/node_modules/
+.opencode/package.json
+.opencode/package-lock.json
+.opencode/bun.lock
+.opencode/.gitignore
+
+# Agent tool directories (local only)
+.cursor
+.claude
+
+# Unbound Force convention packs not applicable to this repository.
+# org-infra is Python + YAML; Go and TypeScript packs are only
+# relevant to repos containing source code in those languages.
+.opencode/uf/packs/go.md
+.opencode/uf/packs/go-custom.md
+.opencode/uf/packs/typescript.md
+.opencode/uf/packs/typescript-custom.md
+
+# Unbound Force — managed by uf init
+# Runtime data under .uf/ (databases, caches, locks, logs)
+.uf/workflows/
+.uf/artifacts/
+.uf/feedback/
+.uf/dewey/graph.db
+.uf/dewey/graph.db-shm
+.uf/dewey/graph.db-wal
+.uf/dewey/*.lock
+.uf/dewey/cache/
+.uf/dewey/dewey.log
+.uf/replicator/*.db
+.uf/replicator/*.db-shm
+.uf/replicator/*.db-wal
+.uf/replicator/*.lock
+.uf/replicator/*.log
+.uf/muti-mind/artifacts/
+.uf/mx-f/data/
+# Legacy tool directories (renamed to .uf/ in Spec 025)
+.dewey/
+.hive/
+.unbound-force/
+.muti-mind/
+.mx-f/
+
+# Test output artifacts
+.test-output/
+
+# Python virtual environment
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# MegaLinter reports (generated)
+megalinter-reports/

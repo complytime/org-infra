@@ -1,0 +1,327 @@
+# Reusable CRAP Load Analysis Workflow
+# =====================================
+# Runs CRAP (Change Risk Anti-Patterns) analysis on Go code using Gaze.
+# Compares results against a committed baseline and reports regressions,
+# improvements, and new functions. The caller is responsible for posting
+# PR comments using the uploaded artifact.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Reusable CRAP Load Analysis
+
+on:
+  workflow_call:
+    inputs:
+      go-version-file:
+        description: "Path to go.mod for Go version detection"
+        type: string
+        default: "./go.mod"
+      gaze-version:
+        description: "Gaze version tag to install via go install"
+        type: string
+        default: "latest"
+      baseline-file:
+        description: "Path to committed baseline thresholds file"
+        type: string
+        default: ".gaze/baseline.json"
+      packages:
+        description: "Go packages to analyse"
+        type: string
+        default: "./..."
+      coverprofile:
+        description: "Path to coverage profile"
+        type: string
+        default: "coverage.out"
+      new-function-threshold:
+        description: "CRAP score ceiling for new functions with no baseline entry"
+        type: number
+        default: 30
+      regression-epsilon:
+        description: >-
+          Minimum CRAP/GazeCRAP score delta to flag a regression.
+          Differences within this tolerance are treated as noise
+          from platform, toolchain, or test-ordering variance.
+        required: false
+        type: number
+        default: 0.5
+    outputs:
+      status:
+        description: "pass or fail"
+        value: ${{ jobs.crapload-analysis.outputs.status }}
+      crapload-count:
+        description: "Number of functions at or above CRAP threshold"
+        value: ${{ jobs.crapload-analysis.outputs.crapload-count }}
+      gaze-crapload-count:
+        description: "Number of functions at or above GazeCRAP threshold"
+        value: ${{ jobs.crapload-analysis.outputs.gaze-crapload-count }}
+      regressions-count:
+        description: "Number of functions that regressed vs baseline"
+        value: ${{ jobs.crapload-analysis.outputs.regressions-count }}
+      improvements-count:
+        description: "Number of functions that improved vs baseline"
+        value: ${{ jobs.crapload-analysis.outputs.improvements-count }}
+
+permissions:
+  contents: read
+
+jobs:
+  crapload-analysis:
+    name: CRAP Load Analysis
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.compare.outputs.status }}
+      crapload-count: ${{ steps.compare.outputs.crapload_count }}
+      gaze-crapload-count: ${{ steps.compare.outputs.gaze_crapload_count }}
+      regressions-count: ${{ steps.compare.outputs.regressions_count }}
+      improvements-count: ${{ steps.compare.outputs.improvements_count }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout org-infra scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .workflow-scripts
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Detect changed packages
+        id: detect-changes
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          CHANGED_FILES=$(git diff --name-only "${BASE_SHA}..HEAD" -- '*.go' ':!vendor' ':!*/vendor' || true)
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "packages=" >> "$GITHUB_OUTPUT"
+            echo "No Go files changed in this PR."
+            exit 0
+          fi
+          PACKAGES=$(echo "$CHANGED_FILES" | xargs -I{} dirname {} | grep -v '/vendor/' | grep -v '^vendor' | sort -u | sed 's|^|./|' | tr '\n' ' ' | sed 's/ $//')
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+          echo "Changed packages: $PACKAGES"
+
+      - name: Handle no code changes
+        if: github.event_name == 'pull_request' && steps.detect-changes.outputs.has_changes == 'false'
+        id: no-changes
+        run: |
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+          printf '%s\n' '<!-- crapload-analysis-marker -->' '## CRAP Load Analysis' '' \
+            'No Go code changes detected in this PR. No CRAP impact.' > /tmp/crapload-comment-body.md
+
+      - name: Resolve Go version source
+        if: steps.no-changes.outputs.skip != 'true'
+        id: go-version-source
+        env:
+          GO_VERSION_FILE: ${{ inputs.go-version-file }}
+        run: |
+          if [[ -f "$GO_VERSION_FILE" ]]; then
+            echo "go-version-file=$GO_VERSION_FILE" >> "$GITHUB_OUTPUT"
+            echo "go-version=" >> "$GITHUB_OUTPUT"
+          else
+            echo "go-version-file=" >> "$GITHUB_OUTPUT"
+            echo "go-version=stable" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Go
+        if: steps.no-changes.outputs.skip != 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ steps.go-version-source.outputs.go-version-file }}
+          go-version: ${{ steps.go-version-source.outputs.go-version }}
+
+      - name: Auto-detect packages for multi-module repos
+        if: steps.no-changes.outputs.skip != 'true'
+        id: resolve-packages
+        env:
+          DETECTED_PACKAGES: ${{ steps.detect-changes.outputs.packages }}
+          PACKAGES_INPUT: ${{ inputs.packages }}
+        run: |
+          # In PR mode, detect-changes already scoped to changed files
+          if [ -n "$DETECTED_PACKAGES" ]; then
+            echo "packages=$DETECTED_PACKAGES" >> "$GITHUB_OUTPUT"
+            echo "Using PR-scoped packages: $DETECTED_PACKAGES"
+            exit 0
+          fi
+
+          # Use the resolution script for consistent behavior
+          RESOLVED=$(bash .workflow-scripts/scripts/resolve-go-packages.sh "$PACKAGES_INPUT")
+          echo "packages=$RESOLVED" >> "$GITHUB_OUTPUT"
+
+      - name: Install Gaze
+        if: steps.no-changes.outputs.skip != 'true'
+        id: install-gaze
+        env:
+          GOTOOLCHAIN: auto
+          GAZE_VERSION: ${{ inputs.gaze-version }}
+        run: |
+          echo "Installing gaze@${GAZE_VERSION}..."
+          go install "github.com/unbound-force/gaze/cmd/gaze@${GAZE_VERSION}"
+          gaze --version || echo "gaze installed (version flag may not be supported)"
+
+      - name: Generate coverage profile
+        if: steps.no-changes.outputs.skip != 'true'
+        env:
+          PKGS: ${{ steps.resolve-packages.outputs.packages }}
+          COVERPROFILE: ${{ inputs.coverprofile }}
+        run: |
+          read -ra pkg_array <<< "$PKGS"
+          echo "Running tests with coverage for: ${pkg_array[*]}"
+          go test -coverprofile="${COVERPROFILE}" "${pkg_array[@]}" || \
+            echo "::warning::Some tests failed; coverage data may be incomplete"
+
+      - name: Configure baseline settings
+        if: steps.no-changes.outputs.skip != 'true'
+        env:
+          EPSILON: ${{ inputs.regression-epsilon }}
+          NEW_FUNC_THRESHOLD: ${{ inputs.new-function-threshold }}
+        run: |
+          # Write .gaze.yaml from workflow inputs when the consumer
+          # repo does not already have one. This preserves backward
+          # compatibility for repos that set epsilon/threshold via
+          # workflow inputs rather than .gaze.yaml.
+          if [ ! -f .gaze.yaml ]; then
+            cat > .gaze.yaml <<EOF
+          baseline:
+            epsilon: ${EPSILON}
+            new_function_threshold: ${NEW_FUNC_THRESHOLD}
+          EOF
+            echo "Wrote .gaze.yaml from workflow inputs."
+          else
+            echo "Using existing .gaze.yaml from repository."
+          fi
+
+      - name: Run Gaze analysis
+        if: steps.no-changes.outputs.skip != 'true'
+        id: gaze-analysis
+        env:
+          PKGS: ${{ steps.resolve-packages.outputs.packages }}
+          COVERPROFILE: ${{ inputs.coverprofile }}
+        run: |
+          read -ra pkg_array <<< "$PKGS"
+          gaze report \
+            --format=json \
+            --coverprofile="${COVERPROFILE}" \
+            "${pkg_array[@]}" 2>/tmp/gaze-stderr.txt \
+            > /tmp/gaze-report.json || true
+          echo "Gaze analysis complete."
+          cat /tmp/gaze-stderr.txt >&2 || true
+
+      - name: Compare against baseline
+        if: steps.no-changes.outputs.skip != 'true'
+        id: compare
+        env:
+          BASELINE: ${{ inputs.baseline-file }}
+          PKGS: ${{ steps.resolve-packages.outputs.packages }}
+          COVERPROFILE: ${{ inputs.coverprofile }}
+          GAZE_VERSION: ${{ inputs.gaze-version }}
+        run: |
+          read -ra pkg_array <<< "$PKGS"
+
+          BASELINE_FLAG=""
+          HAS_BASELINE="false"
+          if [ -f "$BASELINE" ] && [ -s "$BASELINE" ]; then
+            BASELINE_FLAG="--baseline=${BASELINE}"
+            HAS_BASELINE="true"
+          fi
+
+          # Run gaze crap with baseline comparison (when available).
+          # gaze crap exits 1 on regression/violation — capture exit
+          # code but don't fail the step yet.
+          # shellcheck disable=SC2086
+          gaze crap \
+            --format=json \
+            --coverprofile="${COVERPROFILE}" \
+            ${BASELINE_FLAG} \
+            "${pkg_array[@]}" > /tmp/crapload-current.json 2>/tmp/gaze-crap-stderr.txt || true
+          cat /tmp/gaze-crap-stderr.txt >&2 || true
+
+          # Guard: if gaze produced invalid JSON (e.g. unsupported
+          # flag), fail fast with a clear message instead of silently
+          # cascading to a false "fail" status downstream.
+          if ! jq -e '.summary' /tmp/crapload-current.json >/dev/null 2>&1; then
+            echo "::error::gaze crap produced invalid or empty JSON output."
+            echo "::error::This usually means the installed gaze version" \
+              "does not support a flag used by this workflow (e.g. --baseline)." \
+              "Upgrade gaze or pin gaze-version to a compatible release."
+            exit 1
+          fi
+
+          # Extract outputs from gaze crap JSON.
+          CRAPLOAD=$(jq -r '.summary.crapload // 0' /tmp/crapload-current.json)
+          GAZE_CRAPLOAD=$(jq -r '.summary.gaze_crapload // 0' /tmp/crapload-current.json)
+
+          if [ "$HAS_BASELINE" = "true" ]; then
+            PASSED=$(jq -r '.comparison.passed // true' /tmp/crapload-current.json)
+            REGRESSIONS=$(jq -r '.comparison.regressions // 0' /tmp/crapload-current.json)
+            IMPROVEMENTS=$(jq -r '.comparison.improvements // 0' /tmp/crapload-current.json)
+            if [ "$PASSED" = "true" ]; then
+              STATUS="pass"
+            else
+              STATUS="fail"
+            fi
+          else
+            REGRESSIONS=0
+            IMPROVEMENTS=0
+            STATUS="pass"
+          fi
+
+          {
+            echo "status=${STATUS}"
+            echo "crapload_count=${CRAPLOAD}"
+            echo "gaze_crapload_count=${GAZE_CRAPLOAD}"
+            echo "regressions_count=${REGRESSIONS}"
+            echo "improvements_count=${IMPROVEMENTS}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate PR comment
+        if: steps.no-changes.outputs.skip != 'true'
+        env:
+          BASELINE: ${{ inputs.baseline-file }}
+          GAZE_VERSION: ${{ inputs.gaze-version }}
+          STATUS: ${{ steps.compare.outputs.status }}
+        run: |
+          # Call external script to avoid actionlint hang on large
+          # inline bash blocks.
+          bash .workflow-scripts/scripts/generate-crapload-comment.sh \
+            "/tmp/crapload-current.json" \
+            "/tmp/gaze-report.json"
+      - name: Write step summary
+        if: github.event_name == 'pull_request'
+        run: cat /tmp/crapload-comment-body.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload analysis artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: crapload-analysis
+          path: /tmp/crapload-comment-body.md
+          retention-days: 30
+
+      - name: Upload detailed analysis
+        if: steps.no-changes.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: crapload-analysis-detailed
+          path: |
+            /tmp/gaze-report.json
+            /tmp/crapload-current.json
+          retention-days: 30
+
+      - name: Enforce threshold
+        if: steps.no-changes.outputs.skip != 'true'
+        env:
+          STATUS: ${{ steps.compare.outputs.status }}
+        run: |
+          if [ "$STATUS" = "fail" ]; then
+            echo "::error::CRAP load check failed. See PR comment for details."
+            exit 1
+          fi
+          echo "CRAP load check passed."

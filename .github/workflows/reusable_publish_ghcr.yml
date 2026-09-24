@@ -1,7 +1,34 @@
 # Reusable Push Image Workflow
 # ============================
-# Builds and pushes container images with supply chain security artifacts.
+# Builds and optionally pushes container images with supply chain security artifacts.
 # Focused responsibility: build + push only.
+#
+# Modes:
+# - push=true (default): Full pipeline — build, push, attestations
+# - push=false: Build-only — validates Dockerfile and action versions without
+#   requiring GHCR write access or org membership. Useful for dependabot PRs.
+#
+# Security Layers (for unprotected refs, push=true only):
+# - Layer 1: Workflow opt-in via allow_unprotected_ref input (default: false)
+# - Layer 2: Org membership verification via GitHub API
+# - Layer 3: Tag isolation (dev-sha-* and dev-* tags for unprotected refs)
+#
+# Tag Formats:
+# - Protected refs:   sha-<commit>, <branch>, <tag> (e.g., sha-abc123, main, v1.2.3)
+# - Unprotected refs: dev-sha-<commit>, dev-<branch> (e.g., dev-sha-abc123, dev-feat-xyz)
+#
+# Attestations (SLSA provenance + SBOM):
+# - generate_attestations='auto' (default): only for protected refs
+# - generate_attestations='true': always generate (even for unprotected refs)
+# - Skipped entirely when push=false
+#
+# Required Permissions by Mode:
+# - push=true:  contents:read, packages:write, id-token:write, actions:read, attestations:write
+# - push=false: contents:read, actions:read (write perms are no-op but caller must still grant them)
+#
+# Org Membership Check (unprotected refs only):
+# - Public orgs: GITHUB_TOKEN works (has public membership read access)
+# - Private orgs: Provide org_check_token secret with PAT (org:read scope)
 
 name: Reusable Push Image
 
@@ -9,84 +36,208 @@ on:
   workflow_call:
     inputs:
       component_name:
-        description: 'Component name (e.g., compass, beacon-distro)'
+        description: "Component name (e.g., proofwatch, beacon-distro)"
         required: true
         type: string
       containerfile_path:
-        description: 'Containerfile path relative to repo root'
+        description: "Containerfile path relative to repo root"
         required: true
         type: string
       context_path:
-        description: 'Build context path'
+        description: "Build context path"
         required: true
         type: string
       image_name:
-        description: 'Image name without registry (e.g., org/image-name)'
+        description: "Image name without registry (e.g., org/image-name)"
         required: true
         type: string
       image_description:
-        description: 'Image description for OCI label (defaults to component_name)'
+        description: "Image description for OCI label (defaults to component_name)"
         required: false
         type: string
       image_vendor:
-        description: 'Vendor name for OCI label'
+        description: "Vendor name for OCI label"
         required: false
         type: string
       force_rebuild:
-        description: 'Force rebuild without cache'
+        description: "Force rebuild without cache"
         required: false
         default: false
         type: boolean
       platforms:
-        description: 'Comma-separated target platforms'
+        description: "Comma-separated target platforms"
         required: false
-        default: 'linux/amd64'
+        default: "linux/amd64"
         type: string
+      allow_unprotected_ref:
+        description: "Allow builds from unprotected refs (PR branches). Default: false (protected refs only)"
+        required: false
+        default: false
+        type: boolean
+      generate_attestations:
+        description: "Generate SLSA provenance and SBOM. Values: auto (based on ref_protected), true (always). Default: auto"
+        required: false
+        default: "auto"
+        type: string
+      push:
+        description: "Push image to GHCR. Set to false for build-only CI validation without registry access."
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      org_check_token:
+        description: "PAT with org:read scope for private org membership checks. Falls back to GITHUB_TOKEN if not provided."
+        required: false
     outputs:
       digest:
-        description: 'Pushed image digest'
+        description: "Pushed image digest (empty when push=false)"
         value: ${{ jobs.push.outputs.digest }}
       image:
-        description: 'Full image name (ghcr.io/org/image)'
+        description: "Full image name (ghcr.io/org/image)"
         value: ${{ jobs.push.outputs.image }}
+      image_ref:
+        description: "Full image reference with tag (empty when push=false)"
+        value: ${{ jobs.push.outputs.image_ref }}
+      tags:
+        description: "Multi-line string with all applied tags (empty when push=false)"
+        value: ${{ jobs.push.outputs.tags }}
 
 permissions:
   contents: none
   packages: none
+  id-token: none
+  attestations: none
+  actions: none
 
 concurrency:
   group: reusable-push-${{ inputs.image_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !github.ref_protected }}
 
 jobs:
   push:
-    if: ${{ github.ref_protected }}
+    if: ${{ github.ref_protected || inputs.allow_unprotected_ref }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      contents: read    # Checkout source code
-      packages: write   # Push to GHCR (and write cache)
-      actions: read     # Required for GHA cache access (Buildx layer caching)
+      contents: read # Checkout source code
+      packages: write # Push to GHCR (and write cache)
+      actions: read # Required for GHA cache access (Buildx layer caching)
+      id-token: write # Required for GitHub attestations (OIDC token)
+      attestations: write # Required for pushing attestations to GHCR
     outputs:
       digest: ${{ steps.digest.outputs.digest }}
       image: ${{ steps.images.outputs.image }}
+      image_ref: ${{ steps.output_refs.outputs.image_ref }}
+      tags: ${{ steps.output_refs.outputs.tags }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      - name: Free disk space
+        run: |
+          echo "=== Disk before cleanup ==="
+          df -h /
+          sudo rm -rf /usr/local/lib/android \
+                      /usr/share/dotnet \
+                      /opt/ghc \
+                      /usr/local/share/boost \
+                      /usr/local/.ghcup \
+                      /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force || true
+          echo "=== Disk after cleanup ==="
+          df -h /
+
+      - name: Verify org membership
+        if: ${{ inputs.push && !github.ref_protected && inputs.allow_unprotected_ref }}
+        env:
+          GH_TOKEN: ${{ secrets.org_check_token != '' && secrets.org_check_token || secrets.GITHUB_TOKEN }}
+          ORG_CHECK_TOKEN_PROVIDED: ${{ secrets.org_check_token != '' }}
+          ACTOR: ${{ github.actor }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          echo "::notice::Checking if $ACTOR is a member of $ORG"
+
+          # Call GitHub API to check org membership
+          # -L follows 302 redirect to public_members endpoint when
+          # GITHUB_TOKEN lacks org-level read permission (expected for public orgs)
+          HTTP_STATUS=$(curl -s -L -o /tmp/org_check_response.json -w "%{http_code}" \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/orgs/$ORG/members/$ACTOR")
+
+          case $HTTP_STATUS in
+            204)
+              echo "::notice::✓ $ACTOR is a member of $ORG"
+              ;;
+            404)
+              echo "::error::✗ $ACTOR is NOT a member of $ORG"
+              echo "::error::Only organization members can push images from unprotected refs"
+              exit 1
+              ;;
+            401|403)
+              echo "::error::Authentication failed (HTTP $HTTP_STATUS)"
+              if [[ "$ORG_CHECK_TOKEN_PROVIDED" != "true" ]]; then
+                echo "::error::For private orgs, provide a PAT with 'org:read' scope via org_check_token secret"
+              fi
+              echo "::error::Response: $(cat /tmp/org_check_response.json)"
+              exit 1
+              ;;
+            *)
+              echo "::error::GitHub API request failed (HTTP $HTTP_STATUS)"
+              echo "::error::Response: $(cat /tmp/org_check_response.json)"
+              exit 1
+              ;;
+          esac
+
+      - name: Determine tag prefix
+        env:
+          REF_PROTECTED: ${{ github.ref_protected }}
+        run: |
+          if [[ "$REF_PROTECTED" == "true" ]]; then
+            echo "TAG_PREFIX=" >> "$GITHUB_ENV"
+            echo "::notice::Protected ref detected - using production tags (sha-*, branch)"
+          else
+            echo "TAG_PREFIX=dev-" >> "$GITHUB_ENV"
+            echo "::notice::Unprotected ref detected - using dev tags (dev-sha-*, dev-branch)"
+          fi
+
+      - name: Resolve attestation policy
+        id: attestation_policy
+        env:
+          INPUT_GENERATE_ATTESTATIONS: ${{ inputs.generate_attestations }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+        run: |
+          case "$INPUT_GENERATE_ATTESTATIONS" in
+            auto)
+              ENABLED="$REF_PROTECTED"
+              echo "::notice::Attestation policy: auto (ref_protected=$ENABLED)"
+              ;;
+            true)
+              ENABLED="true"
+              echo "::notice::Attestation policy: true (forced on)"
+              ;;
+            *)
+              echo "::error::Invalid generate_attestations value: $INPUT_GENERATE_ATTESTATIONS"
+              echo "::error::Must be 'auto' or 'true'"
+              exit 1
+              ;;
+          esac
+          echo "enabled=$ENABLED" >> "$GITHUB_OUTPUT"
+
       - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        if: ${{ inputs.push }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Container Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
 
       - name: Set image reference
         id: images
@@ -96,11 +247,14 @@ jobs:
 
       - name: Container metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ steps.images.outputs.image }}
           tags: |
-            type=sha,format=long,prefix=sha-
+            type=sha,format=long,prefix=${{ env.TAG_PREFIX }}sha-,priority=1000
+            type=ref,event=branch,prefix=${{ env.TAG_PREFIX }}
+            type=ref,event=pr,prefix=${{ env.TAG_PREFIX }}
+            type=ref,event=tag,prefix=${{ env.TAG_PREFIX }}
           flavor: |
             latest=false
           labels: |
@@ -108,13 +262,30 @@ jobs:
             org.opencontainers.image.description=${{ inputs.image_description || inputs.component_name }}
             ${{ inputs.image_vendor && format('org.opencontainers.image.vendor={0}', inputs.image_vendor) || '' }}
 
+      - name: Assert version tag for tag events
+        if: ${{ github.ref_type == 'tag' }}
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          GIT_TAG: ${{ github.ref_name }}
+        run: |
+          if echo "$TAGS" | grep -qF ":${GIT_TAG}"; then
+            echo "::notice::✓ Version tag :${GIT_TAG} present in metadata output"
+          else
+            echo "::error::Version tag :${GIT_TAG} missing from metadata output"
+            echo "::error::Expected one of the generated tags to end with :${GIT_TAG}"
+            echo "::error::Generated tags:"
+            echo "$TAGS" | while read -r t; do echo "::error::  $t"; done
+            echo "::error::This usually means type=ref,event=tag was dropped from the metadata-action config"
+            exit 1
+          fi
+
       - name: Build and push
         id: build
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ inputs.context_path }}
           file: ${{ inputs.containerfile_path }}
-          push: true
+          push: ${{ inputs.push }}
           platforms: ${{ inputs.platforms }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -122,12 +293,61 @@ jobs:
             type=gha,scope=${{ inputs.component_name }}-${{ github.ref_name }}
             type=gha,scope=${{ inputs.component_name }}-main
           cache-to: type=gha,mode=max,scope=${{ inputs.component_name }}-${{ github.ref_name }}
-          sbom: true
-          provenance: mode=max
+          sbom: false
+          provenance: false
           no-cache: ${{ inputs.force_rebuild }}
 
       - name: Export digest
+        if: ${{ inputs.push }}
         id: digest
         env:
           BUILD_DIGEST: ${{ steps.build.outputs.digest }}
         run: echo "digest=${BUILD_DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Attest SLSA provenance
+        if: ${{ inputs.push && steps.attestation_policy.outputs.enabled == 'true' }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.images.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Generate SBOM
+        if: ${{ inputs.push && steps.attestation_policy.outputs.enabled == 'true' }}
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          image: ${{ steps.images.outputs.image }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Attest SBOM
+        if: ${{ inputs.push && steps.attestation_policy.outputs.enabled == 'true' }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.images.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: sbom.spdx.json
+          push-to-registry: true
+
+      - name: Set output references
+        if: ${{ inputs.push }}
+        id: output_refs
+        env:
+          IMAGE: ${{ steps.images.outputs.image }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          # Extract primary tag (first line of metadata-action output)
+          # tags output contains full refs (ghcr.io/org/image:tag), strip to bare tag
+          PRIMARY_REF=$(echo "$TAGS" | head -n1)
+          PRIMARY_TAG="${PRIMARY_REF##*:}"
+
+          # Set outputs using grouped redirects
+          {
+            echo "image_ref=${IMAGE}:${PRIMARY_TAG}"
+            echo "tags<<EOF"
+            echo "$TAGS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "::notice::Image reference: ${IMAGE}:${PRIMARY_TAG}"
+          echo "::notice::All tags: $(echo "$TAGS" | tr '\n' ' ')"

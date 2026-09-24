@@ -2,6 +2,8 @@ name: Reusable Dependabot Reviewer
 
 # --------------------------------------------------------------------------
 # This workflow only runs when explicitly called by another workflow.
+# It extracts dependency information from dependabot PRs, classifies risk,
+# checks release age, detects ecosystem, and searches for dependency usage.
 # --------------------------------------------------------------------------
 on:
   workflow_call:
@@ -12,6 +14,18 @@ on:
       updates_count:
         description: "Rough number of projects that already adopted this dependency"
         value: "${{ jobs.dependabot_review.outputs.updates_count }}"
+      dep_name:
+        description: "Fully qualified dependency name"
+        value: "${{ jobs.dependabot_review.outputs.dep_name }}"
+      dep_version:
+        description: "New dependency version"
+        value: "${{ jobs.dependabot_review.outputs.dep_version }}"
+      release_age_hours:
+        description: "Hours since the dependency version was released, -1 if unknown"
+        value: "${{ jobs.dependabot_review.outputs.release_age_hours }}"
+      is_org_owned:
+        description: "Whether the dependency belongs to the same GitHub org as the consuming repo"
+        value: "${{ jobs.dependabot_review.outputs.is_org_owned }}"
 
 # This workflow is passive so ensure the minimal permissions even if the
 # inherited token is more lenient.
@@ -23,85 +37,182 @@ permissions:
 jobs:
   dependabot_review:
     name: Dependabot Review
-    if: github.actor == 'dependabot[bot]'
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     outputs:
       risk_level: "${{ steps.classify_risk.outputs.risk_level }}"
       updates_count: "${{ steps.check_popularity.outputs.updates_count }}"
+      dep_name: "${{ steps.get_dep_info.outputs.dep_name }}"
+      dep_version: "${{ steps.get_dep_info.outputs.dep_version }}"
+      release_age_hours: "${{ steps.check_release_age.outputs.release_age_hours }}"
+      is_org_owned: "${{ steps.detect_org_ownership.outputs.is_org_owned }}"
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: "${{ github.event.repository.full_name }}"
+          ref: "${{ github.event.pull_request.head.sha }}"
           fetch-depth: 2
+          persist-credentials: false
 
       - name: Get Dependency Information
+        id: get_dep_info
         shell: bash
         env:
           DEPENDABOT_SHA: "${{ github.event.pull_request.head.sha }}"
+          PR_TITLE: "${{ github.event.pull_request.title }}"
         run: |
-          # Use 'git log' specifically on the Dependabot commit SHA to get its subject.
-          # This command works regardless of which commit SHA was checked out locally.
-          COMMIT_SUBJECT="$(git log -1 --format=%s "$DEPENDABOT_SHA")"
+          REF="${DEPENDABOT_SHA:-HEAD}"
+          COMMIT_BODY="$(git log -1 --format=%B "$REF" 2>/dev/null || echo "")"
+          COMMIT_SUBJECT="$(git log -1 --format=%s "$REF" 2>/dev/null || echo "")"
           echo "Dependabot Commit Subject: $COMMIT_SUBJECT"
 
-          # Extract dependency name from commit title
-          dep_name="$(echo "$COMMIT_SUBJECT" | sed -E 's/.*[Bb]ump ([^ ]+) .*/\1/')"
-          if [[ -n "$dep_name" ]]; then
-            echo "Dependency Name: $dep_name"
-            echo "DEP_NAME=$dep_name" >> "$GITHUB_ENV"
+          dep_name=""
+          dep_version=""
+          update_type=""
+          uses_query=""
+
+          # Source 1: Commit metadata (updated-dependencies block)
+          dep_name="$(echo "$COMMIT_BODY" | grep -m1 'dependency-name:' \
+            | sed 's/.*dependency-name:[[:space:]]*//' | tr -d '[:space:]')" || true
+          dep_version="$(echo "$COMMIT_BODY" | grep -m1 'dependency-version:' \
+            | sed 's/.*dependency-version:[[:space:]]*//' | tr -d '[:space:]')" || true
+          update_type="$(echo "$COMMIT_BODY" | grep -m1 'update-type:' \
+            | sed 's/.*update-type:[[:space:]]*//' | tr -d '[:space:]')" || true
+          [[ -n "$dep_name" ]] && echo "Metadata: name=$dep_name version=$dep_version type=$update_type"
+
+          # Source 2: Title fallback for dep_name
+          if [[ -z "$dep_name" ]]; then
+            dep_name="$(echo "$COMMIT_SUBJECT" \
+              | sed -E 's/.*[Bb]ump ([^ ]+) .*/\1/; t; s/.*[Uu]pdate ([^ ]+) .*/\1/')" || true
+            [[ "$dep_name" == "$COMMIT_SUBJECT" ]] && dep_name=""
+            [[ -n "$dep_name" ]] && echo "Title fallback: name=$dep_name"
           fi
 
-          if grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' <<< "$COMMIT_SUBJECT"; then
-            # Extract two semantic version numbers (e.g., 1.2.3)
-            mapfile -t versions < <(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' <<< "$COMMIT_SUBJECT")
+          # Extract versions from title (always needed for from_version)
+          mapfile -t versions < <(echo "$COMMIT_SUBJECT" \
+            | grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+' | sed 's/^v//' | head -2)
+          from_version=""
+          to_version="${dep_version}"
+          [[ "${#versions[@]}" -ge 2 ]] && from_version="${versions[0]}"
+          [[ "${#versions[@]}" -ge 2 && -z "$to_version" ]] && to_version="${versions[1]}"
+          [[ "${#versions[@]}" -eq 1 && -z "$to_version" ]] && to_version="${versions[0]}"
+
+          # Source 2b: Commit body fallback for versions (grouped PRs omit
+          # version numbers from the subject line)
+          if [[ "${#versions[@]}" -lt 2 ]]; then
+            mapfile -t versions < <(echo "$COMMIT_BODY" \
+              | grep -Eo 'from v?[0-9]+\.[0-9]+\.[0-9]+ to v?[0-9]+\.[0-9]+\.[0-9]+' \
+              | grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+' | sed 's/^v//' | head -2)
+            [[ "${#versions[@]}" -ge 2 ]] && from_version="${versions[0]}"
+            [[ "${#versions[@]}" -ge 2 && -z "$to_version" ]] && to_version="${versions[1]}"
+            [[ "${#versions[@]}" -ge 2 ]] && echo "Body fallback: from=$from_version to=$to_version"
+          fi
+
+          # Source 2c: PR title fallback for versions
+          if [[ "${#versions[@]}" -lt 2 && -n "$PR_TITLE" ]]; then
+            mapfile -t versions < <(echo "$PR_TITLE" \
+              | grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+' | sed 's/^v//' | head -2)
+            [[ "${#versions[@]}" -ge 2 ]] && from_version="${versions[0]}"
+            [[ "${#versions[@]}" -ge 2 && -z "$to_version" ]] && to_version="${versions[1]}"
+            [[ "${#versions[@]}" -ge 2 ]] && echo "PR title fallback: from=$from_version to=$to_version"
+          fi
+
+          # Derive update_type from versions when metadata is absent
+          if [[ -z "$update_type" && -n "$from_version" && -n "$to_version" ]]; then
+            _from_major=$(echo "$from_version" | cut -d. -f1)
+            _from_minor=$(echo "$from_version" | cut -d. -f2)
+            _to_major=$(echo "$to_version" | cut -d. -f1)
+            _to_minor=$(echo "$to_version" | cut -d. -f2)
+            if [[ "$_from_major" -ne "$_to_major" ]]; then
+              update_type="version-update:semver-major"
+            elif [[ "$_from_minor" -ne "$_to_minor" ]]; then
+              update_type="version-update:semver-minor"
+            else
+              update_type="version-update:semver-patch"
+            fi
+            echo "Derived update_type: $update_type"
+          fi
+
+          # Source 3: Diff enrichment (SHA-pinned refs for usage search only)
+          DIFF="$(git diff "$REF^..$REF" 2>/dev/null || echo "")"
+          if [[ -n "$DIFF" && -n "$dep_name" ]]; then
+            uses_ref="$(echo "$DIFF" \
+              | grep -oE "^\+.*uses:[[:space:]]*${dep_name}@[a-f0-9]{40}" \
+              | grep -oE "${dep_name}@[a-f0-9]{40}" | head -1)" || true
+            [[ -n "$uses_ref" ]] && uses_query=" $uses_ref"
+          fi
+
+          # Export to GITHUB_ENV for downstream steps
+          dep_version_final="${dep_version:-$to_version}"
+          {
+            [[ -n "$dep_name" ]] && echo "DEP_NAME=$dep_name"
+            [[ -n "$dep_version_final" ]] && echo "DEP_VERSION=$dep_version_final"
+            [[ -n "$from_version" ]] && echo "FROM_VERSION=$from_version"
+            [[ -n "$to_version" ]] && echo "TO_VERSION=$to_version"
+            [[ -n "$update_type" ]] && echo "UPDATE_TYPE=$update_type"
+            [[ -n "$uses_query" ]] && echo "USES_QUERY=$uses_query"
+          } >> "$GITHUB_ENV"
+
+          # Export to GITHUB_OUTPUT for job outputs
+          echo "dep_name=${dep_name}" >> "$GITHUB_OUTPUT"
+          echo "dep_version=${dep_version_final}" >> "$GITHUB_OUTPUT"
+
+          echo "Final: DEP_NAME=$dep_name DEP_VERSION=$dep_version_final FROM=$from_version TO=$to_version TYPE=$update_type USES=$uses_query"
+
+      - name: Detect Org Ownership
+        id: detect_org_ownership
+        shell: bash
+        env:
+          REPO_OWNER: "${{ github.repository_owner }}"
+        run: |
+          dep="$DEP_NAME"
+          is_org_owned="false"
+
+          if [[ -n "$dep" ]]; then
+            dep_owner="$(echo "$dep" | cut -d'/' -f1)"
+            if [[ "$dep_owner" == "$REPO_OWNER" ]]; then
+              is_org_owned="true"
+              echo "Org-owned dependency: $dep (owner=$dep_owner matches $REPO_OWNER)"
+            else
+              echo "Third-party dependency: $dep (owner=$dep_owner != $REPO_OWNER)"
+            fi
           else
-            # In some cases, the dependency name and version are not in the commit title.
-            # So, we need to extract the versions from the commit description.
-            COMMIT_DESCRIPTION="$(git log -1 --format=%B "$DEPENDABOT_SHA" | grep -i Bumps)"
-            mapfile -t versions < <(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' <<< "$COMMIT_DESCRIPTION")
+            echo "No dependency name available. Defaulting to third-party."
           fi
 
-          if [[ "${#versions[@]}" -eq 2 ]]; then
-            echo "Versions: ${versions[0]} -> ${versions[1]}"
-            echo "FROM_VERSION=${versions[0]}" >> "$GITHUB_ENV"
-            echo "TO_VERSION=${versions[1]}" >> "$GITHUB_ENV"
-          fi
-
-          # Extract dependency name and version together in case of GitHub Actions
-          # The title is not always standardized, so we need to extract the name and version from the file changes.
-          dep_name_and_version="$(grep -rhoE "uses:[[:space:]']*$dep_name.*@[^\s#]+" .github/workflows/ | sed 's/uses:[[:space:]]*//' | tail -n1 || echo '')"
-          echo "Dependency Name and Version: $dep_name_and_version"
-          echo "DEP_NAME_AND_VERSION=$dep_name_and_version" >> "$GITHUB_ENV"
+          echo "is_org_owned=$is_org_owned" >> "$GITHUB_OUTPUT"
 
       - name: Classify Risk Based on Semantic Version
         id: classify_risk
         shell: bash
         run: |
-          risk="high"  # Default risk level
+          risk="high"
 
-          if [[ -z "${{ env.FROM_VERSION }}" || -z "${{ env.TO_VERSION }}" ]]; then
-            echo "No clear versioning detected."
-            echo "Risk level: $risk"
-            echo "risk_level=$risk" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          FROM_VER_MAJOR=$(echo "${{ env.FROM_VERSION }}" | cut -d. -f1)
-          FROM_VER_MINOR=$(echo "${{ env.FROM_VERSION }}" | cut -d. -f2)
-          TO_VER_MAJOR=$(echo "${{ env.TO_VERSION }}" | cut -d. -f1)
-          TO_VER_MINOR=$(echo "${{ env.TO_VERSION }}" | cut -d. -f2)
-
-          if [[ "$FROM_VER_MAJOR" -eq "$TO_VER_MAJOR" && "$FROM_VER_MINOR" -eq "$TO_VER_MINOR" ]]; then
-            echo "Patch update detected."
-            risk="low"
-          elif [[ "$FROM_VER_MAJOR" -eq "$TO_VER_MAJOR" && "$FROM_VER_MINOR" -lt "$TO_VER_MINOR" ]]; then
-            echo "Minor update detected."
-            risk="medium"
+          # Primary: use update-type from commit metadata
+          if [[ -n "$UPDATE_TYPE" ]]; then
+            case "$UPDATE_TYPE" in
+              *semver-patch*) risk="low"; echo "Patch update (metadata)." ;;
+              *semver-minor*) risk="medium"; echo "Minor update (metadata)." ;;
+              *semver-major*) risk="high"; echo "Major update (metadata). Requires manual review." ;;
+            esac
+          # Fallback: compare semantic versions
+          elif [[ -n "$FROM_VERSION" && -n "$TO_VERSION" ]]; then
+            from_major=$(echo "$FROM_VERSION" | cut -d. -f1)
+            from_minor=$(echo "$FROM_VERSION" | cut -d. -f2)
+            to_major=$(echo "$TO_VERSION" | cut -d. -f1)
+            to_minor=$(echo "$TO_VERSION" | cut -d. -f2)
+            if [[ "$from_major" -eq "$to_major" && "$from_minor" -eq "$to_minor" ]]; then
+              risk="low"; echo "Patch update (semver)."
+            elif [[ "$from_major" -eq "$to_major" && "$from_minor" -lt "$to_minor" ]]; then
+              risk="medium"; echo "Minor update (semver)."
+            else
+              echo "Major update (semver). Requires manual review."
+            fi
           else
-            echo "Major update detected. Likely includes breaking changes. Requires manual review."
+            echo "No version info available. Defaulting to high risk."
           fi
 
           echo "Risk level: $risk"
@@ -109,7 +220,7 @@ jobs:
 
       - name: Get Changed Files
         id: changed_files
-        uses: tj-actions/changed-files@e0021407031f5be11a464abee9a0776171c79891 # v47.0.1
+        uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96 # v47.0.6
 
       - name: Detect Ecosystem
         id: detect_ecosystem
@@ -117,12 +228,12 @@ jobs:
         env:
           ALL_CHANGED_FILES: "${{ steps.changed_files.outputs.all_changed_files }}"
         run: |
-          if [[ $ALL_CHANGED_FILES =~ (^|[[:space:]])go\.mod($|[[:space:]]) ]]; then
+          if [[ $ALL_CHANGED_FILES == *"go.mod"* ]]; then
             eco="go"
-          elif [[ $ALL_CHANGED_FILES =~ (^|[[:space:]])requirements\.txt($|[[:space:]]) || \
-                  $ALL_CHANGED_FILES =~ (^|[[:space:]])pyproject\.toml($|[[:space:]]) || \
-                  $ALL_CHANGED_FILES =~ (^|[[:space:]])setup\.cfg($|[[:space:]]) || \
-                  $ALL_CHANGED_FILES =~ (^|[[:space:]])poetry\.lock($|[[:space:]]) ]]; then
+          elif [[ $ALL_CHANGED_FILES == *"requirements.txt"* || \
+                  $ALL_CHANGED_FILES == *"pyproject.toml"* || \
+                  $ALL_CHANGED_FILES == *"setup.cfg"* || \
+                  $ALL_CHANGED_FILES == *"poetry.lock"* ]]; then
             eco="python"
           elif [[ $ALL_CHANGED_FILES == *".github/workflows/"* || \
                   $ALL_CHANGED_FILES == *".github/actions/"* ]]; then
@@ -135,34 +246,103 @@ jobs:
           echo "Detected ecosystem: $eco"
           echo "ecosystem=$eco" >> "$GITHUB_OUTPUT"
 
+      - name: Check Release Age
+        id: check_release_age
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          ECOSYSTEM: "${{ steps.detect_ecosystem.outputs.ecosystem }}"
+        run: |
+          dep="$DEP_NAME"
+          version="$DEP_VERSION"
+          eco="$ECOSYSTEM"
+          release_date=""
+
+          # Skip if no dependency info available
+          if [[ -z "$dep" || -z "$version" ]]; then
+            echo "No dependency info available. Skipping release age check."
+            echo "release_age_hours=-1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          case "$eco" in
+            github_actions)
+              # Reusable workflow refs include the file path in the dep name
+              # (e.g., "org/repo/.github/workflows/reusable_foo.yml").
+              # Extract "org/repo" for GitHub API calls.
+              repo_slug="$(echo "$dep" | cut -d'/' -f1-2)"
+
+              # Try GitHub Releases first (with and without v prefix)
+              release_date="$(gh api "repos/${repo_slug}/releases/tags/v${version}" \
+                --jq '.published_at' 2>/dev/null)" || true
+              if [[ -z "$release_date" || "$release_date" == "null" ]]; then
+                release_date="$(gh api "repos/${repo_slug}/releases/tags/${version}" \
+                  --jq '.published_at' 2>/dev/null)" || true
+              fi
+              # Fall back to tag creation date
+              if [[ -z "$release_date" || "$release_date" == "null" ]]; then
+                tag_url="$(gh api "repos/${repo_slug}/git/ref/tags/v${version}" \
+                  --jq '.object.url' 2>/dev/null)" || true
+                if [[ -n "$tag_url" && "$tag_url" != "null" ]]; then
+                  release_date="$(gh api "$tag_url" \
+                    --jq '.tagger.date // .author.date' 2>/dev/null)" || true
+                fi
+              fi
+              ;;
+            go)
+              release_date="$(curl -sL \
+                "https://proxy.golang.org/${dep}/@v/v${version}.info" \
+                | jq -r '.Time' 2>/dev/null)" || true
+              ;;
+            python)
+              release_date="$(curl -sL \
+                "https://pypi.org/pypi/${dep}/${version}/json" \
+                | jq -r '.urls[0].upload_time_iso_8601 // empty' 2>/dev/null)" || true
+              ;;
+          esac
+
+          if [[ -n "$release_date" && "$release_date" != "null" ]]; then
+            release_epoch="$(date -d "$release_date" +%s 2>/dev/null)" || true
+            now_epoch="$(date +%s)"
+            if [[ -n "$release_epoch" ]]; then
+              age_hours=$(( (now_epoch - release_epoch) / 3600 ))
+              echo "Release date: $release_date (${age_hours}h ago)"
+              echo "release_age_hours=$age_hours" >> "$GITHUB_OUTPUT"
+            else
+              echo "Could not parse release date: $release_date"
+              echo "release_age_hours=-1" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "Release date not available for $dep v$version ($eco)"
+            echo "release_age_hours=-1" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Search GitHub for Dependency Usage
         id: check_popularity
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          ECOSYSTEM: "${{ steps.detect_ecosystem.outputs.ecosystem }}"
         run: |
-          dep="${{ env.DEP_NAME }}"
-          ver="${{ env.TO_VERSION }}"
-          name_and_ver="${{ env.DEP_NAME_AND_VERSION }}"
-          eco="${{ steps.detect_ecosystem.outputs.ecosystem }}"
+          dep="$DEP_NAME"
+          uses_query="$USES_QUERY"
+          eco="$ECOSYSTEM"
 
           case "$eco" in
             python)
-              # There are many different ways to declare Python dependencies making it hard
-              # to bring consistent results. So, skipping Python dependency count for now.
-              echo "Queries for Python dependencies are not consistent enough. Skipping"
+              echo "Queries for Python dependencies are not consistent enough. Skipping."
               echo "updates_count=0" >> "$GITHUB_OUTPUT"
               exit 0
               ;;
             go)
-              query="${dep} v${ver} filename:go.mod"
+              query="${dep} v${TO_VERSION} filename:go.mod"
               ;;
             github_actions)
-              if [[ -n "${name_and_ver}" ]]; then
-                pattern="${name_and_ver}"
+              if [[ -n "${uses_query}" ]]; then
+                query="${uses_query} path:.github/workflows/"
               else
-                pattern="${dep}@v${ver}"
+                echo "No USES_QUERY for Actions, skipping search."
+                echo "updates_count=0" >> "$GITHUB_OUTPUT"
+                exit 0
               fi
-              query="${pattern} path:.github/workflows/"
               ;;
             *)
               echo "Unknown ecosystem, skipping search."
@@ -171,23 +351,24 @@ jobs:
               ;;
           esac
 
-          echo "Searching GitHub with following query:"
-          echo " - gh search code \"$query\" --json repository --limit 25"
+          echo "Searching GitHub: gh search code \"$query\" --json repository --limit 10"
 
-          # Run search with retry logic
+          result=""
           for i in {1..3}; do
-            result="$(gh search code "$query" --json repository --limit 25 2>/dev/null)" && break
-            echo "Search failed (attempt $i), retrying..."
-            sleep "$((i * 5))"
+            result="$(timeout 30 gh search code "$query" --json repository --limit 10 2>&1)" && break
+            echo "Search attempt $i failed: ${result:0:200}"
+            result=""
+            sleep "$((i * 15))"
           done
 
-          if [[ -z "$result" ]]; then
+          if [[ -z "$result" || "$result" == "[]" ]]; then
             echo "updates_count=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          repo_list="$(jq -r '.[].repository.nameWithOwner' <<<"$result" | sort -u)"
-          count=$(wc -w <<<"$repo_list")
+          repo_list="$(jq -r '.[].repository.nameWithOwner' <<<"$result" | sort -u)" || true
+          count="$(echo "$repo_list" | grep -c . 2>/dev/null)" || true
+          [[ -z "$count" ]] && count=0
 
           echo "Repository Count: $count"
           echo "Repository List: $repo_list"

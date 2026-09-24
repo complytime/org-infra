@@ -2,7 +2,10 @@
 name: Reusable CI
 
 # --------------------------------------------------------------------------
-# This workflow only runs when explicitly called by another workflow.
+# Reusable CI workflow: runs MegaLinter and PR title validation.
+# If linter config files are missing locally, fetches org defaults
+# from org-infra as a fallback. See sync-config.yml for the canonical
+# list of org-managed configs.
 # --------------------------------------------------------------------------
 on:
   workflow_call:
@@ -21,22 +24,87 @@ jobs:
     permissions:
       contents: read
       issues: read
+      pull-requests: read
+    # Org-managed linter configs — single source of truth for fallback.
+    # Keep in sync with sync-config.yml when adding new config files.
+    env:
+      LINTER_CONFIGS: >-
+        .mega-linter.yml .golangci.yml .yamllint.yml
+        commitlint.config.js ruff.toml
     steps:
       - name: Checkout Code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check local linter configs
+        id: check_configs
+        run: |
+          missing=""
+          for file in $LINTER_CONFIGS; do
+            if [ ! -f "$file" ]; then
+              missing="$missing $file"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "needs_fallback=true" >> "$GITHUB_OUTPUT"
+            echo "missing_files=$missing" >> "$GITHUB_OUTPUT"
+            echo "Missing configs:$missing — will fetch from org-infra"
+          else
+            echo "needs_fallback=false" >> "$GITHUB_OUTPUT"
+            echo "All linter configs present locally"
+          fi
+
+      - name: Checkout org-infra fallback configs
+        if: steps.check_configs.outputs.needs_fallback == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .org-infra-fallback
+          sparse-checkout: |
+            .mega-linter.yml
+            .golangci.yml
+            .yamllint.yml
+            commitlint.config.js
+            ruff.toml
+          persist-credentials: false
+
+      - name: Copy missing configs from org-infra
+        if: steps.check_configs.outputs.needs_fallback == 'true'
+        env:
+          MISSING_FILES: ${{ steps.check_configs.outputs.missing_files }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          fallback_dir=".org-infra-fallback"
+          echo "org-infra fallback ref: $WORKFLOW_SHA"
+          for file in $MISSING_FILES; do
+            if [ -f "$fallback_dir/$file" ]; then
+              cp "$fallback_dir/$file" "$file"
+              echo "Copied fallback: $file"
+            else
+              echo "::warning::Fallback config not found in org-infra: $file"
+            fi
+          done
+          rm -rf "$fallback_dir"
 
       - name: Install Dependencies
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         run: npm install @commitlint/cli @commitlint/config-conventional
 
       - name: Validate PR Title
-        if: ${{ github.event.pull_request.title != '' }}
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         env:
-          PR_TITLE: "${{ github.event.pull_request.title }}"
-        run: echo "$PR_TITLE" | npx commitlint --config commitlint.config.js
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          PR_TITLE=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title --jq '.title')
+          echo "PR title (live): $PR_TITLE"
+          echo "$PR_TITLE" | npx commitlint --config commitlint.config.js
 
       - name: Run MegaLinter
         id: megalinter
-        uses: oxsecurity/megalinter@42bb470545e359597e7f12156947c436e4e3fb9a # v9.3.0
+        uses: oxsecurity/megalinter@9949bad031045f366be2467e00e8371a7328a2e2 # v10.1.0
         env:
           VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           GITHUB_COMMENT_REPORTER: false

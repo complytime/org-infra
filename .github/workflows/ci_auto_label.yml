@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# --------------------------------------------------------------------------
+# Auto-label PRs using release-drafter's autolabeler rules defined in
+# .github/release-drafter.yml. Without this workflow the autolabeler
+# section is dormant — labels would only be applied at release time,
+# which is too late to be useful for triage and changelog previews.
+# --------------------------------------------------------------------------
+
+name: Auto-label PRs
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9 # v7.7.0
+        with:
+          dry-run: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

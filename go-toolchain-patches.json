@@ -1,0 +1,36 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Go version patch updates only — shared preset for complytime org",
+  "dependencyDashboard": false,
+  "enabledManagers": ["gomod"],
+  "packageRules": [
+    {
+      "description": "Disable all gomod dependency updates by default",
+      "matchManagers": ["gomod"],
+      "enabled": false
+    },
+    {
+      "description": "Re-enable Go version directives for patch updates",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "enabled": true,
+      "rangeStrategy": "bump",
+      "separateMinorPatch": true,
+      "automerge": false,
+      "labels": ["dependencies"],
+      "commitMessagePrefix": "chore(deps):"
+    },
+    {
+      "description": "Suppress non-patch Go version updates (minor/major)",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
+    }
+  ],
+  "postUpdateOptions": ["gomodTidy", "gomodVendor"],
+  "vulnerabilityAlerts": {
+    "description": "Disabled — vulnerability remediation is handled by Dependabot",
+    "enabled": false
+  }
+}

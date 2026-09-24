@@ -1,0 +1,141 @@
+# org-infra
+
+CI/CD infrastructure hub for ComplyTime. Syncs reusable workflows, lint configs, templates, and AI tooling to all org repositories via `sync-config.yml`.
+
+## Structure
+
+```text
+.github/workflows/      # reusable_* (callable), ci_* (consumer), sync_*/report_* (org-infra only)
+scripts/                 # sync-org-repositories.py (Python, GitPython + PyYAML + requests)
+tests/                   # pytest unit tests for sync script
+compliance/              # Ampel policy definitions (branch protection rules)
+specs/                   # SpecKit feature specifications
+openspec/                # OpenSpec feature specifications
+docs/                    # Project documentation (includes AI_TOOLING.md)
+.agents/skills/          # Agent-agnostic AI skills (auto-discovered by OpenCode)
+.opencode/commands/      # Project-specific AI commands (review-pr.md)
+sync-config.yml          # Defines which files sync to org repos — check before modifying any config
+.specify/memory/constitution.md  # All coding standards and governance (single source of truth)
+Makefile                 # Build/test/lint automation
+```
+
+## Commands
+
+```bash
+make lint            # yamllint + ruff (all linters)
+make test            # pytest -v
+make sync-dry-run    # Preview file sync to org repos
+make clean           # Remove __pycache__ and .pyc
+```
+
+## Council Review (AI-assisted PR review)
+
+Comment-triggered workflow chain for AI code review using OpenCode on Vertex AI,
+with Divisor persona discovery from the reviewed repo. Invoked by posting
+`/council-review` as a PR comment. Only org members can invoke.
+
+### Workflow chain
+
+```text
+ci_council_review_collect.yml  (issue_comment: /council-review)  [synced]
+  ├── Gate: only PR comments starting with /council-review
+  ├── Gate: skip drafts, dependabot PRs
+  ├── Gate: verify commenter is an org member (notice reply if not)
+  ├── Collect diff: gh pr diff → pr-diff.patch
+  ├── Build metadata: pr-meta.json
+  └── Upload artifact (1-day retention)
+         │
+         ▼  workflow_run / workflow_dispatch
+ci_council_review.yml  (consumer)  [synced]
+  └── Calls reusable_council_review.yml@main (org-infra only)
+         │
+         ▼  workflow_call
+reusable_council_review.yml  [NOT synced — org-infra only]
+  ├── Harden runner (egress blocked, allowlist only)
+  ├── Cooldown check (5-minute minimum between reviews)
+  ├── WIF auth → Vertex AI
+  ├── council-review-action (composite, SHA-pinned, from unbound-force)
+  ├── Clean up previous bot comments
+  ├── Post review summary
+  └── Post inline comments on diff lines
+```
+
+### Required secrets
+
+| Secret | Scope | Purpose |
+| -------- | ------- | --------- |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Org-level | WIF provider for Vertex AI auth |
+| `GCP_PROJECT_ID` | Org-level | GCP project containing Vertex AI |
+| `ORG_CHECK_TOKEN` | Optional | PAT with `org:read` for private membership checks (falls back to `GITHUB_TOKEN` for public-only) |
+
+### Sync and rollout
+
+Consumer workflows (`ci_council_review_collect.yml`, `ci_council_review.yml`) sync
+to downstream repos via `sync-config.yml`. The reusable workflow stays in org-infra
+and is called cross-repo. See `sync-config.yml` for current `exclude_repos` list.
+
+Rollout is staged: all downstream repos are excluded until the composite action SHA
+points to a merged `main` commit and security hardening (#429) / cost controls (#430)
+are in place.
+
+### Related issues
+
+- Security hardening: #429
+- Token consumption controls: #430
+- Composite action: `unbound-force/unbound-force` → `council-review-action/`
+
+See `docs/COUNCIL_REVIEW.md` for the full operational guide.
+
+## Constraints
+
+- **Sync impact**: Config files (`.golangci.yml`, `.yamllint.yml`, `ruff.toml`, `.mega-linter.yml`, `commitlint.config.js`) and workflows (`ci_*`, `reusable_*`) sync to all org repos. Check `sync-config.yml` before modifying to understand downstream impact.
+- **Workflow naming**: Reusable workflows MUST use `reusable_` prefix, consumer workflows `ci_` prefix.
+- **Python**: Lint with `ruff` (`ruff.toml`). No `go.mod` — this repo is Python + YAML, not Go (Go configs are sync templates for other repos).
+- **YAML**: Lint with `yamllint` (`.yamllint.yml`). Line length follows yamllint config, not the 99-char code rule.
+- **Standards**: All coding standards are in `.specify/memory/constitution.md`. Do not duplicate them.
+- **AI tooling**: Setup, commands, and skill creation documented in `docs/AI_TOOLING.md`.
+
+## Commits
+
+All commits MUST use Conventional Commits, the `-s` flag (Signed-off-by), and include an `Assisted-by` trailer:
+
+```bash
+git commit -s -m "feat: add feature X
+
+Description of changes.
+
+Assisted-by: OpenCode (model-name)"
+```
+
+Replace `model-name` with the actual model identifier (e.g., `claude-opus-4-6`).
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->
+
+## Active Technologies
+- YAML (GitHub Actions syntax), Markdown, Python 3.x (sync scripts only) + OpenCode (agent), OpenSpec/SpecKit (spec frameworks — plugin-managed), `gh` CLI (PR review command), GitPython + PyYAML + requests (sync script — existing) (004-standardize-ai-tooling)
+- N/A (filesystem-only; no database or persistent storage) (004-standardize-ai-tooling)
+- Bash (shell scripts in GitHub Actions `run:` blocks), YAML (GitHub Actions workflow syntax) + GitHub Actions platform, `gh` CLI (pre-installed on runners), `jq` (pre-installed on runners), `curl` (pre-installed on runners), `actions/dependency-review-action@v4.9.0`, `peter-evans/create-or-update-comment@v5.0.0`, `actions/github-script@v8.0.0`, `actions/checkout@v6.0.2`, `tj-actions/changed-files@v47.0.5` (006-robust-dependabot-approval)
+- N/A (no persistent storage; data flows via GitHub Actions outputs and environment variables) (006-robust-dependabot-approval)
+- `renovatebot/github-action@v46.1.16` (self-hosted Renovate runner), `actions/create-github-app-token@v3.2.0` (GitHub App authentication) + JavaScript config (`renovate-config.js`), JSON preset (`go-toolchain-patches.json`) (go-toolchain-patch-automation)
+
+## Recent Changes
+- 004-standardize-ai-tooling: Added YAML (GitHub Actions syntax), Markdown, Python 3.x (sync scripts only) + OpenCode (agent), OpenSpec/SpecKit (spec frameworks — plugin-managed), `gh` CLI (PR review command), GitPython + PyYAML + requests (sync script — existing)
+- 006-robust-dependabot-approval: Added Bash (shell scripts in GitHub Actions `run:` blocks), YAML (GitHub Actions workflow syntax) + GitHub Actions platform, `gh` CLI (pre-installed on runners), `jq` (pre-installed on runners), `curl` (pre-installed on runners), `actions/dependency-review-action@v4.9.0`, `peter-evans/create-or-update-comment@v5.0.0`, `actions/github-script@v8.0.0`, `actions/checkout@v6.0.2`, `tj-actions/changed-files@v47.0.5`
+- 284-org-member-image-push: Extended `reusable_publish_ghcr.yml` with unprotected ref publishing (org membership verification, dev-prefixed tag isolation, configurable attestation policy). Added `docker/login-action@v4.2.0`, `docker/setup-qemu-action@v4.0.0`, `docker/setup-buildx-action@v4.1.0`, `docker/build-push-action@v7.2.0`, `docker/metadata-action@v6.1.0`, `actions/attest-build-provenance@v4.1.0`, `anchore/sbom-action@v0.24.0`, `actions/attest@v4.1.0`, `sigstore/cosign-installer@v4.1.2`
+- 306-publish-complypack-ampel-bp: Added `reusable_publish_complypack.yml` (pack and push complypack OCI artifacts to GHCR with SLSA provenance and SBOM attestation) and `ci_publish_complypack.yml` (dual-registry: GHCR on push, Quay on release). Renamed `resuable_publish_quay.yml` to `reusable_publish_quay.yml` (typo fix). Uses `complypack` CLI via `go install`, `oras-project/setup-oras`, `imjasonh/setup-crane`.
+- go-toolchain-patch-automation: Added `ci_renovate.yml` (centralized self-hosted Renovate runner for Go version patch updates). Uses `renovatebot/github-action@v46.1.16` with a dedicated GitHub App (`complytime-renovate[bot]`, `contents:write` + `pull-requests:write`). Shared preset (`go-toolchain-patches.json`) restricts to Go version patch updates only (matches `go` and `toolchain` directives via `matchDepNames`). Global config (`renovate-config.js`) autodiscovers org repos via `globalExtends`.
+- 478-stale-review-alerts: Added `reusable_stale_reviews.yml` (detect and flag PRs with review requests pending beyond a configurable business-day threshold) and `ci_stale_reviews.yml` (weekday scheduled caller). Uses `actions/github-script@v9.0.0` (SHA-pinned) with inline business-day calculation. Staged rollout via `sync-config.yml` exclusions.
+- 500-reusable-homebrew-workflow: Added `reusable_release_homebrew.yml` (generate, validate with `brew audit --strict`, and push source-build Homebrew formulae to a tap repository via GitHub App token) and `ci_test_homebrew.yml` (macOS-based CI self-test for formula generation and input validation). Uses `actions/create-github-app-token@v3.2.0`, `actions/checkout@v7.0.1`.
+
+## Convention Packs
+
+This repository uses convention packs scaffolded by
+unbound-force. Agents MUST read the applicable pack(s)
+before writing or reviewing code.
+
+- `.opencode/uf/packs/default.md`
+- `.opencode/uf/packs/default-custom.md`
+- `.opencode/uf/packs/severity.md`
+- `.opencode/uf/packs/content.md`
+- `.opencode/uf/packs/content-custom.md`

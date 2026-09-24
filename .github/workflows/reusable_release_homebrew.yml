@@ -1,0 +1,349 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Reusable Homebrew Formula Publishing Workflow
+# ===============================================
+# Generates a source-build Homebrew formula from workflow inputs, validates it
+# with `brew audit --strict`, and pushes it to a Homebrew tap repository.
+#
+# Designed to run as the final job in a release pipeline, after tag validation
+# (preflight) and binary release (goreleaser).
+#
+# The formula builds from source using Go, so users compile on install. This
+# avoids macOS Gatekeeper/notarisation requirements for pre-built binaries.
+#
+# Prerequisites:
+#   - A GitHub App with contents:write permission on the tap repository
+#   - The tap repository must exist with a Formula/ directory
+#   - The source tarball must be available at the standard GitHub archive URL
+#
+# Usage:
+#   homebrew:
+#     needs: [preflight, release]
+#     if: needs.preflight.outputs.tag != ''
+#     uses: complytime/org-infra/.github/workflows/reusable_release_homebrew.yml@main
+#     with:
+#       tag: ${{ needs.preflight.outputs.tag }}
+#       project_name: complyctl
+#       description: "CLI for streamlining end-to-end compliance workflows"
+#       binary_name: complyctl
+#       tap_repo: complytime/homebrew-tap
+#       go_main_path: ./cmd/complyctl
+#       ldflags_module: github.com/complytime/complyctl/internal/version
+#       homepage: https://github.com/complytime/complyctl
+#     secrets:
+#       app_client_id: ${{ secrets.APP_ID_HOMEBREW_FORMULA_PUBLISHER }}
+#       app_private_key: ${{ secrets.PRIVATE_KEY_APP_HOMEBREW_FORMULA_PUBLISHER }}
+
+name: Reusable Homebrew Formula Publish
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.2.3). Must exist as a git tag with a published release.'
+        required: true
+        type: string
+      project_name:
+        description: 'Project name used in the tarball URL path (e.g., complyctl)'
+        required: true
+        type: string
+      description:
+        description: 'One-line description for the Homebrew formula desc field'
+        required: true
+        type: string
+      binary_name:
+        description: 'Name of the binary produced by go build (e.g., complyctl)'
+        required: true
+        type: string
+      tap_repo:
+        description: 'Homebrew tap repository in owner/repo format (e.g., complytime/homebrew-tap)'
+        required: true
+        type: string
+      go_main_path:
+        description: 'Go main package path relative to the repo root (e.g., ./cmd/complyctl)'
+        required: true
+        type: string
+      ldflags_module:
+        description: 'Go module path for ldflags version injection (e.g., github.com/complytime/complyctl/internal/version)'
+        required: true
+        type: string
+      homepage:
+        description: 'Homepage URL for the Homebrew formula (e.g., https://github.com/complytime/complyctl)'
+        required: true
+        type: string
+      tap_branch:
+        description: 'Branch to push to in the tap repository'
+        required: false
+        type: string
+        default: main
+    secrets:
+      app_client_id:
+        description: 'GitHub App client ID for tap repository access'
+        required: true
+      app_private_key:
+        description: 'GitHub App private key for tap repository access'
+        required: true
+
+permissions: {}
+
+jobs:
+  homebrew:
+    name: Publish Homebrew Formula
+    runs-on: ubuntu-latest
+    concurrency:
+      group: homebrew-publish-${{ inputs.tap_repo }}-${{ inputs.project_name }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    env:
+      TAG: ${{ inputs.tag }}
+      PROJECT_NAME: ${{ inputs.project_name }}
+      FORMULA_DESC: ${{ inputs.description }}
+      BINARY_NAME: ${{ inputs.binary_name }}
+      TAP_REPO: ${{ inputs.tap_repo }}
+      GO_MAIN_PATH: ${{ inputs.go_main_path }}
+      LDFLAGS_MODULE: ${{ inputs.ldflags_module }}
+      HOMEPAGE: ${{ inputs.homepage }}
+      TAP_BRANCH: ${{ inputs.tap_branch }}
+    # No checkout needed — formula is generated from inputs and the source tarball URL.
+    steps:
+      - name: Validate tag format
+        run: |
+          set -euo pipefail
+          if ! [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::TAG does not match expected semver format: ${TAG}"
+            exit 1
+          fi
+          echo "Tag ${TAG} passes format validation"
+
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+
+          # Validate project_name (alphanumeric + hyphens only)
+          if ! [[ "${PROJECT_NAME}" =~ ^[a-zA-Z][a-zA-Z0-9-]*$ ]]; then
+            echo "::error::project_name contains invalid characters: ${PROJECT_NAME}"
+            exit 1
+          fi
+
+          # Validate binary_name (alphanumeric + hyphens only)
+          if ! [[ "${BINARY_NAME}" =~ ^[a-zA-Z][a-zA-Z0-9-]*$ ]]; then
+            echo "::error::binary_name contains invalid characters: ${BINARY_NAME}"
+            exit 1
+          fi
+
+          # Validate tap_repo format (owner/repo)
+          if ! [[ "${TAP_REPO}" =~ ^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$ ]]; then
+            echo "::error::tap_repo must be in owner/repo format: ${TAP_REPO}"
+            exit 1
+          fi
+
+          # Validate go_main_path (must start with ./)
+          if ! [[ "${GO_MAIN_PATH}" =~ ^\./[a-zA-Z0-9_/.-]+$ ]]; then
+            echo "::error::go_main_path must be a relative path starting with ./: ${GO_MAIN_PATH}"
+            exit 1
+          fi
+
+          # Validate homepage URL
+          if ! [[ "${HOMEPAGE}" =~ ^https://[a-zA-Z0-9._/-]+$ ]]; then
+            echo "::error::homepage must be a valid HTTPS URL: ${HOMEPAGE}"
+            exit 1
+          fi
+
+          # Validate description (printable ASCII, no shell/sed metacharacters)
+          if ! [[ "${FORMULA_DESC}" =~ ^[a-zA-Z0-9\ ,.\-\(\)/:]+$ ]]; then
+            echo "::error::description contains invalid characters: ${FORMULA_DESC}"
+            exit 1
+          fi
+
+          # Homebrew audit rejects descriptions starting with an article
+          if [[ "${FORMULA_DESC}" =~ ^(A|An|The)[[:space:]] ]]; then
+            echo "::error::description must not start with an article (A/An/The): ${FORMULA_DESC}"
+            exit 1
+          fi
+
+          # Validate ldflags_module (Go module path characters only)
+          if ! [[ "${LDFLAGS_MODULE}" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+            echo "::error::ldflags_module contains invalid characters: ${LDFLAGS_MODULE}"
+            exit 1
+          fi
+
+          # Validate tap_branch (git branch name characters only)
+          if ! [[ "${TAP_BRANCH}" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+            echo "::error::tap_branch contains invalid characters: ${TAP_BRANCH}"
+            exit 1
+          fi
+
+          echo "All inputs pass validation"
+
+      - name: Download source tarball and compute SHA256
+        id: tarball
+        run: |
+          set -euo pipefail
+
+          # Construct tarball URL from homepage (which is the project's GitHub URL)
+          TARBALL_URL="${HOMEPAGE}/archive/refs/tags/${TAG}.tar.gz"
+          echo "Downloading source tarball: ${TARBALL_URL}"
+
+          HTTP_CODE=$(curl -sL -o /tmp/source.tar.gz -w "%{http_code}" --retry 3 --retry-delay 5 "${TARBALL_URL}")
+
+          if [[ "${HTTP_CODE}" -ne 200 ]]; then
+            echo "::error::Failed to download source tarball (HTTP ${HTTP_CODE}). URL: ${TARBALL_URL}"
+            echo "::notice::Verify that tag ${TAG} exists and the repository is public."
+            exit 1
+          fi
+
+          SHA256=$(sha256sum /tmp/source.tar.gz | cut -d' ' -f1)
+
+          if [[ ${#SHA256} -ne 64 ]]; then
+            echo "::error::SHA256 checksum has unexpected length (${#SHA256} chars, expected 64): ${SHA256}"
+            exit 1
+          fi
+
+          echo "SHA256: ${SHA256}"
+          echo "tarball_url=${TARBALL_URL}" >> "${GITHUB_OUTPUT}"
+          echo "sha256=${SHA256}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate Homebrew formula
+        env:
+          TARBALL_URL: ${{ steps.tarball.outputs.tarball_url }}
+          SHA256: ${{ steps.tarball.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+
+          # Convert project_name to PascalCase for Ruby class name
+          # e.g., complyctl -> Complyctl, comply-ctl -> ComplyCtl
+          CLASS_NAME=$(echo "${PROJECT_NAME}" | sed -E 's/(^|-)([a-z])/\U\2/g')
+
+          # Generate formula file with heredoc. Content is indented by 10 spaces
+          # (matching YAML nesting) and stripped after generation.
+          # NOTE: This template is duplicated in ci_test_homebrew.yml.
+          # Changes here must be mirrored there.
+          cat > "/tmp/${BINARY_NAME}.rb" <<'HEREDOC_END'
+          class __CLASS_NAME__ < Formula
+            desc "__FORMULA_DESC__"
+            homepage "__HOMEPAGE__"
+            url "__TARBALL_URL__"
+            sha256 "__SHA256__"
+            license "Apache-2.0"
+            head "__HOMEPAGE__.git", branch: "main"
+
+            depends_on "go" => :build
+
+            def install
+              ldflags = %W[
+                -X __LDFLAGS_MODULE__.version=#{version}
+                -X __LDFLAGS_MODULE__.buildDate=#{time.iso8601}
+                -X __LDFLAGS_MODULE__.gitTreeState=clean
+              ]
+              system "go", "build", *std_go_args(ldflags:), "__GO_MAIN_PATH__"
+              generate_completions_from_executable(bin/"__BINARY_NAME__", "completion")
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/__BINARY_NAME__ version")
+            end
+          end
+          HEREDOC_END
+
+          # Strip leading indentation (10 spaces from YAML nesting)
+          sed -i 's/^          //' "/tmp/${BINARY_NAME}.rb"
+
+          # Replace placeholder tokens with validated input values
+          sed -i "s|__CLASS_NAME__|${CLASS_NAME}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i "s|__FORMULA_DESC__|${FORMULA_DESC}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i "s|__HOMEPAGE__|${HOMEPAGE}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i "s|__TARBALL_URL__|${TARBALL_URL}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i "s|__SHA256__|${SHA256}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i "s|__LDFLAGS_MODULE__|${LDFLAGS_MODULE}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i "s|__GO_MAIN_PATH__|${GO_MAIN_PATH}|g" "/tmp/${BINARY_NAME}.rb"
+          sed -i "s|__BINARY_NAME__|${BINARY_NAME}|g" "/tmp/${BINARY_NAME}.rb"
+
+          echo "Generated formula:"
+          cat "/tmp/${BINARY_NAME}.rb"
+
+      - name: Audit formula with brew audit --strict
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+
+          # Homebrew is pre-installed on GitHub runners (including ubuntu).
+          # Update to get latest audit rules, with retry for transient failures.
+          brew update --quiet || brew update --quiet
+
+          # Install the formula into a local tap so brew audit can reference it
+          # by name (brew audit no longer accepts file paths directly).
+          TAP_DIR="$(brew --repository)/Library/Taps/local/homebrew-test"
+          mkdir -p "${TAP_DIR}/Formula"
+          cp "/tmp/${BINARY_NAME}.rb" "${TAP_DIR}/Formula/${BINARY_NAME}.rb"
+
+          # Trust the local tap so brew can load formulae from it
+          brew trust local/test
+
+          echo "Running brew audit --strict on generated formula..."
+          brew audit --strict --formula "${BINARY_NAME}"
+          echo "Formula passed brew audit --strict"
+
+          # Clean up temporary tap
+          rm -rf "${TAP_DIR}"
+
+      - name: Prepare tap repository credentials
+        id: tap-info
+        run: |
+          set -euo pipefail
+          # Extract owner and repo name from owner/repo format
+          TAP_OWNER="${TAP_REPO%%/*}"
+          TAP_NAME="${TAP_REPO##*/}"
+          echo "tap_owner=${TAP_OWNER}" >> "${GITHUB_OUTPUT}"
+          echo "tap_name=${TAP_NAME}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.app_client_id }}
+          private-key: ${{ secrets.app_private_key }}
+          repositories: ${{ steps.tap-info.outputs.tap_name }}
+          owner: ${{ steps.tap-info.outputs.tap_owner }} # zizmor: ignore[github-app]
+          permission-contents: write
+
+      - name: Push formula to tap
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+
+          echo "Cloning tap repository: ${TAP_REPO}"
+          gh repo clone "${TAP_REPO}" tap-repo -- --depth 1 --branch "${TAP_BRANCH}"
+          cd tap-repo
+
+          mkdir -p Formula
+          cp "/tmp/${BINARY_NAME}.rb" "Formula/${BINARY_NAME}.rb"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "Formula/${BINARY_NAME}.rb"
+
+          if git diff --cached --quiet; then
+            echo "Formula is already up-to-date. No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(formula): update ${PROJECT_NAME} to ${VERSION}"
+
+          # Use gh CLI credential helper (token via env var, never persisted)
+          gh auth setup-git
+          git push origin "${TAP_BRANCH}"
+
+          echo "Successfully published ${BINARY_NAME} ${VERSION} to ${TAP_REPO}"
+
+          {
+            echo "### Homebrew Formula Published"
+            echo "- **Project**: ${PROJECT_NAME}"
+            echo "- **Version**: ${TAG}"
+            echo "- **Tap**: ${TAP_REPO}"
+            echo "- **Formula**: Formula/${BINARY_NAME}.rb"
+          } >> "${GITHUB_STEP_SUMMARY}"

@@ -1,0 +1,148 @@
+# Centralized Renovate Runner
+# ===========================
+# Runs Renovate via GitHub Actions on a daily schedule to manage Go
+# toolchain patch updates across configured repositories. Target repos
+# and update rules are defined in renovate-config.js and
+# go-toolchain-patches.json.
+#
+# Authentication uses a dedicated GitHub App (complytime-renovate[bot])
+# with minimal permissions (contents:write, pull-requests:write).
+# The App is installed only on the target Go repositories — not on
+# org-infra itself.
+
+name: Renovate
+
+on:
+  schedule:
+    - cron: "30 5 * * *"
+  workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:dry_run is an intentional manual operational control for Renovate simulation modes; this workflow produces no build output.
+    inputs:
+      dry_run:
+        description: >-
+          Dry-run mode: "full" (simulate PR creation), "lookup"
+          (discover updates only), or "none" for normal operation.
+        required: false
+        type: choice
+        default: none
+        options:
+          - none
+          - full
+          - lookup
+
+permissions: {}
+
+jobs:
+  renovate:
+    name: Renovate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout org-infra
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.RENOVATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }} # zizmor: ignore[github-app]
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Run Renovate
+        uses: renovatebot/github-action@9fea9f0fbf80401026d11d03911d62b1f70fef1f # v46.3.3
+        with:
+          configurationFile: renovate-config.js
+          token: ${{ steps.generate-token.outputs.token }}
+        env:
+          LOG_LEVEL: info
+          RENOVATE_DRY_RUN: ${{ inputs.dry_run != 'none' && inputs.dry_run || '' }}
+          RENOVATE_REPORT_TYPE: file
+          RENOVATE_REPORT_PATH: /tmp/renovate-report.json
+
+      - name: Generate job summary
+        if: always()
+        shell: bash
+        run: |
+          REPORT="/tmp/renovate-report.json"
+          if [ ! -f "$REPORT" ]; then
+            echo "No Renovate report found; skipping summary."
+            exit 0
+          fi
+          DRY_RUN="${{ inputs.dry_run }}"
+
+          {
+            echo "## Renovate Run Summary"
+            echo ""
+            if [ -n "$DRY_RUN" ] && [ "$DRY_RUN" != "none" ]; then
+              echo "> **Mode:** dry-run (\`${DRY_RUN}\`) — no changes were made"
+              echo ""
+            fi
+
+            # --- Repository overview table ---
+            echo "### Repositories"
+            echo ""
+            echo "| Repository | Go Version | Deps | PRs | Status |"
+            echo "|:-----------|:-----------|-----:|----:|:-------|"
+
+            jq -r '
+              .repositories | to_entries[] |
+              (.value.packageFiles.gomod // []) as $gomod |
+              ([($gomod[]?.deps // [])[] | select(.depName == "go" and .depType == "golang") | .currentValue] | unique | join(", ")) as $versions |
+              ([($gomod[]?.deps // []) | length] | add // 0) as $deps |
+              (.value.branches | length) as $prs |
+              (if $prs > 0 then "\u26a0\ufe0f Updates"
+               elif ($gomod | length) == 0 then "Skipped (no go.mod)"
+               else "\u2705 Up to date"
+               end) as $status |
+              "| \(.key) | \(if $versions == "" then "-" else $versions end) | \($deps) | \($prs) | \($status) |"
+            ' "$REPORT"
+
+            # --- PRs created/updated ---
+            PR_COUNT=$(jq '[.repositories[].branches[]] | length' "$REPORT")
+            if [ "$PR_COUNT" -gt 0 ]; then
+              echo ""
+              echo "### Pull Requests"
+              echo ""
+              echo "| Repository | Branch | Update | From | To |"
+              echo "|:-----------|:-------|:-------|:-----|:---|"
+
+              jq -r '
+                .repositories | to_entries[] |
+                .key as $repo |
+                .value.branches[]? |
+                .branchName as $branch |
+                (.upgrades // [])[] |
+                "| \($repo) | \($branch) | \(.depName // .packageName // "-") | \(.currentVersion // .currentValue // "-") | \(.newVersion // .newValue // "-") |"
+              ' "$REPORT"
+            fi
+
+            # --- Problems ---
+            PROBLEM_COUNT=$(jq '[.problems[], .repositories[].problems[]] | length' "$REPORT")
+            if [ "$PROBLEM_COUNT" -gt 0 ]; then
+              echo ""
+              echo "### Warnings"
+              echo ""
+              jq -r '
+                [.repositories | to_entries[] | .key as $repo | .value.problems[] | "\($repo): \(.msg)"] |
+                unique[] | "- \(.)"
+              ' "$REPORT"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Renovate report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: renovate-report
+          path: /tmp/renovate-report.json
+          if-no-files-found: ignore
+          retention-days: 30

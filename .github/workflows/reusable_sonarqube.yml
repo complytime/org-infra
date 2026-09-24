@@ -9,31 +9,41 @@ on:
       sonar_organization:
         required: true
         type: string
-        description: 'The SonarCloud organization key (e.g., rh-psce).'
+        description: "The SonarCloud organization key (e.g., rh-psce)."
       sonar_project_key:
-        required: true    # Make this mandatory for clarity
+        required: true # Make this mandatory for clarity
         type: string
-        description: 'The SonarCloud project key (e.g., rh-psce_complyctl).'
+        description: "The SonarCloud project key (e.g., rh-psce_complyctl)."
       coverage_artifact_name:
-        required: false   # Optional, as some repos might not have coverage
+        required: false # Optional, as some repos might not have coverage
         type: string
         default: coverage
-        description: 'The name of the coverage artifact that was uploaded by the caller (e.g., coverage).'
+        description: "The name of the coverage artifact that was uploaded by the caller (e.g., coverage)."
       coverage_file_path:
-        required: false   # Optional, as some repos might not have coverage
+        required: false # Optional, as some repos might not have coverage
         type: string
-        description: 'The path to the generated coverage file (e.g., coverage.out).'
+        description: "The path to the generated coverage file (e.g., coverage.out)."
       language_scanner_property:
         required: false
         type: string
-        description: 'The Sonar Scanner property for coverage, e.g., sonar.typescript.lcov.reportPaths.'
+        description: "The Sonar Scanner property for coverage, e.g., sonar.typescript.lcov.reportPaths."
+      sonar_sources:
+        required: false
+        type: string
+        default: ""
+        description: "Comma-separated list of source directories (e.g., src/,lib/). Maps to sonar.sources."
+      sonar_tests:
+        required: false
+        type: string
+        default: ""
+        description: "Comma-separated list of test directories (e.g., tests/). Maps to sonar.tests."
     secrets:
       SONAR_TOKEN:
         required: true
-        description: 'The SonarCloud analysis token.'
+        description: "The SonarCloud analysis token."
       source_token:
         required: true
-        description: 'GitHub Token'
+        description: "GitHub Token"
 
 permissions:
   contents: none
@@ -50,13 +60,14 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: "${{ github.event.repository.full_name }}"
           fetch-depth: 0 # This may also capture vulnerabilities unrelated to the PR.
+          persist-credentials: false
 
       - name: Download coverage file
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         if: ${{ inputs.coverage_file_path != '' }}
         env:
           COVERAGE_ARTIFACT_NAME: "${{ inputs.coverage_artifact_name }}"
@@ -67,8 +78,9 @@ jobs:
 
       # The calling workflow MUST ensure the coverage file exists before calling this.
       # This step just runs the SonarCloud analysis with the provided inputs.
+      # Inject dynamic coverage properties only if path is provided
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
+        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
         env:
           GITHUB_TOKEN: ${{ secrets.source_token }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -76,11 +88,14 @@ jobs:
           SONAR_PROJECT_KEY: ${{ inputs.sonar_project_key }}
           COVERAGE_FILE_PATH: ${{ inputs.coverage_file_path }}
           LANGUAGE_SCANNER_PROPERTY: ${{ inputs.language_scanner_property }}
+          SONAR_SOURCES: ${{ inputs.sonar_sources }}
+          SONAR_TESTS: ${{ inputs.sonar_tests }}
         with:
           projectBaseDir: ${{ github.workspace }} # Ensure scan starts at the repo root
           args: >
-            "-Dsonar.organization=${{ env.SONAR_ORGANIZATION }}"
-            "-Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}"
-            "-Dsonar.qualitygate.wait=true"
-            # Inject dynamic coverage properties only if path is provided
-            "${{ env.COVERAGE_FILE_PATH && format('-D{0}={1}', env.LANGUAGE_SCANNER_PROPERTY, env.COVERAGE_FILE_PATH) || '' }}"
+            -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
+            -Dsonar.qualitygate.wait=true
+            ${{ env.COVERAGE_FILE_PATH && format('-D{0}={1}', env.LANGUAGE_SCANNER_PROPERTY, env.COVERAGE_FILE_PATH) || '' }}
+            ${{ env.SONAR_SOURCES && format('-Dsonar.sources={0}', env.SONAR_SOURCES) || '' }}
+            ${{ env.SONAR_TESTS && format('-Dsonar.tests={0}', env.SONAR_TESTS) || '' }}

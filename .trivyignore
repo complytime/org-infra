@@ -1,0 +1,9 @@
+# Trivy ignore file
+# https://trivy.dev/latest/docs/configuration/filtering/#trivyignore
+#
+# AVD-DS-0026: "Add HEALTHCHECK instruction in your Dockerfile"
+# Suppressed for .github/ci-tests/ghcr-publish/Containerfile: this is a one-shot
+# CI test image (runs `cat /test-marker` and exits) used only to validate the
+# reusable_publish_ghcr.yml workflow. A HEALTHCHECK is meaningless for a
+# non-service container that is never run as a long-lived process.
+AVD-DS-0026

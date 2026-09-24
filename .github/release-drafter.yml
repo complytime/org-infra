@@ -1,0 +1,152 @@
+# SPDX-License-Identifier: Apache-2.0
+---
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+
+category-template: |
+  ### $TITLE
+
+template: |
+  ## org-infra $RESOLVED_VERSION
+
+  Central **reusable GitHub Actions workflows**, CI templates, **compliance** policy assets, and **org sync** tooling. Downstream repos usually consume this repo via workflow `uses:` pins or version tags.
+
+  #### Before you upgrade
+
+  - Treat **workflow YAML** updates as potentially **breaking for every consumer** until you’ve reviewed them.
+  - Use the **Workflows & GitHub Actions** section below for PRs that touched pipelines; for exact paths and hunks, open the compare link and narrow **Files changed** to `.github/workflows/`.
+
+  **[View full diff: `$PREVIOUS_TAG` → `v$RESOLVED_VERSION`](https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION)**
+
+  ## Changes
+
+  $CHANGES
+
+  ---
+
+  **Compare:** [`$PREVIOUS_TAG`…`v$RESOLVED_VERSION`](https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION)
+
+  **Thanks** to $CONTRIBUTORS for this release.
+
+change-template: "- $TITLE — [#$NUMBER]($URL) · @$AUTHOR"
+no-changes-template: |
+  *No pull requests are included in this release since the previous tag. If that’s unexpected, check that PRs are merged to the default branch and not labeled `skip-changelog`.*
+sort-by: merged_at
+sort-direction: ascending
+
+categories:
+  # --- pre-filters ---
+  - type: "pre-exclude"
+    when:
+      label: "skip-changelog"
+
+  # --- intent-based categories (checked first so a feat: or fix: PR
+  #     is classified by intent even when it also touches workflow files) ---
+  - title: "Breaking changes"
+    semver-increment: "major"
+    when:
+      labels:
+        - "breaking"
+        - "major"
+  - title: "Features"
+    semver-increment: "minor"
+    when:
+      labels:
+        - "feature"
+        - "enhancement"
+  - title: "Bug fixes"
+    semver-increment: "patch"
+    when:
+      labels:
+        - "fix"
+        - "bugfix"
+        - "bug"
+  - title: "Performance"
+    semver-increment: "patch"
+    when:
+      label: "performance"
+
+  # --- area-based categories (catch remaining PRs that have no intent label) ---
+  - title: "Workflows & GitHub Actions"
+    semver-increment: "patch"
+    collapse-after: 12
+    when:
+      label: "workflows"
+  - title: "Compliance & policy assets"
+    semver-increment: "patch"
+    collapse-after: 8
+    when:
+      label: "compliance"
+  - title: "Sync & repository configuration"
+    semver-increment: "patch"
+    collapse-after: 8
+    when:
+      label: "sync-config"
+
+  # --- catch-all maintenance bucket ---
+  - title: "Maintenance"
+    semver-increment: "patch"
+    when:
+      labels:
+        - "infrastructure"
+        - "automation"
+        - "documentation"
+        - "dependencies"
+        - "maintenance"
+        - "revert"
+
+  # --- version-only labels (no changelog section) ---
+  - type: "version-resolver"
+    semver-increment: "minor"
+    when:
+      label: "minor"
+  - type: "version-resolver"
+    semver-increment: "patch"
+    when:
+      label: "patch"
+
+exclude-contributors:
+  - "github-actions[bot]"
+  - "dependabot[bot]"
+  - "complytime-renovate[bot]"
+
+version-resolver:
+  default: patch
+
+autolabeler:
+  - label: "workflows"
+    files:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+  - label: "compliance"
+    files:
+      - "compliance/**"
+  - label: "sync-config"
+    files:
+      - "sync-config.yml"
+      - "complytime.yaml"
+      - "scripts/**"
+  - label: "automation"
+    title:
+      - "/^(build|ci|refactor|test).*/i"
+  - label: "enhancement"
+    title:
+      - "/^(style).*/i"
+  - label: "documentation"
+    title:
+      - "/^(docs).*/i"
+  - label: "feature"
+    title:
+      - "/^(feat).*/i"
+  - label: "fix"
+    title:
+      - "/^(fix).*/i"
+  - label: "infrastructure"
+    title:
+      - "/^(infrastructure).*/i"
+  - label: "maintenance"
+    title:
+      - "/^(chore|maintenance).*/i"
+  - label: "revert"
+    title:
+      - "/^(revert).*/i"
