@@ -102,10 +102,12 @@ jobs:
             ATTESTATIONS="auto"
             DEST_TAG=""
           fi
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "complypack_version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "generate_attestations=${ATTESTATIONS}" >> "$GITHUB_OUTPUT"
-          echo "release_tag=${DEST_TAG}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=${TAG}"
+            echo "complypack_version=${VERSION}"
+            echo "generate_attestations=${ATTESTATIONS}"
+            echo "release_tag=${DEST_TAG}"
+          } >> "$GITHUB_OUTPUT"
 
   publish-ghcr:
     needs: [prepare]

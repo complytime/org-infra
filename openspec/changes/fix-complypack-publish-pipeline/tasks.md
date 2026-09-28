@@ -101,9 +101,9 @@
 - [x] 2.11 In `.github/workflows/ci_publish_complypack.yml`, remove the
   `release: types: [published]` trigger from the `on:` block. Add a comment
   noting that manual `workflow_dispatch` from a tag replaces the release
-  trigger (e.g., `# Release-triggered promotion removed -- use
-  # workflow_dispatch with promote_quay=true from a tag ref instead.
-  # See non-goal: App token automation is a follow-up.`).
+  trigger with a YAML comment explaining the rationale (release-triggered
+  promotion removed, use workflow_dispatch with promote_quay=true from a
+  tag ref instead, App token automation is a follow-up).
   Verify: the `release` trigger is removed and the comment explains the
   rationale.
 
@@ -138,7 +138,7 @@
   verify each produces the expected job execution sequence:
 
   | Trigger | Expected Job Sequence | Key Parameters |
-  |---|---|---|
+  | --- | --- | --- |
   | `push` to main (policy path match) | `publish-ghcr` -> `sign-ghcr` | tag: `sha-<commit>`, version: `0.0.0-dev`, attestations: `auto` |
   | `workflow_dispatch` (`promote_quay=false`) | `publish-ghcr` -> `sign-ghcr` | tag: `tag_override` or `sha-<commit>`, version: `0.0.0-dev`, attestations: `auto` |
   | `workflow_dispatch` (`promote_quay=true`, from tag) | `publish-ghcr` -> `sign-ghcr` -> `promote-quay` | tag: release tag, version: from tag, attestations: `true` |

@@ -107,10 +107,10 @@ Consumer workflow specific to org-infra's ampel branch-protection policies.
 - `push` to `main` with changes in `compliance/ampel/branch-protection/**`
 - `workflow_dispatch` with the following inputs:
 
-| Input          | Required                 | Description                                                                 |
-|----------------|--------------------------|-----------------------------------------------------------------------------|
-| `tag_override` | no                       | Custom GHCR tag (leave empty for default `sha-<commit>`)                    |
-| `promote_quay` | no                       | Rebuild and publish to GHCR, then promote to Quay                           |
+| Input          | Required                 | Description                                                                    |
+|----------------|--------------------------|--------------------------------------------------------------------------------|
+| `tag_override` | no                       | Custom GHCR tag (leave empty for default `sha-<commit>`)                       |
+| `promote_quay` | no                       | Rebuild and publish to GHCR, then promote to Quay                              |
 | `release_tag`  | when `promote_quay=true` | Quay destination tag (defaults to `github.ref_name` when dispatched from a tag) |
 
 ## Cutting a Release
@@ -183,7 +183,7 @@ promotes to Quay.
 > follow-up. Until then, manual dispatch from a tag is the canonical
 > promotion path.
 
-### Steps
+### Promotion Steps
 
 1. **Ensure a release tag exists** for the commit you want to promote.
 
@@ -222,7 +222,7 @@ promotes to Quay.
 
 ## Local Testing
 
-### Prerequisites
+### Local Prerequisites
 
 ```bash
 # Install the complypack CLI
