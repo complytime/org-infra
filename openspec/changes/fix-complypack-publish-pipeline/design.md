@@ -180,6 +180,27 @@ from the tag (D4).
 semver with a pre-release identifier and cannot be confused with any
 release version.
 
+### D8: Pin Go version to minor series (1.26)
+
+**Decision**: Set `go_version: "1.26"` in the consumer workflow, replacing
+the current `"1.26.4"` patch pin.
+
+**Alternatives considered**:
+
+- *Use `"stable"`*: Rejected. `stable` resolves to the latest Go release
+  (currently 1.27.x), which could introduce breaking changes from a minor
+  version jump. The complypack CLI is built with Go 1.26.x and has not been
+  tested with 1.27.
+- *Match complypack's go.mod version (`"1.26.8"`)*: Rejected. Pinning to a
+  specific patch requires manual updates when complypack bumps its Go
+  version. A minor-series pin automatically picks up patch-level security
+  fixes without manual intervention.
+
+**Rationale**: `"1.26"` tells `setup-go` to install the latest 1.26.x patch,
+which gets security fixes while staying on the same minor series as
+complypack v0.1.0. This avoids both the staleness of a patch pin and the
+risk of a minor version jump.
+
 ## Risks / Trade-offs
 
 **Rebuilding produces a different OCI digest than the tested artifact**:
@@ -192,11 +213,10 @@ after the release publish step. The complypack artifact type is opaque
 content (tar+gzip of JSON files) — content correctness depends on the
 source files, not the OCI metadata.
 
-**Go version drift**: The consumer pins `go_version: "1.26.4"` but
-complypack v0.1.0 uses Go 1.26.8 in its go.mod. `go install` should work
-with any recent Go version, but a mismatch could cause unexpected behavior.
-Mitigation: update `go_version` to `"stable"` or match complypack's
-go.mod version.
+**Go version drift**: The consumer previously pinned `go_version: "1.26.4"`
+while complypack v0.1.0 uses Go 1.26.8 in its go.mod. Decision D8 addresses
+this by pinning to the minor series (`"1.26"`), which automatically picks up
+the latest 1.26.x patch including security fixes.
 
 **Tag protection rules**: If the org later enables tag protection rules in
 GitHub, `ref_protected` would become `true` for protected tags, making the
