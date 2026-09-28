@@ -1,4 +1,4 @@
-# Proposal
+# Proposal: Fix Complypack Publish Pipeline
 
 ## Why
 
@@ -32,6 +32,11 @@ release).
 - **Force attestations for release builds**: Pass
   `generate_attestations: "true"` for release builds since the `auto` policy
   disables attestations on tags (where `ref_protected` is false).
+- **Remove `release: published` trigger from `ci_publish_complypack.yml`**:
+  The trigger is a dead code path -- the GITHUB_TOKEN limitation prevents
+  automated release events, and manual dispatch is now the canonical
+  promotion path. Removing it eliminates a silent no-op that could confuse
+  operators.
 - **Remove stale root `complypack.yaml`**: The reusable workflow generates
   its own config at build time; the root file is unused and contradicts the
   workflow values.
