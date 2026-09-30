@@ -104,6 +104,14 @@ This requires a two-step verification approach:
   check-only and update modes (read API access only). No GitHub App or
   additional secrets are required.
 
+## Documentation Impact
+
+- **`AGENTS.md`**: Update Active Technologies to list
+  `suzuki-shunsuke/pinact-action@v3.0.0` and pinact CLI. Add a Recent Changes
+  entry for this change.
+- **`CHANGELOG.md`**: Add entry documenting the new pinact CI hard gate and
+  `.pinact.yaml` org-wide configuration.
+
 ## Non-goals
 
 - **Auto-committing fixes**: This change does not auto-update or auto-pin

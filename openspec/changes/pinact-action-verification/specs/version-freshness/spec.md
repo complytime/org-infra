@@ -1,3 +1,6 @@
+This spec defines requirements for detecting outdated GitHub Actions versions
+and enforcing a minimum release age for supply chain protection.
+
 ## ADDED Requirements
 
 ### Requirement: Outdated action versions SHOULD produce warnings
@@ -15,7 +18,7 @@ version, a warning annotation SHOULD be emitted on the PR without failing CI.
 
 - **GIVEN** a workflow file containing `uses: actions/checkout@<SHA> # v3.5.1`
 - **WHEN** `v7.0.1` is the latest release of `actions/checkout`
-- **THEN** the freshness check SHALL emit a `::warning` annotation identifying the outdated action
+- **THEN** the freshness check SHALL emit a `::warning` annotation containing the file path, current version, and latest available version of the outdated action
 - **AND** the CI job SHALL NOT fail
 
 #### Scenario: Freshness check failure does not block CI
@@ -24,7 +27,7 @@ version, a warning annotation SHOULD be emitted on the PR without failing CI.
 - **WHEN** the step completes
 - **THEN** the CI job SHALL NOT fail (the step uses `continue-on-error: true`)
 
-### Requirement: Minimum release age MUST be enforced
+### Requirement: Minimum release age SHALL be enforced
 
 Actions SHALL NOT be pinned to versions released fewer than 3 days ago. This
 provides a supply chain cooldown window against compromised newly-published

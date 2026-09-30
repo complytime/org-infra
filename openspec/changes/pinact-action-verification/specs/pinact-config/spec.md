@@ -1,3 +1,6 @@
+This spec defines requirements for the `.pinact.yaml` configuration file and its
+org-wide distribution via the sync mechanism.
+
 ## ADDED Requirements
 
 ### Requirement: Org-wide pinact configuration synced to all repositories
@@ -21,9 +24,15 @@ defaults for minimum release age and exclusion rules.
 
 #### Scenario: Repository with local override
 
-- **GIVEN** a downstream repository has a local `.pinact.yaml` with different settings
-- **WHEN** pinact runs
-- **THEN** the local configuration SHALL take precedence over the synced default
+- **GIVEN** a downstream repository requires different pinact settings
+- **WHEN** the repository is added to the `exclude_repos` list for the `.pinact.yaml` sync entry in `sync-config.yml`
+- **AND** the repository maintains a local `.pinact.yaml` with its own settings
+- **THEN** the local configuration SHALL take precedence because the sync mechanism will not overwrite it
+
+> **Note**: The sync mechanism copies files unconditionally. Repositories that need
+> local overrides MUST be added to `exclude_repos` for the `.pinact.yaml` entry in
+> `sync-config.yml` to prevent their local configuration from being overwritten on
+> each sync run.
 
 ## MODIFIED Requirements
 

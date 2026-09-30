@@ -118,6 +118,7 @@ Replace `model-name` with the actual model identifier (e.g., `claude-opus-4-6`).
 - Bash (shell scripts in GitHub Actions `run:` blocks), YAML (GitHub Actions workflow syntax) + GitHub Actions platform, `gh` CLI (pre-installed on runners), `jq` (pre-installed on runners), `curl` (pre-installed on runners), `actions/dependency-review-action@v4.9.0`, `peter-evans/create-or-update-comment@v5.0.0`, `actions/github-script@v8.0.0`, `actions/checkout@v6.0.2`, `tj-actions/changed-files@v47.0.5` (006-robust-dependabot-approval)
 - N/A (no persistent storage; data flows via GitHub Actions outputs and environment variables) (006-robust-dependabot-approval)
 - `renovatebot/github-action@v46.1.16` (self-hosted Renovate runner), `actions/create-github-app-token@v3.2.0` (GitHub App authentication) + JavaScript config (`renovate-config.js`), JSON preset (`go-toolchain-patches.json`) (go-toolchain-patch-automation)
+- `suzuki-shunsuke/pinact-action@v3.0.0` (GitHub Actions version verification), pinact CLI (Go binary for SHA verification and version freshness detection) (337-pinact-action-verification)
 
 ## Recent Changes
 - 004-standardize-ai-tooling: Added YAML (GitHub Actions syntax), Markdown, Python 3.x (sync scripts only) + OpenCode (agent), OpenSpec/SpecKit (spec frameworks — plugin-managed), `gh` CLI (PR review command), GitPython + PyYAML + requests (sync script — existing)
@@ -127,6 +128,7 @@ Replace `model-name` with the actual model identifier (e.g., `claude-opus-4-6`).
 - go-toolchain-patch-automation: Added `ci_renovate.yml` (centralized self-hosted Renovate runner for Go version patch updates). Uses `renovatebot/github-action@v46.1.16` with a dedicated GitHub App (`complytime-renovate[bot]`, `contents:write` + `pull-requests:write`). Shared preset (`go-toolchain-patches.json`) restricts to Go version patch updates only (matches `go` and `toolchain` directives via `matchDepNames`). Global config (`renovate-config.js`) autodiscovers org repos via `globalExtends`.
 - 478-stale-review-alerts: Added `reusable_stale_reviews.yml` (detect and flag PRs with review requests pending beyond a configurable business-day threshold) and `ci_stale_reviews.yml` (weekday scheduled caller). Uses `actions/github-script@v9.0.0` (SHA-pinned) with inline business-day calculation. Staged rollout via `sync-config.yml` exclusions.
 - 500-reusable-homebrew-workflow: Added `reusable_release_homebrew.yml` (generate, validate with `brew audit --strict`, and push source-build Homebrew formulae to a tap repository via GitHub App token) and `ci_test_homebrew.yml` (macOS-based CI self-test for formula generation and input validation). Uses `actions/create-github-app-token@v3.2.0`, `actions/checkout@v7.0.1`.
+- 337-pinact-action-verification: Added `pinact` job to `reusable_ci.yml` (SHA verification hard gate + version freshness warnings) and `ci_test_pinact.yml` (self-test workflow). Added `.pinact.yaml` (org-wide pinact configuration synced to all repos). Uses `suzuki-shunsuke/pinact-action@v3.0.0` with `skip_pinact` emergency disable input.
 
 ## Convention Packs
 

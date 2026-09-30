@@ -92,12 +92,12 @@ jobs:
           make build-ampel-provider
 
       - name: Install snappy
-        uses: carabiner-dev/actions/install/snappy@d41fe10fe88deaf493ce026007da73738b9f570c
+        uses: carabiner-dev/actions/install/snappy@d41fe10fe88deaf493ce026007da73738b9f570c # v1.3.0
         with:
           install-dir: ${{ env.CARABINER_INSTALL_DIR }}
 
       - name: Install ampel
-        uses: carabiner-dev/actions/install/ampel@d41fe10fe88deaf493ce026007da73738b9f570c
+        uses: carabiner-dev/actions/install/ampel@d41fe10fe88deaf493ce026007da73738b9f570c # v1.3.0
         with:
           install-dir: ${{ env.CARABINER_INSTALL_DIR }}
 
