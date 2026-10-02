@@ -4,6 +4,17 @@
 
 ### Added
 
+- **Pinact action version verification**: Added `pinact` job to
+  `reusable_ci.yml` as a CI hard gate for GitHub Actions SHA verification
+  and version comment validation, plus advisory version freshness warnings.
+  Added `.pinact.yaml` org-wide configuration (3-day minimum release age)
+  synced to all downstream repos. Added `ci_test_pinact.yml` self-test
+  workflow. Includes `skip_pinact` emergency disable input. Uses
+  `suzuki-shunsuke/pinact-action@v3.0.0`. Resolves #337.
+  - Spec: `openspec/changes/pinact-action-verification/specs/sha-verification/spec.md`
+  - Spec: `openspec/changes/pinact-action-verification/specs/version-freshness/spec.md`
+  - Spec: `openspec/changes/pinact-action-verification/specs/pinact-config/spec.md`
+
 - **Project board review-status advance**: The Compliance Automation
   planning board sync moves items from Ready for Review to In Review when
   a non-author human comments or submits a PR review after the Status

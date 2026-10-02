@@ -1,0 +1,17 @@
+---
+# Org-wide pinact configuration for action version verification.
+# Synced to all downstream repositories via sync-config.yml.
+# Repos needing local overrides must be added to exclude_repos
+# in sync-config.yml for this file.
+version: 3
+min_age:
+  value: 3
+ignore_actions:
+  # Reusable workflows are consumed cross-repo via @main by design.
+  # This is the standard org pattern for all downstream repositories.
+  - name: "complytime/org-infra/.github/workflows/.*"
+    ref: "main"
+  # aquasecurity org has IP allowlists blocking GitHub runners
+  # from API access, preventing SHA-to-version verification.
+  - name: "aquasecurity/trivy-action"
+    ref: ".*"

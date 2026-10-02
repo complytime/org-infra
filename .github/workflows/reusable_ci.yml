@@ -2,13 +2,21 @@
 name: Reusable CI
 
 # --------------------------------------------------------------------------
-# Reusable CI workflow: runs MegaLinter and PR title validation.
-# If linter config files are missing locally, fetches org defaults
-# from org-infra as a fallback. See sync-config.yml for the canonical
-# list of org-managed configs.
+# Reusable CI workflow: runs MegaLinter, PR title validation, and pinact
+# action version verification. If linter config files are missing locally,
+# fetches org defaults from org-infra as a fallback. See sync-config.yml
+# for the canonical list of org-managed configs.
 # --------------------------------------------------------------------------
 on:
   workflow_call:
+    inputs:
+      skip_pinact:
+        description: >-
+          Emergency escape hatch to bypass pinact verification.
+          Set to true if the pinact job causes false positives.
+        type: boolean
+        required: false
+        default: false
 
 # This workflow is passive so ensure the minimal permissions even if the
 # inherited token is more lenient.
@@ -109,3 +117,47 @@ jobs:
           VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           GITHUB_COMMENT_REPORTER: false
           GOTOOLCHAIN: auto
+
+  pinact:
+    name: Verify action versions
+    if: ${{ !inputs.skip_pinact }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify action versions
+        # min_age threshold is read from .pinact.yaml (single source of truth).
+        uses: suzuki-shunsuke/pinact-action@896d595f299e71d65b9d28349d6956abe144390a # v3.0.0
+        with:
+          fix: "false"
+          verify: "true"
+          verify_min_age: "true"
+          github_token: ${{ github.token }}
+
+      - name: Check action freshness
+        uses: suzuki-shunsuke/pinact-action@896d595f299e71d65b9d28349d6956abe144390a # v3.0.0
+        continue-on-error: true
+        with:
+          update: "true"
+          skip_push: "true"
+          github_token: ${{ github.token }}
+
+      - name: Report outdated actions
+        if: always()
+        run: |
+          modified=$(git diff --name-only)
+          if [ -n "$modified" ]; then
+            echo "::warning::Outdated action versions detected in the following files:"
+            echo "$modified" | while IFS= read -r file; do
+              echo "  - $file"
+              echo "::warning file=$file::Action versions in this file can be updated by pinact"
+            done
+            git checkout -- .
+          else
+            echo "All action versions are up to date"
+          fi

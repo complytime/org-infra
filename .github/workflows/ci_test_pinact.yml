@@ -1,0 +1,219 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# CI Test: Pinact Verification
+# ======================================
+# Validates that the pinact action-version verification job in
+# reusable_ci.yml works correctly. Creates temporary workflow
+# fixture files with known-good and known-bad action references,
+# runs pinact-action against them via a scoped config, and
+# verifies the expected outcomes.
+#
+# Uses the same SHA-pinned pinact-action as the production job
+# so Dependabot can track version updates.
+
+name: Test Pinact Verification
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ci_test_pinact.yml"
+      - ".github/workflows/reusable_ci.yml"
+      - ".pinact.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/ci_test_pinact.yml"
+      - ".github/workflows/reusable_ci.yml"
+      - ".pinact.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  test-valid-actions:
+    name: Verify valid SHA-pinned actions pass
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create valid fixture
+        run: |
+          set -euo pipefail
+          mkdir -p test-fixtures
+          # Fixture is built via printf to avoid pinact scanning
+          # the heredoc content in this workflow file itself.
+          SHA="3d3c42e5aac5ba805825da76410c181273ba90b1"
+          TAG="v7.0.1"
+          printf '%s\n' \
+            "name: Valid Test" \
+            "on: push" \
+            "jobs:" \
+            "  test:" \
+            "    runs-on: ubuntu-latest" \
+            "    steps:" \
+            "      - uses: actions/checkout@${SHA} # ${TAG}" \
+            > test-fixtures/valid.yml
+
+      - name: Create test config scoped to fixtures
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            "version: 3" \
+            "files:" \
+            "  - pattern: \"test-fixtures/*.yml\"" \
+            > .pinact-test.yaml
+
+      - name: Run pinact verify on valid fixture
+        uses: suzuki-shunsuke/pinact-action@896d595f299e71d65b9d28349d6956abe144390a # v3.0.0
+        with:
+          fix: "false"
+          verify: "true"
+          config: .pinact-test.yaml
+          github_token: ${{ github.token }}
+
+      - name: Clean up
+        if: always()
+        run: rm -rf test-fixtures .pinact-test.yaml
+
+  test-invalid-comment:
+    name: Verify mismatched version comment fails
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create invalid fixture
+        run: |
+          set -euo pipefail
+          mkdir -p test-fixtures
+          # SHA 3d3c42e5... resolves to v7.0.1, NOT v3.0.0.
+          # pinact --verify should detect the mismatch and fail.
+          # Fixture is built via printf to avoid pinact scanning
+          # the heredoc content in this workflow file itself.
+          SHA="3d3c42e5aac5ba805825da76410c181273ba90b1"
+          WRONG_TAG="v3.0.0"
+          printf '%s\n' \
+            "name: Invalid Test" \
+            "on: push" \
+            "jobs:" \
+            "  test:" \
+            "    runs-on: ubuntu-latest" \
+            "    steps:" \
+            "      - uses: actions/checkout@${SHA} # ${WRONG_TAG}" \
+            > test-fixtures/invalid.yml
+
+      - name: Create test config scoped to fixtures
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            "version: 3" \
+            "files:" \
+            "  - pattern: \"test-fixtures/*.yml\"" \
+            > .pinact-test.yaml
+
+      - name: Run pinact verify on invalid fixture (expect failure)
+        id: pinact_verify
+        continue-on-error: true
+        uses: suzuki-shunsuke/pinact-action@896d595f299e71d65b9d28349d6956abe144390a # v3.0.0
+        with:
+          fix: "false"
+          verify: "true"
+          config: .pinact-test.yaml
+          github_token: ${{ github.token }}
+
+      - name: Assert pinact failed on mismatched comment
+        env:
+          VERIFY_OUTCOME: ${{ steps.pinact_verify.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$VERIFY_OUTCOME" = "success" ]; then
+            echo "::error::pinact verify should have failed on mismatched version comment"
+            exit 1
+          fi
+          echo "pinact verify failed as expected — mismatched comment detected"
+
+      - name: Clean up
+        if: always()
+        run: rm -rf test-fixtures .pinact-test.yaml
+
+  test-freshness-warning:
+    name: Detect outdated action versions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create outdated fixture
+        run: |
+          set -euo pipefail
+          mkdir -p test-fixtures
+          # v4.2.2 is an older version of actions/checkout.
+          # pinact --update should detect a newer version is available
+          # and modify the file.
+          # Fixture is built via printf to avoid pinact scanning
+          # the heredoc content in this workflow file itself.
+          SHA="11bd71901bbe5b1630ceea73d27597364c9af683"
+          OLD_TAG="v4.2.2"
+          printf '%s\n' \
+            "name: Outdated Test" \
+            "on: push" \
+            "jobs:" \
+            "  test:" \
+            "    runs-on: ubuntu-latest" \
+            "    steps:" \
+            "      - uses: actions/checkout@${SHA} # ${OLD_TAG}" \
+            > test-fixtures/outdated.yml
+
+      - name: Save original fixture for comparison
+        run: cp test-fixtures/outdated.yml test-fixtures/outdated.yml.orig
+
+      - name: Create test config scoped to fixtures
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            "version: 3" \
+            "files:" \
+            "  - pattern: \"test-fixtures/*.yml\"" \
+            > .pinact-test.yaml
+
+      - name: Run pinact update on outdated fixture
+        uses: suzuki-shunsuke/pinact-action@896d595f299e71d65b9d28349d6956abe144390a # v3.0.0
+        with:
+          update: "true"
+          skip_push: "true"
+          config: .pinact-test.yaml
+          github_token: ${{ github.token }}
+
+      - name: Assert freshness changes detected
+        run: |
+          set -euo pipefail
+          # Compare against the saved original because pinact-action
+          # with fix=true (default) commits changes, making git diff
+          # against HEAD show nothing.
+          if diff -q test-fixtures/outdated.yml test-fixtures/outdated.yml.orig >/dev/null 2>&1; then
+            echo "::error::pinact did not detect any updates for outdated action"
+            exit 1
+          fi
+          echo "pinact detected outdated action — freshness check works:"
+          diff test-fixtures/outdated.yml.orig test-fixtures/outdated.yml || true
+
+      - name: Clean up
+        if: always()
+        run: rm -rf test-fixtures .pinact-test.yaml

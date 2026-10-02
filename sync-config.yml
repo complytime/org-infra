@@ -169,6 +169,9 @@ files_to_sync:
       - community
       - website
 
+  - source: .pinact.yaml
+    destination: .pinact.yaml
+
   # AI Tooling
   - source: .specify/memory/constitution.md
     destination: .specify/memory/constitution.md
