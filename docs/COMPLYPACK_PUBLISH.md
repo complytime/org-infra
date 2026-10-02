@@ -34,40 +34,46 @@ pull these artifacts via the `complypacks:` section in their `complytime.yaml`.
 
 ## Dual-Registry Strategy
 
-| Registry                                                | Purpose    | Tag format        | Trigger                                |
-|---------------------------------------------------------|------------|-------------------|----------------------------------------|
-| `ghcr.io/complytime/complypack-ampel-branch-protection` | Dev / test | `sha-<commit>`    | Push to `main` (policy file changes)   |
-| `quay.io/complytime/complypack-ampel-branch-protection` | Production | `vX.Y.Z` (semver) | GitHub Release published               |
-| `quay.io/complytime/complypack-ampel-branch-protection` | Production | `vX.Y.Z` (semver) | `workflow_dispatch` (manual promotion) |
+| Registry                                                | Purpose    | Tag format        | Trigger                                              |
+|---------------------------------------------------------|------------|-------------------|------------------------------------------------------|
+| `ghcr.io/complytime/complypack-ampel-branch-protection` | Dev / test | `sha-<commit>`    | Push to `main` (policy file changes)                 |
+| `ghcr.io/complytime/complypack-ampel-branch-protection` | Release    | `vX.Y.Z` (semver) | `workflow_dispatch` (promote_quay=true, from a tag)  |
+| `quay.io/complytime/complypack-ampel-branch-protection` | Production | `vX.Y.Z` (semver) | `workflow_dispatch` (promote_quay=true, from a tag)  |
 
 GHCR is the staging area. Every push to `main` that modifies files under
 `compliance/ampel/branch-protection/` triggers a publish to GHCR with a
 commit-based tag. The artifact is signed with Sigstore keyless signing and
 includes SLSA provenance and SBOM attestations.
 
-Quay is the production registry. The current procedure promotes from GHCR to Quay through
-two paths: automatically when a GitHub Release is published, or manually via
-`workflow_dispatch`. Manual promotion exists because GitHub Actions does not
-trigger downstream workflows from release events created by `GITHUB_TOKEN`-based
-workflows — see [Manual Quay Promotion](#manual-quay-promotion) for details.
+Quay is the production registry. Promotion from GHCR to Quay is done via
+`workflow_dispatch` with `promote_quay=true`, dispatched from a release tag.
+The workflow rebuilds the complypack from the release commit, publishes to
+GHCR with the release tag, signs it, then promotes the signed artifact to
+Quay.
 
-> **Note:** this limitation will be addressed in a follow-up PR by using an APP Token.
+> **Note:** Automated release-triggered promotion via App token is a follow-up.
 
 ```text
-Push to main              Release published         workflow_dispatch
-     │                          │                   (promote_quay=true)
-     ▼                          │                         │
- publish-ghcr                   ▼                         ▼
-     │                    verify-ghcr-source       verify-ghcr-source
-     ▼                          │                         │
- sign-ghcr                      ▼                         ▼
-     │                     promote-quay              promote-quay
-     ▼                          │                         │
- ghcr.io/complytime/            ▼                         ▼
-   complypack-ampel-      quay.io/complytime/       quay.io/complytime/
-   branch-protection:       complypack-ampel-         complypack-ampel-
-   sha-abc123               branch-protection:        branch-protection:
-                            v1.0.0                    v0.5.0
+Push to main                    workflow_dispatch
+     │                          (promote_quay=true, from tag)
+     ▼                                │
+ prepare                          prepare
+     │                                │
+     ▼                                ▼
+ publish-ghcr                    publish-ghcr
+ (sha-<commit>, 0.0.0-dev)      (vX.Y.Z, X.Y.Z, attestations: true)
+     │                                │
+     ▼                                ▼
+ sign-ghcr                       sign-ghcr
+     │                                │
+     ▼                                ▼
+ ghcr.io/complytime/             promote-quay
+   complypack-ampel-                  │
+   branch-protection:                 ▼
+   sha-abc123                    quay.io/complytime/
+                                   complypack-ampel-
+                                   branch-protection:
+                                   v1.0.0
 ```
 
 ## Workflows
@@ -99,15 +105,13 @@ Consumer workflow specific to org-infra's ampel branch-protection policies.
 **Triggers:**
 
 - `push` to `main` with changes in `compliance/ampel/branch-protection/**`
-- `release` published (any semver tag)
 - `workflow_dispatch` with the following inputs:
 
-| Input          | Required                 | Description                                                                   |
-|----------------|--------------------------|-------------------------------------------------------------------------------|
-| `tag_override` | no                       | Custom GHCR tag (leave empty for default `sha-<commit>`)                      |
-| `promote_quay` | no                       | Set `true` to skip GHCR publish and promote an existing GHCR artifact to Quay |
-| `release_tag`  | when `promote_quay=true` | Quay destination tag (e.g., `v0.5.0`)                                         |
-| `source_sha`   | no                       | Source commit SHA to promote (defaults to current HEAD)                       |
+| Input          | Required                 | Description                                                                    |
+|----------------|--------------------------|--------------------------------------------------------------------------------|
+| `tag_override` | no                       | Custom GHCR tag (leave empty for default `sha-<commit>`)                       |
+| `promote_quay` | no                       | Rebuild and publish to GHCR, then promote to Quay                              |
+| `release_tag`  | when `promote_quay=true` | Quay destination tag (defaults to `github.ref_name` when dispatched from a tag) |
 
 ## Cutting a Release
 
@@ -115,22 +119,11 @@ Consumer workflow specific to org-infra's ampel branch-protection policies.
 
 - Quay credentials (`QUAY_USERNAME`, `QUAY_PASSWORD`) must be configured as
   repository secrets in org-infra.
-- The policy changes you want to release must already be merged to `main`
-  (the GHCR artifact must exist for the tagged commit).
+- The policy changes you want to release must already be merged to `main`.
 
 ### Steps
 
-1. **Verify the GHCR artifact exists** for the commit you want to release:
-
-   ```bash
-   # Check the publish workflow ran for the target commit
-   gh run list \
-     --repo complytime/org-infra \
-     --workflow ci_publish_complypack.yml \
-     --limit 5
-   ```
-
-2. **Create a GitHub Release** with a semver tag:
+1. **Create a GitHub Release** with a semver tag:
 
    ```bash
    gh release create v1.0.0 \
@@ -139,85 +132,74 @@ Consumer workflow specific to org-infra's ampel branch-protection policies.
      --notes "Publish ampel branch-protection complypack v1.0.0"
    ```
 
-3. **Monitor the promotion** workflow:
+2. **Trigger the publish-and-promote workflow** from the release tag:
 
    ```bash
-   gh run watch \
-     --repo complytime/org-infra
+   gh workflow run ci_publish_complypack.yml \
+     --repo complytime/org-infra \
+     --ref v1.0.0 \
+     -f promote_quay=true
    ```
 
    The workflow will:
-   - Verify the GHCR artifact exists at `sha-<tagged-commit>`
-   - Promote it to `quay.io/complytime/complypack-ampel-branch-protection:v1.0.0`
-   - Verify source signatures before copying
+   - Rebuild the complypack from the release commit
+   - Publish to GHCR with the release tag (`v1.0.0`) and forced attestations
+   - Sign the GHCR artifact with Sigstore keyless signing
+   - Promote the signed artifact to `quay.io/complytime/complypack-ampel-branch-protection:v1.0.0`
+
+3. **Monitor the workflow**:
+
+   ```bash
+   gh run watch --repo complytime/org-infra
+   ```
 
 4. **Verify the Quay artifact**:
 
    ```bash
-   # Using crane (or oras)
    crane manifest \
      quay.io/complytime/complypack-ampel-branch-protection:v1.0.0
    ```
 
 ### Troubleshooting
 
-**Promotion fails with "No GHCR image found":**
-
-The GHCR artifact for the tagged commit does not exist. This happens when:
-- The policy files were not changed in the tagged commit (push trigger did
-  not fire).
-- The publish workflow failed on a previous push.
-
-Fix: trigger a manual publish via `workflow_dispatch`, then re-run the release
-workflow.
-
 **Promotion fails with "destination tag already exists":**
 
 Quay tags are immutable. You cannot overwrite an existing release. If you need
 to republish, use a new version tag (e.g., `v1.0.1`).
 
+**Publish fails with "promote_quay requires dispatching from a tag":**
+
+The workflow was dispatched from a branch instead of a tag. Re-run the
+workflow using `--ref v1.0.0` to dispatch from the release tag.
+
 ## Manual Quay Promotion
 
-### Why manual promotion exists
+Quay promotion is always manual via `workflow_dispatch` with
+`promote_quay=true`. The workflow rebuilds the complypack from the specified
+commit (tag or protected branch), publishes to GHCR, signs it, then
+promotes to Quay.
 
-GitHub Actions has a known limitation: release events created by workflows
-that authenticate with `GITHUB_TOKEN` do not trigger other workflows. This
-means that if your release is cut by an automated workflow (or by any process
-using `GITHUB_TOKEN`), the `release: published` trigger in
-`ci_publish_complypack.yml` will not fire and the Quay promotion will not
-happen.
+> **Note:** Automated promotion via App token in `release.yml` is a
+> follow-up. Until then, manual dispatch from a tag is the canonical
+> promotion path.
 
-Manual promotion via `workflow_dispatch` bypasses this limitation by letting
-you promote an existing GHCR artifact to Quay without relying on the release
-event trigger.
+### Promotion Steps
 
-### Steps
+1. **Ensure a release tag exists** for the commit you want to promote.
 
-1. **Identify the source commit** whose GHCR artifact you want to promote:
-
-   ```bash
-   # Find the commit SHA for the GHCR artifact you want to promote
-   gh run list \
-     --repo complytime/org-infra \
-     --workflow ci_publish_complypack.yml \
-     --limit 5
-   ```
-
-2. **Trigger the manual promotion**:
+2. **Trigger the publish-and-promote workflow** from the tag:
 
    ```bash
    gh workflow run ci_publish_complypack.yml \
      --repo complytime/org-infra \
-     -f promote_quay=true \
-     -f release_tag=v0.5.0 \
-     -f source_sha=abc123def456
+     --ref v0.5.0 \
+     -f promote_quay=true
    ```
 
-   Replace `v0.5.0` with the desired semver tag and `abc123def456` with the
-   full commit SHA. If `source_sha` is omitted, the workflow uses the current
-   HEAD of the default branch.
+   When dispatched from a tag, `release_tag` defaults to the tag name
+   (`v0.5.0`). To use a different Quay tag, pass `-f release_tag=v0.5.1`.
 
-3. **Monitor the promotion**:
+3. **Monitor the workflow**:
 
    ```bash
    gh run watch --repo complytime/org-infra
@@ -232,17 +214,15 @@ event trigger.
 
 ### When to use manual promotion
 
-- **Automated releases**: When a CI workflow creates the GitHub Release using
-  `GITHUB_TOKEN`, the promotion workflow will not trigger automatically.
-- **Retroactive promotion**: When you need to promote a specific older commit
-  that already has a signed GHCR artifact.
-- **Re-promotion after failure**: When the release-triggered promotion failed
-  and you need to retry without creating a new release (use a new version tag
+- **Standard release flow**: After creating a GitHub Release, dispatch the
+  workflow from the release tag to publish and promote.
+- **Re-promotion after failure**: If the workflow failed mid-run, re-dispatch
+  from the same tag (use a new version tag if the Quay tag already exists,
   since Quay tags are immutable).
 
 ## Local Testing
 
-### Prerequisites
+### Local Prerequisites
 
 ```bash
 # Install the complypack CLI
@@ -263,7 +243,7 @@ cp compliance/ampel/branch-protection/*.json "$WORK/"
 cat > complypack.yaml <<EOF
 id: io.complytime.ampel-branch-protection
 evaluator-id: ampel
-version: 0.1.0-test
+version: 0.0.0-dev
 EOF
 
 # Pack (--skip-validation required for non-OPA evaluators)

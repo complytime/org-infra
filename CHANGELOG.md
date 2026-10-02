@@ -74,6 +74,13 @@
 
 ### Fixed
 
+- **Complypack publish pipeline**: Restructured release promotion flow to
+  rebuild from the release commit instead of looking up a pre-existing GHCR
+  image. Removed `release: published` trigger (manual dispatch from tag is
+  the canonical promotion path). Pinned complypack CLI to v0.1.0. Relaxed
+  `ref_protected` guard in reusable publish and signing workflows to allow
+  tag-based builds. Removed stale root `complypack.yaml`.
+
 - **Vulnerability scan**: Prevent OSV scan failures when JSON results exceed
   GitHub's 1 MiB job-output limit by explicitly disabling result exports.
   Complete reports remain available as workflow artifacts. (#574)

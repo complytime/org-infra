@@ -65,7 +65,7 @@ concurrency:
 
 jobs:
   sign-and-verify:
-    if: ${{ github.ref_protected }}
+    if: ${{ github.ref_protected || github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
