@@ -2,6 +2,15 @@
 # ==============================================
 # Dual-registry publish pipeline for the Ampel branch-protection complypack.
 #
+# Architecture: Rebuild Model
+# ---------------------------
+# This pipeline uses a rebuild model — the complypack is always built fresh
+# from the source commit, even during Quay promotion. This differs from a
+# promote model (copy an existing GHCR image to Quay byte-for-byte). The
+# rebuild model ensures consistent attestation provenance and avoids tag
+# mismatch issues, but the Quay artifact is not byte-identical to the
+# push-to-main CI artifact.
+#
 # Push to main (policy path change):
 #   1. prepare      — computes publish parameters (tag, version, attestation policy)
 #   2. publish-ghcr — packs and pushes the complypack OCI artifact to GHCR
@@ -111,6 +120,9 @@ jobs:
 
   publish-ghcr:
     needs: [prepare]
+    # Runs for both push and workflow_dispatch (including promote_quay=true).
+    # The promote path intentionally rebuilds and publishes to GHCR first —
+    # the promote-quay job then copies this freshly-built artifact to Quay.
     if: >-
       github.event_name == 'push'
       || github.event_name == 'workflow_dispatch'
