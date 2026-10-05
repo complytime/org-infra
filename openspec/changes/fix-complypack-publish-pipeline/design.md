@@ -14,7 +14,7 @@ Key files:
 | `.github/workflows/reusable_sign_and_verify.yml` | Reusable: Sigstore signing |
 | `.github/workflows/ci_publish_complypack.yml` | Consumer: orchestrates the above |
 | `docs/COMPLYPACK_PUBLISH.md` | Operational guide |
-| `complypack.yaml` | Stale root config (unused) |
+| `complypack.yaml` | ~~Stale root config~~ — never tracked in VCS |
 
 The `reusable_publish_complypack.yml` is consumed by org-infra today but
 designed for any repository publishing complypacks. Changes to it must remain
@@ -126,9 +126,12 @@ path. The user dispatches from the release tag and the workflow derives
 everything else. The `release_tag` input remains available as an override
 for edge cases.
 
-### D5: Remove root complypack.yaml
+### D5: Remove root complypack.yaml (moot)
 
-**Decision**: Delete the root `complypack.yaml` file.
+**Decision**: ~~Delete the root `complypack.yaml` file.~~ No action needed —
+the file was never tracked in version control (`git log --all --
+complypack.yaml` returns no history). The original proposal assumed it was
+a committed file, but it was only ever a local artifact.
 
 **Alternatives considered**:
 
@@ -139,9 +142,7 @@ for edge cases.
   `docs/COMPLYPACK_PUBLISH.md` already documents the expected config
   format. Keeping a stale root file adds confusion.
 
-**Rationale**: The file is unused by any workflow, Makefile, test, or script.
-The design decision to generate config at workflow time explicitly chose
-this over checked-in config. Removing it eliminates a source of confusion.
+**Rationale**: Moot — file was never committed. No deletion required.
 
 ### D6: Pin complypack CLI to v0.1.0
 

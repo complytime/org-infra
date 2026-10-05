@@ -109,8 +109,9 @@
 
 ## 3. Cleanup and Documentation
 
-- [x] 3.1 Delete the root `complypack.yaml` file. Verify: `git rm complypack.yaml`
-  succeeds and no workflow, Makefile, or test references the file.
+- [ ] ~~3.1 Delete the root `complypack.yaml` file.~~ N/A — the file was
+  never tracked in version control (`git log --all -- complypack.yaml`
+  returns no history). No deletion needed.
 
 - [x] 3.2 Update `docs/COMPLYPACK_PUBLISH.md`: revise the dual-registry strategy
   table, flow diagrams, "Manual Quay Promotion" section, and
@@ -146,9 +147,10 @@
   Also verify: the `release` trigger has been removed (task 2.11) and no
   residual job routing references `github.event_name == 'release'`.
 
-- [x] 4.3 Verify no other files in the repository reference the deleted
-  `complypack.yaml` (search for `complypack.yaml` excluding workflow
-  files and docs that have been updated).
+- [x] 4.3 Verify no other files in the repository contain stale references
+  to `complypack.yaml` deletion (the root file was never tracked in
+  version control; remaining references describe the workflow-generated
+  config, which is correct).
 
 <!-- spec-review: passed -->
 <!-- code-review: passed -->

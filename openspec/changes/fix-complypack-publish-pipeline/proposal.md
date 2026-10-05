@@ -37,9 +37,9 @@ release).
   automated release events, and manual dispatch is now the canonical
   promotion path. Removing it eliminates a silent no-op that could confuse
   operators.
-- **Remove stale root `complypack.yaml`**: The reusable workflow generates
-  its own config at build time; the root file is unused and contradicts the
-  workflow values.
+- ~~**Remove stale root `complypack.yaml`**~~: Originally proposed for
+  deletion, but the file was never tracked in version control. No action
+  needed.
 - **Update `docs/COMPLYPACK_PUBLISH.md`**: Reflect the new rebuild-and-promote
   flow, simplified manual promotion steps, and updated troubleshooting.
 
@@ -74,7 +74,8 @@ _None._
   `reusable_publish_complypack.yml` (guard relaxation + CLI pin update).
 - **Documentation**: `docs/COMPLYPACK_PUBLISH.md` (flow diagrams, manual
   promotion steps, troubleshooting).
-- **Files removed**: Root `complypack.yaml` (stale, unused).
+- **Files removed**: None (root `complypack.yaml` was never tracked in
+  version control).
 - **Downstream consumers of `reusable_publish_complypack.yml`**: The
   `ref_protected` relaxation allows tag-based publishing. This is additive
   and non-breaking; existing consumers on protected branches are unaffected.
