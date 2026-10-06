@@ -49,8 +49,9 @@ on:
       complypack_cli_ref:
         description: >-
           Go install ref for complypack CLI (e.g., latest, v0.1.0).
-          Callers SHOULD pin to a specific release tag for reproducibility.
-          Default is latest because complypack has no formal releases yet.
+          v0.1.0 is the first formal release. Callers SHOULD pin to a
+          specific release tag for reproducibility. Default is latest
+          for development flexibility.
         required: false
         default: "latest"
         type: string
@@ -60,7 +61,11 @@ on:
         default: false
         type: boolean
       generate_attestations:
-        description: "Generate SLSA provenance and SBOM. Values: auto (based on ref_protected), true (always). Default: auto"
+        description: >-
+          Generate SLSA provenance and SBOM. Values: auto (based on
+          ref_protected), true (always). Default: auto. When publishing
+          from tags, callers MUST set true explicitly since auto uses
+          ref_protected which is false for tags.
         required: false
         default: "auto"
         type: string
@@ -88,7 +93,7 @@ concurrency:
 
 jobs:
   publish:
-    if: ${{ github.ref_protected }}
+    if: ${{ github.ref_protected || github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

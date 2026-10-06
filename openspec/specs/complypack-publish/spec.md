@@ -56,24 +56,20 @@ The consumer workflow SHALL sign the GHCR artifact using Sigstore keyless signin
 - **WHEN** a complypack artifact is successfully pushed to GHCR on a protected ref
 - **THEN** the artifact is signed with Sigstore keyless signing and the signature is verifiable with cosign
 
-#### Scenario: No signing on unprotected ref
-- **WHEN** a complypack artifact is published from an unprotected ref
-- **THEN** the signing job is skipped and the workflow succeeds without signing
+#### Scenario: No signing on unprotected branch
+- **WHEN** a complypack artifact is published from an unprotected branch (not a tag)
+- **THEN** the signing job is skipped because the publish guard blocks unprotected branch builds
 
-### Requirement: Release-gated Quay promotion
-The consumer workflow SHALL promote the complypack artifact from GHCR to Quay only when a GitHub release is published, using the release tag as the Quay image tag.
+### Requirement: Rebuild-and-promote Quay promotion
+The consumer workflow SHALL promote the complypack artifact from GHCR to Quay via manual `workflow_dispatch` with `promote_quay=true`, rebuilding the artifact from the release commit before promotion. The `release: published` trigger has been removed in favor of manual dispatch.
 
-#### Scenario: Release triggers promotion
-- **WHEN** a GitHub release is published with a semver tag
-- **THEN** the complypack artifact is copied from GHCR to Quay with the release tag and the source signature is verified before promotion
+#### Scenario: Manual dispatch triggers rebuild and promotion
+- **WHEN** the workflow is manually dispatched with `promote_quay=true` from a release tag
+- **THEN** the complypack artifact is rebuilt from the release commit, published to GHCR with the release tag and forced attestations, signed, and promoted to Quay with the release tag
 
-#### Scenario: Source image verification before promotion
-- **WHEN** the promote job starts for a release event
-- **THEN** the workflow verifies that the GHCR artifact for the release commit exists before attempting promotion
-
-#### Scenario: Missing GHCR source
-- **WHEN** a release is published but no GHCR artifact exists for that commit
-- **THEN** the promotion fails with a clear error message indicating the GHCR source is missing
+#### Scenario: Promotion requires tag dispatch or release_tag input
+- **WHEN** the workflow is dispatched with `promote_quay=true` from a branch without providing `release_tag`
+- **THEN** the prepare job fails with a clear error message indicating that dispatching from a tag or providing `release_tag` is required
 
 #### Scenario: Immutable Quay tags
 - **WHEN** a release tag already exists on Quay
