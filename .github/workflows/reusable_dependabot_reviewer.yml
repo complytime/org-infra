@@ -26,6 +26,12 @@ on:
       is_org_owned:
         description: "Whether the dependency belongs to the same GitHub org as the consuming repo"
         value: "${{ jobs.dependabot_review.outputs.is_org_owned }}"
+      org_precedent:
+        description: "Whether a human-approved merge of the same dep@version exists in another org repo"
+        value: "${{ jobs.dependabot_review.outputs.org_precedent }}"
+      precedent_detail:
+        description: "Human-readable detail of the org precedent (repo, PR, reviewer)"
+        value: "${{ jobs.dependabot_review.outputs.precedent_detail }}"
 
 # This workflow is passive so ensure the minimal permissions even if the
 # inherited token is more lenient.
@@ -47,6 +53,8 @@ jobs:
       dep_version: "${{ steps.get_dep_info.outputs.dep_version }}"
       release_age_hours: "${{ steps.check_release_age.outputs.release_age_hours }}"
       is_org_owned: "${{ steps.detect_org_ownership.outputs.is_org_owned }}"
+      org_precedent: "${{ steps.check_org_precedent.outputs.org_precedent }}"
+      precedent_detail: "${{ steps.check_org_precedent.outputs.precedent_detail }}"
 
     steps:
       - name: Checkout Repository
@@ -379,3 +387,90 @@ jobs:
             echo "$repo_list"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Check Org Precedent
+        id: check_org_precedent
+        shell: bash
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          REPO_OWNER: "${{ github.repository_owner }}"
+        run: |
+          dep="$DEP_NAME"
+          version="$DEP_VERSION"
+
+          # Skip if no dependency info available
+          if [[ -z "$dep" || -z "$version" ]]; then
+            echo "No dependency info available. Skipping org precedent check."
+            echo "org_precedent=false" >> "$GITHUB_OUTPUT"
+            echo "precedent_detail=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Search for merged dependabot PRs matching dep@version across the org.
+          # Uses the same retry pattern as the popularity search step
+          # (3 attempts, 15s/30s/45s backoff, 30s timeout).
+          search_query="$dep $version"
+          echo "Searching org precedent: gh search prs \"$search_query\" --owner \"$REPO_OWNER\" --author \"dependabot[bot]\" --merged --review approved --match title --limit 5"
+
+          result=""
+          for i in {1..3}; do
+            result="$(timeout 30 gh search prs "$search_query" \
+              --owner "$REPO_OWNER" \
+              --author "dependabot[bot]" \
+              --merged \
+              --review approved \
+              --match title \
+              --limit 5 \
+              --json repository,number 2>&1)" && break
+            echo "Search attempt $i failed: ${result:0:200}"
+            result=""
+            sleep "$((i * 15))"
+          done
+
+          if [[ -z "$result" || "$result" == "[]" ]]; then
+            echo "No merged dependabot PRs found for $dep@$version in org."
+            echo "org_precedent=false" >> "$GITHUB_OUTPUT"
+            echo "precedent_detail=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Filter out current repository and check each candidate for
+          # a human approval via the Reviews API.
+          candidate_count="$(jq length <<<"$result")"
+          echo "Found $candidate_count candidate PRs."
+
+          org_precedent="false"
+          precedent_detail=""
+
+          for idx in $(seq 0 $((candidate_count - 1))); do
+            repo="$(jq -r ".[$idx].repository.nameWithOwner" <<<"$result")"
+            pr_number="$(jq -r ".[$idx].number" <<<"$result")"
+
+            # Skip the current repository
+            if [[ "$repo" == "$GITHUB_REPOSITORY" ]]; then
+              echo "Skipping current repo: $repo#$pr_number"
+              continue
+            fi
+
+            echo "Checking reviews for $repo#$pr_number..."
+
+            # Call Reviews API to find a human (non-Bot) approval.
+            # If the API call fails, skip this candidate and try the next.
+            reviewer=""
+            reviewer="$(timeout 30 gh api \
+              "repos/${repo}/pulls/${pr_number}/reviews" \
+              --jq '[.[] | select(.state == "APPROVED" and .user.type != "Bot")][0].user.login' \
+              2>/dev/null)" || true
+
+            if [[ -n "$reviewer" && "$reviewer" != "null" ]]; then
+              org_precedent="true"
+              precedent_detail="Reviewed by ${reviewer} in ${repo}#${pr_number}"
+              echo "Found org precedent: $precedent_detail"
+              break
+            else
+              echo "No human approval found for $repo#$pr_number, trying next."
+            fi
+          done
+
+          echo "org_precedent=$org_precedent" >> "$GITHUB_OUTPUT"
+          echo "precedent_detail=$precedent_detail" >> "$GITHUB_OUTPUT"

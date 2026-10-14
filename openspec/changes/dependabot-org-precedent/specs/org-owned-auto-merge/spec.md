@@ -1,5 +1,12 @@
 # Spec Delta
 
+## Purpose
+
+Extends the Dependabot auto-approval and auto-merge pipeline to leverage the
+cross-repo org precedent signal, enabling auto-merge for third-party
+dependencies when a human-reviewed merge already exists in another org
+repository.
+
 ## ADDED Requirements
 
 ### Requirement: Auto-approve and auto-merge with org precedent

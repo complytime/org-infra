@@ -6,8 +6,10 @@ The Dependabot reviewer pipeline (`reusable_dependabot_reviewer.yml`) already
 extracts dependency metadata, classifies risk, checks release age, detects org
 ownership, and searches GitHub for usage. The consumer workflow
 (`ci_dependencies.yml`) uses those signals to auto-approve and optionally
-auto-merge. See `proposal.md` for the motivation behind adding a cross-repo
-precedent signal.
+auto-merge. The current pipeline was established pre-OpenSpec via issue #284
+(`284-org-member-image-push`) and issue #6 (`006-robust-dependabot-approval`).
+See `proposal.md` for the motivation behind adding a cross-repo precedent
+signal.
 
 Current approval paths:
 

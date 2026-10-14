@@ -82,7 +82,7 @@ workflow outputs consumable by downstream jobs in the calling workflow.
   another org repo)
 - **THEN** the pipeline SHALL output `org_precedent` as `"true"` and
   `precedent_detail` as a human-readable string identifying the repository,
-  PR number, and reviewer
+  PR number, and reviewer (e.g., `"Reviewed by @username in org/repo#123"`)
 
 #### Scenario: No precedent found
 
@@ -115,6 +115,14 @@ never block or degrade the existing approval pipeline.
   from the PR
 - **THEN** the pipeline SHALL skip the precedent search and set
   `org_precedent` to `"false"`
+
+#### Scenario: Reviews API failure for a candidate PR
+
+- **WHEN** the search returns candidate PRs but the Reviews API call for a
+  candidate returns an error or timeout
+- **THEN** the pipeline SHALL skip that candidate and evaluate the next
+  candidate. If all candidates fail verification, the pipeline SHALL set
+  `org_precedent` to `"false"` and continue without error
 
 ### Requirement: No additional secrets or configuration
 
