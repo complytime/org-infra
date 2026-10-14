@@ -8,6 +8,8 @@ from typing import Any
 import pytest
 import yaml
 
+from tests.conftest import GitHubActionsLoader
+
 WORKFLOW_PATH = (
     Path(__file__).resolve().parents[1] / ".github" / "workflows" / "reusable_vuln_scan.yml"
 )
@@ -16,28 +18,7 @@ OSV_REUSABLE_WORKFLOW_PATTERN = re.compile(
     r"google/osv-scanner-action/\.github/workflows/"
     r"osv-scanner-reusable-pr\.yml@[0-9a-f]{40}"
 )
-YAML_BOOLEAN_TAG = "tag:yaml.org,2002:bool"
 COMPLETE_RESULT_FILES = ("old-results.json", "new-results.json")
-
-
-class GitHubActionsLoader(yaml.SafeLoader):
-    """Load YAML booleans without treating the GitHub Actions ``on`` key as true."""
-
-
-# PyYAML follows YAML 1.1, while GitHub Actions treats only true and false as booleans.
-GitHubActionsLoader.yaml_implicit_resolvers = {
-    first_character: [
-        (tag, pattern)
-        for tag, pattern in resolvers
-        if tag != YAML_BOOLEAN_TAG
-    ]
-    for first_character, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
-}
-GitHubActionsLoader.add_implicit_resolver(
-    YAML_BOOLEAN_TAG,
-    re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
-    list("tTfF"),
-)
 
 
 @pytest.fixture
