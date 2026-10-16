@@ -447,6 +447,7 @@ jobs:
           # may contain the version in the FROM position (e.g., "from 4.0.0
           # to 5.0.0" matches a search for "4.0.0" but is not precedent for
           # 4.0.0 as a destination).
+          # shellcheck disable=SC2016  # \& is a sed backreference, not a shell expansion
           escaped_version="$(printf '%s' "$version" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
           result="$(jq -c \
             --arg pattern "to ${escaped_version}([^0-9]|$)" \
@@ -478,18 +479,46 @@ jobs:
               continue
             fi
 
+            # Verify the candidate updates the expected dependency and version
+            # using authoritative commit metadata. Dependabot embeds structured
+            # trailers (dependency-name, dependency-version) in commit messages.
+            # If metadata is present and does not match, skip the candidate.
+            # If metadata is absent (older Dependabot or grouped PRs), fall
+            # through to the title-based filter already applied above.
+            commit_msg="$(timeout 15 gh api \
+              "repos/${repo}/pulls/${pr_number}/commits" \
+              --jq '.[0].commit.message' 2>/dev/null)" || true
+
+            if [[ -n "$commit_msg" ]]; then
+              candidate_dep="$(echo "$commit_msg" | grep -m1 'dependency-name:' \
+                | sed 's/.*dependency-name:[[:space:]]*//' | tr -d '[:space:]')" || true
+              if [[ -n "$candidate_dep" && "$candidate_dep" != "$dep" ]]; then
+                echo "Metadata mismatch: candidate=$candidate_dep, expected=$dep. Skipping $repo#$pr_number."
+                continue
+              fi
+
+              candidate_ver="$(echo "$commit_msg" | grep -m1 'dependency-version:' \
+                | sed 's/.*dependency-version:[[:space:]]*//' | tr -d '[:space:]')" || true
+              if [[ -n "$candidate_ver" && "$candidate_ver" != "$version" ]]; then
+                echo "Version mismatch: candidate=$candidate_ver, expected=$version. Skipping $repo#$pr_number."
+                continue
+              fi
+            fi
+
             echo "Checking reviews for $repo#$pr_number..."
 
             # Call Reviews API to find a human (non-Bot) approval.
             # Paginate to avoid missing approvals beyond the first 30
-            # reviews (unlikely for Dependabot PRs, but 30+ reviews
-            # may indicate other process issues worth investigating).
+            # reviews. The jq streams individual matches instead of
+            # array-indexing so that pages with no qualifying approval
+            # produce no output — head -1 then correctly picks the
+            # first human approval across all pages.
             # If the API call fails, skip this candidate and try the next.
             reviewer=""
             reviewer="$(timeout 30 gh api \
               "repos/${repo}/pulls/${pr_number}/reviews" \
               --paginate \
-              --jq '[.[] | select(.state == "APPROVED" and .user.type != "Bot")][0].user.login' \
+              --jq '.[] | select(.state == "APPROVED" and .user.type != "Bot") | .user.login' \
               2>/dev/null | head -1)" || true
 
             if [[ -n "$reviewer" && "$reviewer" != "null" ]]; then
