@@ -9,8 +9,6 @@ IMPORTANT: Mirror functions replicate the GitHub Actions expression and
 JavaScript logic in ``.github/workflows/ci_dependencies.yml``. If the
 workflow implementation changes, the corresponding mirror MUST be updated
 to match. Line references are from the branch ``opsx/dependabot-org-precedent``.
-
-See also: #662 (extract GitHubActionsLoader to conftest.py)
 """
 
 import re
@@ -20,33 +18,20 @@ from typing import Any
 import pytest
 import yaml
 
+from tests.conftest import GitHubActionsLoader
+
 WORKFLOW_PATH = (
     Path(__file__).resolve().parents[1]
     / ".github"
     / "workflows"
     / "ci_dependencies.yml"
 )
-YAML_BOOLEAN_TAG = "tag:yaml.org,2002:bool"
 
-
-class GitHubActionsLoader(yaml.SafeLoader):
-    """Load YAML without treating the GitHub Actions ``on`` key as true."""
-
-
-GitHubActionsLoader.yaml_implicit_resolvers = {
-    first_character: [
-        (tag, pattern)
-        for tag, pattern in resolvers
-        if tag != YAML_BOOLEAN_TAG
-    ]
-    for first_character, resolvers in (
-        yaml.SafeLoader.yaml_implicit_resolvers.items()
-    )
-}
-GitHubActionsLoader.add_implicit_resolver(
-    YAML_BOOLEAN_TAG,
-    re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
-    list("tTfF"),
+DEPS_REVIEWER_PATH = (
+    Path(__file__).resolve().parents[1]
+    / ".github"
+    / "workflows"
+    / "reusable_deps_reviewer.yml"
 )
 
 
@@ -163,6 +148,42 @@ class TestWorkflowContract:
         ]
         assert len(merge_steps) == 1
         assert merge_steps[0]["name"] == "Enable Auto-merge"
+
+    def test_deps_reviewer_determine_result_uses_outcome_not_conclusion(
+        self,
+    ) -> None:
+        """Determine Review Result step must reference .outcome not .conclusion.
+
+        ``steps.<id>.outcome`` reflects whether the step itself succeeded or
+        was skipped, while ``steps.<id>.conclusion`` is the raw exit status
+        before ``continue-on-error`` is applied. Using ``.conclusion`` would
+        incorrectly report the dependency-review-action as failed even when
+        ``continue-on-error: true`` causes the job to proceed.
+        """
+        with DEPS_REVIEWER_PATH.open(encoding="utf-8") as f:
+            deps_workflow = yaml.load(f, Loader=GitHubActionsLoader)
+
+        all_steps: list[dict[str, Any]] = []
+        for job in deps_workflow.get("jobs", {}).values():
+            all_steps.extend(job.get("steps", []))
+
+        determine_steps = [
+            s for s in all_steps
+            if "Determine Review Result" in s.get("name", "")
+        ]
+        assert len(determine_steps) == 1, (
+            "Expected exactly one 'Determine Review Result' step"
+        )
+
+        step_env = determine_steps[0].get("env", {})
+        env_values = " ".join(str(v) for v in step_env.values())
+        assert ".outcome" in env_values, (
+            "Determine Review Result must reference .outcome"
+        )
+        assert ".conclusion" not in env_values, (
+            "Determine Review Result must NOT reference .conclusion — "
+            "use .outcome so continue-on-error is respected"
+        )
 
 
 # ── Logic Mirror Tests ─────────────────────────────────────────────

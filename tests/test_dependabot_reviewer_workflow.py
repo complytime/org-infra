@@ -9,8 +9,6 @@ IMPORTANT: Mirror functions replicate the bash logic in
 ``.github/workflows/reusable_dependabot_reviewer.yml``. If the bash
 implementation changes, the corresponding mirror MUST be updated to
 match. Line references are from the branch ``opsx/dependabot-org-precedent``.
-
-See also: #662 (extract GitHubActionsLoader to conftest.py)
 """
 
 import re
@@ -20,6 +18,8 @@ from typing import Any
 import pytest
 import yaml
 
+from tests.conftest import GitHubActionsLoader
+
 WORKFLOW_PATH = (
     Path(__file__).resolve().parents[1]
     / ".github"
@@ -27,7 +27,6 @@ WORKFLOW_PATH = (
     / "reusable_dependabot_reviewer.yml"
 )
 JOB_NAME = "dependabot_review"
-YAML_BOOLEAN_TAG = "tag:yaml.org,2002:bool"
 
 EXPECTED_OUTPUTS = {
     "risk_level",
@@ -39,27 +38,6 @@ EXPECTED_OUTPUTS = {
     "org_precedent",
     "precedent_detail",
 }
-
-
-class GitHubActionsLoader(yaml.SafeLoader):
-    """Load YAML without treating the GitHub Actions ``on`` key as true."""
-
-
-GitHubActionsLoader.yaml_implicit_resolvers = {
-    first_character: [
-        (tag, pattern)
-        for tag, pattern in resolvers
-        if tag != YAML_BOOLEAN_TAG
-    ]
-    for first_character, resolvers in (
-        yaml.SafeLoader.yaml_implicit_resolvers.items()
-    )
-}
-GitHubActionsLoader.add_implicit_resolver(
-    YAML_BOOLEAN_TAG,
-    re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
-    list("tTfF"),
-)
 
 
 @pytest.fixture
@@ -712,3 +690,89 @@ class TestPrecedentDetail:
     def test_contains_repo_and_pr(self):
         result = self.format_detail("bob", "complytime/complyctl", 42)
         assert "complytime/complyctl#42" in result
+
+
+# ── Mutation-Resistant Step Integrity Tests ────────────────────────
+
+
+class TestOrgPrecedentStepIntegrity:
+    """Mutation-resistant assertions against the Check Org Precedent step.
+
+    These tests parse the actual workflow YAML and inspect the step's
+    properties and ``run`` script verbatim, so that logic mutations in
+    the bash implementation surface as test failures without requiring
+    Python mirrors of every branch.
+    """
+
+    @pytest.fixture
+    def precedent_step(self, steps: list[dict[str, Any]]) -> dict[str, Any]:
+        """Extract the Check Org Precedent step from the workflow."""
+        matches = [
+            s for s in steps if "Check Org Precedent" in s.get("name", "")
+        ]
+        assert len(matches) == 1, "Expected exactly one 'Check Org Precedent' step"
+        return matches[0]
+
+    @pytest.fixture
+    def run_block(self, precedent_step: dict[str, Any]) -> str:
+        """Return the run: script of the Check Org Precedent step."""
+        return precedent_step.get("run", "")
+
+    def test_step_has_continue_on_error_true(
+        self, precedent_step: dict[str, Any],
+    ) -> None:
+        """Step must declare continue-on-error: true at the step level."""
+        assert precedent_step.get("continue-on-error") is True
+
+    def test_search_command_does_not_mix_stderr_into_stdout(
+        self, run_block: str,
+    ) -> None:
+        """Search command must not redirect stderr into stdout (no 2>&1).
+
+        Mixing stderr into stdout would pollute the result variable with
+        error messages and produce false positives.
+        """
+        assert "2>&1" not in run_block
+
+    def test_jq_filter_uses_test_for_title_verification(
+        self, run_block: str,
+    ) -> None:
+        """jq filter must use test( for regex title matching.
+
+        A literal string equality check would not handle case-insensitive
+        version patterns, so test() is required.
+        """
+        assert "test(" in run_block
+
+    def test_reviews_api_call_uses_paginate(
+        self, run_block: str,
+    ) -> None:
+        """Reviews API call must include --paginate to avoid missing approvals."""
+        assert "--paginate" in run_block
+
+    def test_default_org_precedent_false_written_before_search(
+        self, run_block: str,
+    ) -> None:
+        """org_precedent=false must be written as default before the loop.
+
+        Ensures graceful degradation: if the search loop is skipped or
+        all candidates are exhausted, the output defaults to false.
+        """
+        default_pos = run_block.find("org_precedent=false")
+        loop_pos = run_block.find("for idx in")
+        assert default_pos != -1, "org_precedent=false not found in run block"
+        assert loop_pos != -1, "Candidate loop not found in run block"
+        assert default_pos < loop_pos, (
+            "org_precedent=false default must appear before the candidate loop"
+        )
+
+    def test_search_command_does_not_use_review_approved_flag(
+        self, run_block: str,
+    ) -> None:
+        """gh search must NOT use --review approved.
+
+        Human approval is verified separately via the Reviews API; the
+        --review flag only checks whether any review exists and would
+        conflate bot approvals with qualifying human approvals.
+        """
+        assert "--review approved" not in run_block
