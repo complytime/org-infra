@@ -11,7 +11,11 @@ implementation changes, the corresponding mirror MUST be updated to
 match. Line references are from the branch ``opsx/dependabot-org-precedent``.
 """
 
+import json
+import os
 import re
+import subprocess
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -776,3 +780,642 @@ class TestOrgPrecedentStepIntegrity:
         conflate bot approvals with qualifying human approvals.
         """
         assert "--review approved" not in run_block
+
+    def test_search_uses_owner_filter(
+        self, run_block: str,
+    ) -> None:
+        """Search must filter by repo owner."""
+        assert "--owner" in run_block
+
+    def test_search_uses_merged_filter(
+        self, run_block: str,
+    ) -> None:
+        """Search must filter for merged PRs only."""
+        assert "--merged" in run_block
+
+    def test_search_uses_dependabot_author(
+        self, run_block: str,
+    ) -> None:
+        """Search must filter by dependabot[bot] author."""
+        assert "dependabot[bot]" in run_block
+
+    def test_commit_metadata_verification_present_in_loop(
+        self, run_block: str,
+    ) -> None:
+        """Candidate loop must verify dependency via commit metadata.
+
+        The loop must fetch commit messages and check dependency-name
+        against the expected dependency before accepting a candidate.
+        """
+        assert "dependency-name:" in run_block
+        assert "dependency-version:" in run_block
+
+    def test_reviews_jq_uses_streaming_not_array_indexing(
+        self, run_block: str,
+    ) -> None:
+        """Reviews jq must stream results, not array-index.
+
+        Array-indexing (``[...][0]``) outputs ``null`` per empty page
+        when combined with ``--paginate``, hiding approvals on later
+        pages. Streaming (``.[] | select(...) | .user.login``) outputs
+        nothing for empty pages, allowing ``head -1`` to correctly
+        capture the first match across all pages.
+        """
+        # Must NOT contain array-wrap-then-index pattern
+        assert "[0].user.login" not in run_block
+        # Must contain streaming select pattern
+        assert "select(.state ==" in run_block
+        assert "| .user.login" in run_block
+
+
+# ── Behavioral Tests (subprocess + mock gh) ────────────────────────
+
+# Mock gh script that reads canned responses from $MOCK_GH_DIR.
+# Handles: search prs, api .../commits, api .../reviews.
+# Supports multi-page simulation via reviews_page2.json.
+MOCK_GH_SCRIPT = textwrap.dedent("""\
+    #!/bin/bash
+    set -euo pipefail
+
+    if [[ "$1" == "search" && "$2" == "prs" ]]; then
+        cat "$MOCK_GH_DIR/search_prs.json"
+        exit 0
+    fi
+
+    if [[ "$1" == "api" ]]; then
+        api_path="$2"
+        jq_expr=""
+        paginate=false
+        shift 2
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --jq) jq_expr="$2"; shift 2 ;;
+                --paginate) paginate=true; shift ;;
+                *) shift ;;
+            esac
+        done
+
+        if [[ "$api_path" == *"/commits" ]]; then
+            response_file="$MOCK_GH_DIR/commits.json"
+        elif [[ "$api_path" == *"/reviews" ]]; then
+            response_file="$MOCK_GH_DIR/reviews.json"
+        else
+            exit 1
+        fi
+
+        [[ ! -f "$response_file" ]] && exit 1
+
+        page2="${response_file%.json}_page2.json"
+        if [[ "$paginate" == true && -f "$page2" ]]; then
+            if [[ -n "$jq_expr" ]]; then
+                jq -r "$jq_expr" < "$response_file"
+                jq -r "$jq_expr" < "$page2"
+            else
+                cat "$response_file"
+                cat "$page2"
+            fi
+        elif [[ -n "$jq_expr" ]]; then
+            jq -r "$jq_expr" < "$response_file"
+        else
+            cat "$response_file"
+        fi
+        exit 0
+    fi
+
+    exit 1
+""")
+
+
+def _dependabot_commit_message(
+    dep_name: str, dep_version: str,
+) -> str:
+    """Build a realistic Dependabot commit message with metadata."""
+    return (
+        f"Bump {dep_name} from 1.0.0 to {dep_version}\n"
+        f"\n"
+        f"Bumps [{dep_name}](https://github.com/{dep_name}).\n"
+        f"\n"
+        f"---\n"
+        f"updated-dependencies:\n"
+        f"- dependency-name: {dep_name}\n"
+        f"  dependency-type: direct:production\n"
+        f"  dependency-version: {dep_version}\n"
+        f"  update-type: version-update:semver-patch\n"
+        f"...\n"
+    )
+
+
+def _search_result(
+    repo: str, pr_number: int, dep: str, version: str,
+) -> dict[str, Any]:
+    """Build a single search result entry."""
+    return {
+        "repository": {"nameWithOwner": repo},
+        "number": pr_number,
+        "title": f"Bump {dep} from 1.0.0 to {version}",
+    }
+
+
+def _review(
+    login: str,
+    state: str = "APPROVED",
+    user_type: str = "User",
+) -> dict[str, Any]:
+    """Build a single review entry."""
+    return {
+        "state": state,
+        "user": {"login": login, "type": user_type},
+    }
+
+
+class TestOrgPrecedentBehavioral:
+    """Behavioral tests running production bash with mocked gh.
+
+    Extracts the ``Check Org Precedent`` step's ``run:`` block from the
+    workflow YAML and executes it via subprocess with a mock ``gh``
+    script. Asserts on ``GITHUB_OUTPUT`` file contents to verify the
+    step produces correct ``org_precedent`` and ``precedent_detail``
+    outputs under various scenarios.
+
+    Requires: ``jq``, ``timeout``, and ``bash`` on the test host.
+    """
+
+    @pytest.fixture
+    def mock_dir(self, tmp_path: Path) -> Path:
+        """Directory for mock gh response files."""
+        d = tmp_path / "mock_responses"
+        d.mkdir()
+        return d
+
+    @pytest.fixture
+    def github_output(self, tmp_path: Path) -> Path:
+        """Temp file simulating GITHUB_OUTPUT."""
+        f = tmp_path / "github_output"
+        f.touch()
+        return f
+
+    @pytest.fixture
+    def mock_gh(self, tmp_path: Path) -> Path:
+        """Create the mock gh executable."""
+        script = tmp_path / "gh"
+        script.write_text(MOCK_GH_SCRIPT)
+        script.chmod(0o755)
+        return script
+
+    @pytest.fixture
+    def precedent_bash(
+        self, steps: list[dict[str, Any]],
+    ) -> str:
+        """Extract the run: block from the Check Org Precedent step."""
+        matches = [
+            s for s in steps
+            if "Check Org Precedent" in s.get("name", "")
+        ]
+        assert len(matches) == 1
+        return matches[0]["run"]
+
+    def _run(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+        dep_name: str,
+        dep_version: str,
+        current_repo: str = "complytime/org-infra",
+    ) -> tuple[dict[str, str], subprocess.CompletedProcess[str]]:
+        """Execute the production bash and return parsed outputs.
+
+        Prepends ``set -eo pipefail`` to replicate GitHub Actions'
+        default ``shell: bash`` behavior (``bash --noprofile --norc
+        -eo pipefail {0}``).
+        """
+        env = {
+            "PATH": f"{mock_gh.parent}:{os.environ.get('PATH', '')}",
+            "HOME": os.environ.get("HOME", "/tmp"),
+            "DEP_NAME": dep_name,
+            "DEP_VERSION": dep_version,
+            "GITHUB_REPOSITORY": current_repo,
+            "GITHUB_OUTPUT": str(github_output),
+            "MOCK_GH_DIR": str(mock_dir),
+            "REPO_OWNER": current_repo.split("/")[0],
+            "GH_TOKEN": "mock-token",
+        }
+
+        # Replicate GitHub Actions' default shell behavior
+        script = f"set -eo pipefail\n{precedent_bash}"
+        result = subprocess.run(
+            ["bash", "-c", script],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+        outputs: dict[str, str] = {}
+        for line in github_output.read_text().splitlines():
+            if "=" in line:
+                key, _, value = line.partition("=")
+                outputs[key] = value
+        return outputs, result
+
+    def test_happy_path_matching_precedent(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Matching dep, version, and human approval → org_precedent=true."""
+        dep = "actions/checkout"
+        version = "4.2.0"
+
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([_search_result("complytime/complyctl", 99, dep, version)]),
+        )
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{"commit": {"message": _dependabot_commit_message(dep, version)}}]),
+        )
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([_review("alice")]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name=dep, dep_version=version,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "true"
+        assert outputs["precedent_detail"] == (
+            "Reviewed by alice in complytime/complyctl#99"
+        )
+
+    def test_mismatched_dependency_name_in_metadata(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Commit metadata shows different dep → org_precedent=false."""
+        dep = "actions/checkout"
+        version = "4.2.0"
+
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([_search_result("complytime/complyctl", 99, dep, version)]),
+        )
+        # Commit metadata reports a different dependency
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{
+                "commit": {
+                    "message": _dependabot_commit_message(
+                        "actions/setup-node", version,
+                    ),
+                },
+            }]),
+        )
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([_review("alice")]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name=dep, dep_version=version,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "false"
+
+    def test_mismatched_version_in_metadata(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Commit metadata shows different version → org_precedent=false."""
+        dep = "actions/checkout"
+        version = "4.2.0"
+
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([_search_result("complytime/complyctl", 99, dep, version)]),
+        )
+        # Commit metadata reports a different version
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{
+                "commit": {
+                    "message": _dependabot_commit_message(dep, "3.0.0"),
+                },
+            }]),
+        )
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([_review("alice")]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name=dep, dep_version=version,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "false"
+
+    def test_approval_only_on_review_page_two(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Human approval on page 2 of reviews → org_precedent=true.
+
+        Regression test for the pagination fix: the streaming jq
+        expression must find approvals regardless of which page
+        they appear on.
+        """
+        dep = "actions/checkout"
+        version = "4.2.0"
+
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([_search_result("complytime/complyctl", 99, dep, version)]),
+        )
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{"commit": {"message": _dependabot_commit_message(dep, version)}}]),
+        )
+        # Page 1: only non-approval reviews
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([
+                _review("commenter", state="COMMENTED"),
+                _review("requester", state="CHANGES_REQUESTED"),
+            ]),
+        )
+        # Page 2: human approval
+        (mock_dir / "reviews_page2.json").write_text(
+            json.dumps([_review("alice")]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name=dep, dep_version=version,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "true"
+        assert "alice" in outputs["precedent_detail"]
+
+    def test_all_bot_approvals_rejected(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Only bot approvals → org_precedent=false."""
+        dep = "actions/checkout"
+        version = "4.2.0"
+
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([_search_result("complytime/complyctl", 99, dep, version)]),
+        )
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{"commit": {"message": _dependabot_commit_message(dep, version)}}]),
+        )
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([
+                _review("github-actions[bot]", user_type="Bot"),
+                _review("dependabot[bot]", user_type="Bot"),
+            ]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name=dep, dep_version=version,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "false"
+
+    def test_empty_search_results(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """No matching PRs in search → org_precedent=false."""
+        (mock_dir / "search_prs.json").write_text("[]")
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name="actions/checkout", dep_version="4.2.0",
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "false"
+
+    def test_empty_dep_name_skips_search(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Empty DEP_NAME → skip search, org_precedent=false.
+
+        Mock data would produce org_precedent=true if the early
+        exit guard (empty dep/version check) is bypassed — ensures
+        the test catches the exact regression.
+        """
+        dep = "actions/checkout"
+        version = "4.2.0"
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([_search_result(
+                "complytime/complyctl", 99, dep, version,
+            )]),
+        )
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{"commit": {"message": (
+                _dependabot_commit_message(dep, version)
+            )}}]),
+        )
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([_review("alice")]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name="", dep_version=version,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "false"
+
+    def test_current_repo_excluded_from_candidates(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Candidate from current repo skipped → org_precedent=false."""
+        dep = "actions/checkout"
+        version = "4.2.0"
+
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([
+                _search_result("complytime/org-infra", 50, dep, version),
+            ]),
+        )
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{"commit": {"message": _dependabot_commit_message(dep, version)}}]),
+        )
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([_review("alice")]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name=dep, dep_version=version,
+            current_repo="complytime/org-infra",
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "false"
+
+    def test_version_in_from_position_not_matched(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Version appears only in FROM position → org_precedent=false.
+
+        A search for version 4.0.0 should not match a PR titled
+        'Bump X from 4.0.0 to 5.0.0' — the title filter checks for
+        'to <version>', not just any occurrence.
+
+        Mock data would produce org_precedent=true if the title filter
+        is broken, ensuring the test catches the exact regression.
+        """
+        dep = "actions/checkout"
+        version = "4.0.0"
+
+        # Title has version in FROM position, not TO
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([{
+                "repository": {"nameWithOwner": "complytime/complyctl"},
+                "number": 99,
+                "title": f"Bump {dep} from {version} to 5.0.0",
+            }]),
+        )
+        # Provide matching metadata and approval so title filter is
+        # the only gate preventing org_precedent=true
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{"commit": {"message": (
+                _dependabot_commit_message(dep, version)
+            )}}]),
+        )
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([_review("alice")]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name=dep, dep_version=version,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "false"
+
+    def test_metadata_absent_falls_through_to_title_match(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Commit without Dependabot metadata → title match used.
+
+        When commit metadata is absent (older Dependabot, grouped PRs),
+        the title-based filter is the sole verification. If the title
+        already passed the jq filter, the candidate proceeds to the
+        reviews check.
+        """
+        dep = "actions/checkout"
+        version = "4.2.0"
+
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([_search_result("complytime/complyctl", 99, dep, version)]),
+        )
+        # Commit message without structured Dependabot metadata
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{
+                "commit": {
+                    "message": f"Bump {dep} from 1.0.0 to {version}",
+                },
+            }]),
+        )
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([_review("alice")]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name=dep, dep_version=version,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "true"
+        assert outputs["precedent_detail"] == (
+            "Reviewed by alice in complytime/complyctl#99"
+        )
+
+    def test_first_candidate_skipped_second_matches(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Loop continues past current-repo candidate to find match.
+
+        Exercises the multi-candidate loop: first candidate is the
+        current repo (skipped), second candidate has valid metadata
+        and human approval.
+        """
+        dep = "actions/checkout"
+        version = "4.2.0"
+
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([
+                _search_result(
+                    "complytime/org-infra", 50, dep, version,
+                ),
+                _search_result(
+                    "complytime/complyctl", 99, dep, version,
+                ),
+            ]),
+        )
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{"commit": {"message": (
+                _dependabot_commit_message(dep, version)
+            )}}]),
+        )
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([_review("bob")]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name=dep, dep_version=version,
+            current_repo="complytime/org-infra",
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "true"
+        assert outputs["precedent_detail"] == (
+            "Reviewed by bob in complytime/complyctl#99"
+        )
