@@ -446,11 +446,13 @@ jobs:
           # version matches. Search results are candidates only — the title
           # may contain the version in the FROM position (e.g., "from 4.0.0
           # to 5.0.0" matches a search for "4.0.0" but is not precedent for
-          # 4.0.0 as a destination).
+          # 4.0.0 as a destination). The pattern also rejects semver
+          # pre-release suffixes (e.g., "4.2.0-rc.1" must not match "4.2.0")
+          # by excluding alphanumeric, dot, hyphen, and plus after the version.
           # shellcheck disable=SC2016  # \& is a sed backreference, not a shell expansion
           escaped_version="$(printf '%s' "$version" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
           result="$(jq -c \
-            --arg pattern "to ${escaped_version}([^0-9]|$)" \
+            --arg pattern "to ${escaped_version}([^0-9a-zA-Z.+-]|$)" \
             '[.[] | select(.title | test($pattern; "i"))]' \
             <<<"$result")" || result="[]"
 

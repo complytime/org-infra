@@ -810,6 +810,21 @@ class TestOrgPrecedentStepIntegrity:
         assert "dependency-name:" in run_block
         assert "dependency-version:" in run_block
 
+    def test_title_filter_rejects_semver_prerelease_suffixes(
+        self, run_block: str,
+    ) -> None:
+        """Title filter regex must reject semver pre-release suffixes.
+
+        The character class after the version must exclude hyphens,
+        plus signs, dots, and alphanumeric characters to prevent
+        matching pre-release (4.2.0-rc.1) or build metadata
+        (4.2.0+build.123) variants of the requested version.
+        """
+        assert "[^0-9a-zA-Z.+-]" in run_block, (
+            "Title filter regex must use [^0-9a-zA-Z.+-] to reject "
+            "semver pre-release and build metadata suffixes"
+        )
+
     def test_reviews_jq_uses_streaming_not_array_indexing(
         self, run_block: str,
     ) -> None:
@@ -1419,3 +1434,90 @@ class TestOrgPrecedentBehavioral:
         assert outputs["precedent_detail"] == (
             "Reviewed by bob in complytime/complyctl#99"
         )
+
+    def test_prerelease_version_not_matched(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Pre-release suffix must not match base version.
+
+        Searching for version 4.2.0 must not match a PR titled
+        'Bump X from 1.0.0 to 4.2.0-rc.1'. The title filter must
+        reject semver pre-release suffixes to prevent false positives.
+
+        Regression test for: version regex allowing `-` as a non-digit
+        character after the version, matching pre-release identifiers.
+        """
+        dep = "actions/checkout"
+        version = "4.2.0"
+
+        # Title has a pre-release version that starts with 4.2.0
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([{
+                "repository": {"nameWithOwner": "complytime/complyctl"},
+                "number": 99,
+                "title": f"Bump {dep} from 1.0.0 to {version}-rc.1",
+            }]),
+        )
+        # No commit metadata → title filter is the sole gate
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{
+                "commit": {
+                    "message": f"Bump {dep} from 1.0.0 to {version}-rc.1",
+                },
+            }]),
+        )
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([_review("alice")]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name=dep, dep_version=version,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "false"
+
+    def test_prerelease_version_with_build_metadata_not_matched(
+        self,
+        precedent_bash: str,
+        mock_gh: Path,
+        mock_dir: Path,
+        github_output: Path,
+    ) -> None:
+        """Build metadata suffix must not match base version.
+
+        Searching for version 4.2.0 must not match 4.2.0+build.123.
+        """
+        dep = "actions/checkout"
+        version = "4.2.0"
+
+        (mock_dir / "search_prs.json").write_text(
+            json.dumps([{
+                "repository": {"nameWithOwner": "complytime/complyctl"},
+                "number": 99,
+                "title": f"Bump {dep} from 1.0.0 to {version}+build.123",
+            }]),
+        )
+        (mock_dir / "commits.json").write_text(
+            json.dumps([{
+                "commit": {
+                    "message": f"Bump {dep} from 1.0.0 to {version}+build.123",
+                },
+            }]),
+        )
+        (mock_dir / "reviews.json").write_text(
+            json.dumps([_review("alice")]),
+        )
+
+        outputs, result = self._run(
+            precedent_bash, mock_gh, mock_dir, github_output,
+            dep_name=dep, dep_version=version,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert outputs["org_precedent"] == "false"
