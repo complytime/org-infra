@@ -1,5 +1,8 @@
 {
   "id": "block-force-push",
+  "when": {
+    "expression": "predicates.exists(p, p.predicate_type == 'http://github.com/carabiner-dev/snappy/specs/github/branch-rules.yaml' || p.predicate_type == 'http://github.com/carabiner-dev/snappy/specs/gitlab/branch-protection.yaml')"
+  },
   "meta": {
     "description": "Validate force push blocking is enabled on protected branches via GitHub or GitLab API",
     "controls": [

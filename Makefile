@@ -42,7 +42,7 @@ $(VENV)/bin/activate: requirements.txt
 ##@ Lint
 
 .PHONY: lint
-lint: lint-yaml lint-python ## Run all linters
+lint: lint-yaml lint-python lint-policies ## Run all linters
 
 .PHONY: lint-yaml
 lint-yaml: $(VENV)/bin/activate ## Lint YAML files
@@ -53,6 +53,27 @@ lint-yaml: $(VENV)/bin/activate ## Lint YAML files
 lint-python: $(VENV)/bin/activate ## Lint Python files
 	@echo "Linting Python files..."
 	@$(VENV)/bin/ruff check scripts/ tests/
+
+.PHONY: lint-policies
+lint-policies: ## Lint policy when-guard consistency with tenet predicate types
+	@echo "Linting policy when-guards..."
+	@fail=0; \
+	for f in $$(find compliance/ampel -name '*.json' -type f); do \
+		has_when=$$(jq 'has("when")' "$$f"); \
+		if [ "$$has_when" != "true" ]; then \
+			continue; \
+		fi; \
+		missing=$$(jq -r \
+			'.when.expression as $$expr | [.tenets[].predicates.types[]] | unique[] | select(. as $$url | $$expr | contains($$url) | not)' \
+			"$$f"); \
+		if [ -n "$$missing" ]; then \
+			for url in $$missing; do \
+				echo "ERROR: $$f: predicate type '$$url' missing from when.expression"; \
+			done; \
+			fail=1; \
+		fi; \
+	done; \
+	if [ "$$fail" -eq 1 ]; then exit 1; fi
 
 ##@ Sync
 
