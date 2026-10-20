@@ -48,7 +48,7 @@ jobs:
         id: set_status
         if: "${{ always() }}"
         env:
-          REVIEW_CONCLUSION: "${{ steps.dependency_review.conclusion }}"
+          REVIEW_CONCLUSION: "${{ steps.dependency_review.outcome }}"
         run: |
           if [[ "$REVIEW_CONCLUSION" == "failure" ]]; then
             echo "review_step=failure" >> "$GITHUB_OUTPUT"

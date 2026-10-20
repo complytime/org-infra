@@ -52,6 +52,8 @@ jobs:
           DEP_VERSION: ${{ needs.call_dependabot_reviewer.outputs.dep_version }}
           RELEASE_AGE_HOURS: ${{ needs.call_dependabot_reviewer.outputs.release_age_hours }}
           IS_ORG_OWNED: ${{ needs.call_dependabot_reviewer.outputs.is_org_owned }}
+          ORG_PRECEDENT: ${{ needs.call_dependabot_reviewer.outputs.org_precedent }}
+          PRECEDENT_DETAIL: ${{ needs.call_dependabot_reviewer.outputs.precedent_detail }}
         with:
           issue-number: ${{ github.event.pull_request.number }}
           edit-mode: replace
@@ -66,9 +68,10 @@ jobs:
             | **Calculated Risk** | **${{ env.RISK_LEVEL }}** | `${{ env.DEP_NAME }}` v${{ env.DEP_VERSION }} |
             | **Release Age** | **${{ (env.RELEASE_AGE_HOURS == '-1' || env.RELEASE_AGE_HOURS == '') && 'unknown' || format('{0}h', env.RELEASE_AGE_HOURS) }}** | ${{ (env.RELEASE_AGE_HOURS == '-1' || env.RELEASE_AGE_HOURS == '') && 'Release date unavailable — manual review required' || format('Released {0} hours ago', env.RELEASE_AGE_HOURS) }} |
             | **Ownership** | **${{ env.IS_ORG_OWNED == 'true' && 'org-owned' || 'third-party' }}** | ${{ env.IS_ORG_OWNED == 'true' && 'Same organization — trusted source' || 'External dependency' }} |
+            | **Org Precedent** | **${{ env.ORG_PRECEDENT == 'true' && 'found' || 'none' }}** | ${{ env.ORG_PRECEDENT == 'true' && env.PRECEDENT_DETAIL || 'No prior merge found in the organization' }} |
             | **Dependency Usage** | ${{ env.UPDATES_COUNT == '0' && 'unavailable' || format('{0} repos', env.UPDATES_COUNT) }} | Informational only — does not affect approval |
 
-            **Auto-approval:** ${{ (env.IS_ORG_OWNED == 'true' && env.RISK_LEVEL != 'high' && env.REVIEW_CONCLUSION == 'success') && '✅ Approved + auto-merge requested (org-owned)' || (env.RISK_LEVEL != 'high' && env.REVIEW_CONCLUSION == 'success' && env.RELEASE_AGE_HOURS != '-1' && fromJSON(env.RELEASE_AGE_HOURS) >= fromJSON(env.MIN_RELEASE_AGE_HOURS)) && '✅ Approved' || '⏳ Manual review required' }}
+            **Auto-approval:** ${{ (env.IS_ORG_OWNED == 'true' && env.RISK_LEVEL != 'high' && env.REVIEW_CONCLUSION == 'success') && '✅ Approved + auto-merge requested (org-owned)' || (env.ORG_PRECEDENT == 'true' && env.RISK_LEVEL != 'high' && env.REVIEW_CONCLUSION == 'success' && env.RELEASE_AGE_HOURS != '-1' && fromJSON(env.RELEASE_AGE_HOURS) >= fromJSON(env.MIN_RELEASE_AGE_HOURS)) && '✅ Approved + auto-merge requested (org precedent)' || (env.RISK_LEVEL != 'high' && env.REVIEW_CONCLUSION == 'success' && env.RELEASE_AGE_HOURS != '-1' && fromJSON(env.RELEASE_AGE_HOURS) >= fromJSON(env.MIN_RELEASE_AGE_HOURS)) && '✅ Approved' || '⏳ Manual review required' }}
 
             ---
 
@@ -99,39 +102,51 @@ jobs:
           (needs.call_dependabot_reviewer.outputs.is_org_owned == 'true' &&
            needs.call_dependabot_reviewer.outputs.risk_level != 'high' &&
            needs.call_deps_reviewer.outputs.review_conclusion == 'success')
+          ||
+          (needs.call_dependabot_reviewer.outputs.org_precedent == 'true' &&
+           needs.call_dependabot_reviewer.outputs.risk_level != 'high' &&
+           needs.call_deps_reviewer.outputs.review_conclusion == 'success' &&
+           needs.call_dependabot_reviewer.outputs.release_age_hours != '-1' &&
+           fromJSON(needs.call_dependabot_reviewer.outputs.release_age_hours) >= fromJSON(env.MIN_RELEASE_AGE_HOURS))
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RISK_LEVEL: ${{ needs.call_dependabot_reviewer.outputs.risk_level }}
           REVIEW_CONCLUSION: ${{ needs.call_deps_reviewer.outputs.review_conclusion }}
           RELEASE_AGE_HOURS: ${{ needs.call_dependabot_reviewer.outputs.release_age_hours }}
           IS_ORG_OWNED: ${{ needs.call_dependabot_reviewer.outputs.is_org_owned }}
+          ORG_PRECEDENT: ${{ needs.call_dependabot_reviewer.outputs.org_precedent }}
+          PRECEDENT_DETAIL: ${{ needs.call_dependabot_reviewer.outputs.precedent_detail }}
         with:
           script: |
             const risk = process.env.RISK_LEVEL;
             const review = process.env.REVIEW_CONCLUSION;
             const releaseAge = process.env.RELEASE_AGE_HOURS;
             const isOrgOwned = process.env.IS_ORG_OWNED;
+            const orgPrecedent = process.env.ORG_PRECEDENT;
+            const precedentDetail = process.env.PRECEDENT_DETAIL;
             const ownership = isOrgOwned === 'true' ? 'org-owned' : 'third-party';
             const ageInfo = isOrgOwned === 'true' ? 'skipped (org-owned)' : `${releaseAge}h`;
+            const precedentInfo = orgPrecedent === 'true' ? `, precedent=${precedentDetail}` : '';
 
             github.rest.pulls.createReview({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
               event: 'APPROVE',
-              body: `Automatically approved: risk=${risk}, review=${review}, ownership=${ownership}, release_age=${ageInfo}.`
+              body: `Automatically approved: risk=${risk}, review=${review}, ownership=${ownership}, release_age=${ageInfo}${precedentInfo}.`
             });
-            console.log(`Dependabot PR approved: risk=${risk}, review=${review}, ownership=${ownership}, release_age=${ageInfo}`);
+            console.log(`Dependabot PR approved: risk=${risk}, review=${review}, ownership=${ownership}, release_age=${ageInfo}${precedentInfo}`);
 
-      - name: Enable Auto-merge for Org-owned
+      - name: Enable Auto-merge
         if: >-
           steps.auto_approve.outcome == 'success' &&
-          needs.call_dependabot_reviewer.outputs.is_org_owned == 'true'
+          (needs.call_dependabot_reviewer.outputs.is_org_owned == 'true' ||
+           needs.call_dependabot_reviewer.outputs.org_precedent == 'true')
         continue-on-error: true
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         run: |
-          echo "Enabling auto-merge for org-owned dependency..."
+          echo "Enabling auto-merge for trusted dependency..."
           gh pr merge "${{ github.event.pull_request.number }}" \
             --auto --squash \
             --repo "${{ github.repository }}"
