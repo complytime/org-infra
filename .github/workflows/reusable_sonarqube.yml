@@ -71,10 +71,9 @@ jobs:
         if: ${{ inputs.coverage_file_path != '' }}
         env:
           COVERAGE_ARTIFACT_NAME: "${{ inputs.coverage_artifact_name }}"
-          COVERAGE_FILE_PATH: "${{ inputs.coverage_file_path }}"
         with:
           name: ${{ env.COVERAGE_ARTIFACT_NAME }}
-          path: ${{ env.COVERAGE_FILE_PATH }}
+          path: .
 
       # The calling workflow MUST ensure the coverage file exists before calling this.
       # This step just runs the SonarCloud analysis with the provided inputs.
