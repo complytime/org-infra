@@ -1,5 +1,8 @@
 {
   "id": "minimum-approvals",
+  "when": {
+    "expression": "predicates.exists(p, p.predicate_type == 'http://github.com/carabiner-dev/snappy/specs/github/branch-rules.yaml' || p.predicate_type == 'http://github.com/carabiner-dev/snappy/specs/gitlab/project-approvals.yaml')"
+  },
   "meta": {
     "description": "Validate minimum approval count and prevent self-approval via GitHub or GitLab API",
     "controls": [

@@ -1,5 +1,8 @@
 {
   "id": "require-code-owner-review",
+  "when": {
+    "expression": "predicates.exists(p, p.predicate_type == 'http://github.com/carabiner-dev/snappy/specs/github/branch-rules.yaml' || p.predicate_type == 'http://github.com/carabiner-dev/snappy/specs/gitlab/branch-protection.yaml')"
+  },
   "meta": {
     "description": "Validate code owner review requirements are enabled when CODEOWNERS file exists via GitHub or GitLab API",
     "controls": [

@@ -19,7 +19,7 @@ tests/
 ## Commands
 
 ```bash
-make lint            # yamllint + ruff (all linters)
+make lint            # yamllint + ruff + policy lint (all linters)
 make test            # pytest -v
 make sync-dry-run    # Preview file sync to org repos
 make clean           # Remove __pycache__ and .pyc
