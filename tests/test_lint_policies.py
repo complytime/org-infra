@@ -251,18 +251,112 @@ class TestMalformedJson:
 
 
 class TestMakeLintPolicies:
-    """Integration test: verify the full make lint-policies target."""
+    """Integration tests: verify the full make lint-policies target.
+
+    Positive tests run against the real policy tree.
+    Negative tests create an isolated temporary workspace with the
+    production Makefile and broken policy fixtures, asserting that the
+    Makefile target exits non-zero with the expected diagnostic.
+    """
+
+    _project_root = Path(__file__).resolve().parents[1]
 
     def test_make_lint_policies_passes(self) -> None:
         """The make lint-policies target must pass on current policies."""
-        project_root = Path(__file__).resolve().parents[1]
         result = subprocess.run(
             ["make", "lint-policies"],
             capture_output=True,
             text=True,
             check=False,
-            cwd=str(project_root),
+            cwd=str(self._project_root),
         )
         assert result.returncode == 0, (
             f"make lint-policies failed:\n{result.stdout}\n{result.stderr}"
+        )
+
+    @staticmethod
+    def _setup_workspace(
+        tmp_path: Path,
+        policies: dict[str, Any],
+    ) -> Path:
+        """Create an isolated workspace with the production Makefile.
+
+        Copies the real Makefile and creates compliance/ampel/ with the
+        given policy fixtures so that ``make lint-policies`` exercises
+        the production validation logic end-to-end.
+
+        Args:
+            tmp_path: pytest temp directory.
+            policies: mapping of filename to content (str for raw text,
+                dict for JSON-serializable objects).
+
+        Returns:
+            The workspace root path.
+        """
+        project_root = Path(__file__).resolve().parents[1]
+        shutil.copy2(project_root / "Makefile", tmp_path / "Makefile")
+
+        policy_dir = tmp_path / "compliance" / "ampel"
+        policy_dir.mkdir(parents=True)
+        for name, content in policies.items():
+            policy_file = policy_dir / name
+            if isinstance(content, dict):
+                policy_file.write_text(
+                    json.dumps(content), encoding="utf-8"
+                )
+            else:
+                policy_file.write_text(content, encoding="utf-8")
+        return tmp_path
+
+    def test_suffix_mismatch_fails(self, tmp_path: Path) -> None:
+        """make lint-policies must reject URL suffix mismatches.
+
+        A tenet predicate URL that differs from the when.expression URL
+        only by an appended suffix (e.g. '.invalid') must be caught.
+        This case passes on the pre-fix Makefile (contains() matches
+        substrings) and fails correctly with the exact-match fix.
+        """
+        policy = _make_policy(
+            predicate_urls=[GITHUB_BRANCH_RULES_URL],
+            expression_urls=[GITHUB_BRANCH_RULES_URL + ".invalid"],
+        )
+        workspace = self._setup_workspace(
+            tmp_path, {"suffix-mismatch.json": policy}
+        )
+        result = subprocess.run(
+            ["make", "lint-policies"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=str(workspace),
+        )
+        assert result.returncode != 0, (
+            "make lint-policies should fail for suffix-mismatched URLs"
+        )
+        assert "missing from when.expression" in result.stdout, (
+            "Expected diagnostic about missing predicate type"
+        )
+
+    def test_malformed_json_fails(self, tmp_path: Path) -> None:
+        """make lint-policies must reject malformed JSON files.
+
+        Invalid JSON must cause a non-zero exit and a clear diagnostic.
+        This case verifies the jq-empty pre-validation guard added in
+        this PR.
+        """
+        workspace = self._setup_workspace(
+            tmp_path, {"bad.json": "{not valid json"}
+        )
+        result = subprocess.run(
+            ["make", "lint-policies"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=str(workspace),
+        )
+        assert result.returncode != 0, (
+            "make lint-policies should fail for malformed JSON"
+        )
+        assert "invalid JSON" in result.stdout, (
+            "Expected diagnostic about invalid JSON"
         )
