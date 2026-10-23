@@ -57,15 +57,37 @@ lint-python: $(VENV)/bin/activate ## Lint Python files
 .PHONY: lint-policies
 lint-policies: ## Lint policy when-guard consistency with tenet predicate types
 	@echo "Linting policy when-guards..."
-	@fail=0; \
-	for f in $$(find compliance/ampel -name '*.json' -type f); do \
-		has_when=$$(jq 'has("when")' "$$f"); \
+	@if ! command -v jq >/dev/null 2>&1; then \
+		echo "ERROR: jq is required for policy linting"; \
+		exit 1; \
+	fi; \
+	policy_dir="compliance/ampel"; \
+	if [ ! -d "$$policy_dir" ]; then \
+		echo "ERROR: policy directory '$$policy_dir' not found"; \
+		exit 1; \
+	fi; \
+	fail=0; \
+	for f in $$(find "$$policy_dir" -name '*.json' -type f); do \
+		if ! jq empty "$$f" 2>/dev/null; then \
+			echo "ERROR: $$f: invalid JSON"; \
+			fail=1; \
+			continue; \
+		fi; \
+		has_when=$$(jq 'has("when")' "$$f") || { \
+			echo "ERROR: $$f: failed to evaluate when guard"; \
+			fail=1; \
+			continue; \
+		}; \
 		if [ "$$has_when" != "true" ]; then \
 			continue; \
 		fi; \
 		missing=$$(jq -r \
 			'.when.expression as $$expr | [.tenets[].predicates.types[]] | unique[] | select(. as $$url | $$expr | contains($$url) | not)' \
-			"$$f"); \
+			"$$f") || { \
+			echo "ERROR: $$f: failed to validate when expression"; \
+			fail=1; \
+			continue; \
+		}; \
 		if [ -n "$$missing" ]; then \
 			for url in $$missing; do \
 				echo "ERROR: $$f: predicate type '$$url' missing from when.expression"; \
