@@ -51,9 +51,9 @@
 ### Task 4 — Validation
 
 - [x] 4.1 Verify `yamllint` passes on all three files
-- [ ] 4.2 Verify `make sync-dry-run` includes release workflow files if applicable
-- [ ] 4.3 Run release notes preview workflow to confirm dry-run output
-- [ ] 4.4 Test release workflow with first release (e.g., `v0.1.0`)
+- [x] 4.2 Verify `make sync-dry-run` includes release workflow files if applicable
+- [x] 4.3 Run release notes preview workflow to confirm dry-run output
+- [x] 4.4 Test release workflow with first release (e.g., `v0.1.0`) — validated by v0.8.0 release
 
 ---
 
@@ -71,4 +71,4 @@ Before opening the PR to `complytime/org-infra`:
 - [x] No `${{ }}` interpolation in `run:` blocks — all user inputs via `env:`
 - [x] Release restricted to `main` branch only
 - [x] Spec files exist under `specs/007-release-workflow/`
-- [ ] PR description documents the release process and consumer pinning strategy
+- [x] PR description documents the release process and consumer pinning strategy

@@ -1,7 +1,10 @@
 ## ADDED Requirements
 
 ### Requirement: Reusable complypack pack and push
-The reusable workflow SHALL accept a content directory path, registry image name, tag, evaluator ID, complypack ID, and complypack version as inputs and produce a complypack OCI artifact pushed to GHCR.
+The reusable workflow SHALL accept a content directory path, registry image
+name, tag, evaluator ID, complypack ID, and complypack version as inputs and
+produce a complypack OCI artifact pushed to GHCR. The workflow SHALL execute
+on protected branches and on tag refs.
 
 #### Scenario: Successful pack and push
 - **WHEN** the reusable workflow is called with valid inputs including a content directory containing policy files
@@ -9,26 +12,36 @@ The reusable workflow SHALL accept a content directory path, registry image name
 
 #### Scenario: Complypack config generated from inputs
 - **WHEN** the reusable workflow executes
-- **THEN** the workflow generates a `complypack.yaml` containing `id`, `evaluator-id`, and `version` fields from the provided inputs, without requiring a checked-in config file
+- **THEN** the workflow generates a complypack config containing id, evaluator-id, and version fields from the provided inputs, without requiring a checked-in config file
 
 #### Scenario: Digest and output validation
 - **WHEN** the artifact is successfully pushed to GHCR
-- **THEN** the workflow outputs `digest` in `sha256:<64-hex-chars>` format, `image` matching the input `image_name`, and `tag` matching the input `tag`
+- **THEN** the workflow outputs digest in sha256 hex format, image matching the input image_name, and tag matching the input tag
 
 #### Scenario: Pack failure
-- **WHEN** the complypack CLI fails to pack the content directory (invalid path, malformed content, or CLI error)
+- **WHEN** the complypack CLI fails to pack the content directory
 - **THEN** the workflow fails with a non-zero exit code and the CLI error output is visible in the workflow logs
 
 #### Scenario: Digest retrieval failure
-- **WHEN** the ORAS manifest fetch fails or returns a digest not matching `sha256:<64-hex-chars>` format
+- **WHEN** the ORAS manifest fetch fails or returns a digest not matching the expected format
 - **THEN** the workflow fails with a clear error message indicating the unexpected digest format
 
+#### Scenario: Publish from a tag ref
+- **WHEN** the reusable workflow is called from a tag ref
+- **THEN** the workflow SHALL execute the publish job (the ref_protected guard SHALL NOT block tag refs)
+
+#### Scenario: Publish blocked on unprotected branch
+- **WHEN** the reusable workflow is called from an unprotected branch (not main, not a tag)
+- **THEN** the publish job is skipped
+
 ### Requirement: Supply chain attestations
-The reusable workflow SHALL generate SLSA provenance and SBOM attestations for published complypack artifacts when attestation generation is enabled.
+The reusable workflow SHALL generate SLSA provenance and SBOM attestations
+for published complypack artifacts when attestation generation is enabled.
+The consumer workflow SHALL force attestations on release builds.
 
 #### Scenario: Provenance and SBOM on protected ref
 - **WHEN** the workflow runs on a protected ref with attestation generation set to auto
-- **THEN** SLSA provenance attestation and an SBOM attestation (scanning the content directory) are generated and pushed to the registry alongside the artifact
+- **THEN** SLSA provenance attestation and an SBOM attestation are generated and pushed to the registry alongside the artifact
 
 #### Scenario: No attestations on unprotected ref with auto mode
 - **WHEN** the workflow runs on an unprotected ref with attestation generation set to auto
@@ -37,6 +50,10 @@ The reusable workflow SHALL generate SLSA provenance and SBOM attestations for p
 #### Scenario: Forced attestation generation
 - **WHEN** the workflow runs with attestation generation set to true
 - **THEN** SLSA provenance and SBOM attestations are generated regardless of ref protection status
+
+#### Scenario: Release builds force attestations
+- **WHEN** the consumer workflow publishes a complypack for release promotion
+- **THEN** the consumer SHALL pass generate_attestations as true to ensure attestations are present on the release artifact
 
 ### Requirement: Automatic publish on policy change
 The consumer workflow SHALL publish a complypack artifact to GHCR whenever ampel branch-protection policy files change on the main branch.
@@ -50,49 +67,76 @@ The consumer workflow SHALL publish a complypack artifact to GHCR whenever ampel
 - **THEN** the complypack publish workflow does not trigger
 
 ### Requirement: Keyless signing on GHCR
-The consumer workflow SHALL sign the GHCR artifact using Sigstore keyless signing after a successful publish on a protected ref.
+The consumer workflow SHALL sign the GHCR artifact using Sigstore keyless
+signing after a successful publish, including for release builds from tags.
 
 #### Scenario: Sign after publish on protected ref
 - **WHEN** a complypack artifact is successfully pushed to GHCR on a protected ref
 - **THEN** the artifact is signed with Sigstore keyless signing and the signature is verifiable with cosign
 
+#### Scenario: Sign after publish from tag ref
+- **WHEN** a complypack artifact is successfully pushed to GHCR from a tag ref during release promotion
+- **THEN** the artifact is signed with Sigstore keyless signing
+
 #### Scenario: No signing on unprotected branch
 - **WHEN** a complypack artifact is published from an unprotected branch (not a tag)
 - **THEN** the signing job is skipped because the publish guard blocks unprotected branch builds
 
-### Requirement: Rebuild-and-promote Quay promotion
-The consumer workflow SHALL promote the complypack artifact from GHCR to Quay via manual `workflow_dispatch` with `promote_quay=true`, rebuilding the artifact from the release commit before promotion. The `release: published` trigger has been removed in favor of manual dispatch.
+### Requirement: Release-gated Quay promotion
+The consumer workflow SHALL promote the complypack artifact from GHCR to
+Quay only during a release flow, using the release tag as the Quay image
+tag. Promotion SHALL rebuild the artifact from the release commit to ensure
+the GHCR image exists with the release tag before copying to Quay.
 
 #### Scenario: Manual dispatch triggers rebuild and promotion
-- **WHEN** the workflow is manually dispatched with `promote_quay=true` from a release tag
-- **THEN** the complypack artifact is rebuilt from the release commit, published to GHCR with the release tag and forced attestations, signed, and promoted to Quay with the release tag
+- **WHEN** the workflow is manually dispatched from a release tag with promotion enabled
+- **THEN** the workflow rebuilds the complypack from the release commit, publishes to GHCR with the release tag, signs the artifact, and promotes to Quay with the same tag
 
-#### Scenario: Promotion requires tag dispatch or release_tag input
-- **WHEN** the workflow is dispatched with `promote_quay=true` from a branch without providing `release_tag`
-- **THEN** the prepare job fails with a clear error message indicating that dispatching from a tag or providing `release_tag` is required
+#### Scenario: Release tag derived from ref
+- **WHEN** the workflow is dispatched from a tag ref
+- **THEN** the release tag SHALL be derived from the ref name without requiring the user to manually specify it
+
+#### Scenario: Source image verification before promotion
+- **WHEN** the promote job starts after the publish job completes
+- **THEN** the GHCR artifact with the release tag SHALL exist because the workflow published it in a preceding job
 
 #### Scenario: Immutable Quay tags
 - **WHEN** a release tag already exists on Quay
 - **THEN** the promotion fails with a non-zero exit code and an error message indicating the destination tag already exists, without modifying the existing artifact
 
 ### Requirement: Manual dispatch
-The consumer workflow SHALL support manual triggering for re-publishing or testing.
+The consumer workflow SHALL support manual triggering for re-publishing to
+GHCR or for combined publish-and-promote to Quay.
 
-#### Scenario: Manual dispatch without tag override
-- **WHEN** the workflow is manually dispatched without a `tag_override` input
-- **THEN** the workflow publishes the complypack artifact to GHCR with tag `sha-<github.sha>`
+#### Scenario: Manual dispatch for GHCR only
+- **WHEN** the workflow is manually dispatched without promotion enabled
+- **THEN** the workflow publishes the complypack artifact to GHCR with the specified or default tag
 
 #### Scenario: Manual dispatch with tag override
-- **WHEN** the workflow is manually dispatched with a `tag_override` value
+- **WHEN** the workflow is manually dispatched with a tag_override value and promotion disabled
 - **THEN** the workflow publishes the complypack artifact to GHCR with the provided tag
 
-### Requirement: Workflow file naming correction
-The misspelled promote workflow file SHALL be renamed from `resuable_publish_quay.yml` to `reusable_publish_quay.yml` with all in-repo references updated.
+#### Scenario: Manual dispatch for release promotion
+- **WHEN** the workflow is manually dispatched from a release tag with promotion enabled
+- **THEN** the workflow publishes to GHCR with the release tag, signs, and promotes to Quay in a single run
 
-#### Scenario: Renamed file
-- **WHEN** the rename is applied
-- **THEN** the file exists at `.github/workflows/reusable_publish_quay.yml` and no file exists at the old path
+### Requirement: Complypack artifact version alignment
+The consumer workflow SHALL derive the complypack artifact version from the
+release tag for release builds and use a fixed development version for
+non-release builds.
 
-#### Scenario: In-repo references updated
-- **WHEN** the rename is applied
-- **THEN** all references within org-infra (including README.md) use the corrected filename
+#### Scenario: Development build version
+- **WHEN** the workflow publishes a complypack artifact from a push to main
+- **THEN** the complypack artifact version SHALL be a fixed development placeholder distinct from any release version
+
+#### Scenario: Release build version
+- **WHEN** the workflow publishes a complypack artifact for release promotion from a tag
+- **THEN** the complypack artifact version SHALL be derived from the release tag
+
+### Requirement: CLI version pinning
+The consumer workflow SHALL pin the complypack CLI to a specific release
+version for build reproducibility.
+
+#### Scenario: Pinned CLI version
+- **WHEN** the consumer workflow installs the complypack CLI
+- **THEN** it SHALL use a pinned release version rather than latest
