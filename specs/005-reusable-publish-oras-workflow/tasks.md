@@ -75,5 +75,5 @@ Before opening the PR to `complytime/org-infra`:
 - [x] Spec and plan files exist under `specs/005-reusable-publish-oras-workflow/`
 - [x] End-to-end POC green: [run #24032400693](https://github.com/sonupreetam/image-publish-test/actions/runs/24032400693)
 - [x] Issue #172 updated with media type corrections and POC result
-- [ ] PR description references issue #172 with `Closes #172`
-- [ ] PR description notes companion issue #173 (`verify_vuln`) is a separate PR
+- [x] PR description references issue #172 with `Closes #172`
+- [x] PR description notes companion issue #173 (`verify_vuln`) is a separate PR
