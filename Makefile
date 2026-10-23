@@ -82,7 +82,7 @@ lint-policies: ## Lint policy when-guard consistency with tenet predicate types
 			continue; \
 		fi; \
 		missing=$$(jq -r \
-			'.when.expression as $$expr | [.tenets[].predicates.types[]] | unique[] | select(. as $$url | $$expr | contains($$url) | not)' \
+			'[.when.expression | match("'"'"'([^'"'"']+)'"'"'"; "g") | .captures[0].string] as $$expr_urls | [.tenets[].predicates.types[]] | unique[] | select(. as $$url | $$expr_urls | index($$url) | not)' \
 			"$$f") || { \
 			echo "ERROR: $$f: failed to validate when expression"; \
 			fail=1; \
