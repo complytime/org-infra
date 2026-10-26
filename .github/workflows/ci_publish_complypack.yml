@@ -182,6 +182,7 @@ jobs:
       allowed_identity_regex: https://github.com/complytime/org-infra(/.*)?
       fail_if_dest_exists: true
       include_sha_tags: false
+      additional_tags: "latest"
     secrets:
       dest_username: ${{ secrets.QUAY_USERNAME }}
       dest_password: ${{ secrets.QUAY_PASSWORD }}
