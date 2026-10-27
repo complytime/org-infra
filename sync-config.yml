@@ -141,6 +141,11 @@ files_to_sync:
     exclude_repos:
       - complytime-collector-components
 
+  - source: lychee.toml
+    destination: lychee.toml
+    exclude_repos:
+      - complytime-collector-components
+
   - source: .yamllint.yml
     destination: .yamllint.yml
 
