@@ -13,8 +13,9 @@ exclude_private = true
 # Exclude link-local addresses (169.254.0.0/16, fe80::/10)
 exclude_link_local = true
 
-# Skip URLs inside fenced code blocks (config examples, curl commands, etc.)
-exclude_code_blocks = true
+# Do not check links inside code blocks (config examples, curl commands, etc.)
+# lychee calls this "verbatim" content (<code>, <pre>, Markdown fenced blocks).
+include_verbatim = false
 
 # Exclude placeholder domains and auth-gated GitHub pages
 exclude = [
