@@ -1,0 +1,33 @@
+# Lychee link checker configuration
+# https://lychee.cli.rs/guides/config/
+#
+# Synced to org repos via sync-config.yml.
+# Used by MegaLinter's SPELL_LYCHEE linter.
+
+# Exclude loopback (localhost, 127.0.0.0/8)
+exclude_loopback = true
+
+# Exclude private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+exclude_private = true
+
+# Exclude link-local addresses (169.254.0.0/16, fe80::/10)
+exclude_link_local = true
+
+# Exclude placeholder and commonly-unreachable domains
+exclude = [
+  'example\.com',
+  'example\.org',
+  'example\.net',
+]
+
+# Skip mail address validation (avoids DNS/SMTP false positives in CI)
+include_mail = false
+
+# Timeout per request (seconds)
+timeout = 30
+
+# Maximum retries for transient failures
+max_retries = 2
+
+# Wait between retries (seconds)
+retry_wait_time = 2
