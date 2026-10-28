@@ -13,11 +13,20 @@ exclude_private = true
 # Exclude link-local addresses (169.254.0.0/16, fe80::/10)
 exclude_link_local = true
 
-# Exclude placeholder and commonly-unreachable domains
+# Do not check links inside code blocks (config examples, curl commands, etc.)
+# lychee calls this "verbatim" content (<code>, <pre>, Markdown fenced blocks).
+include_verbatim = false
+
+# Exclude placeholder domains and auth-gated GitHub pages
 exclude = [
   'example\.com',
   'example\.org',
   'example\.net',
+  # GitHub pages that require authentication or org membership
+  'github\.com/organizations/.*/settings',
+  'github\.com/orgs/.*/projects',
+  'github\.com/.*/settings/secrets',
+  'github\.com/settings/personal-access-tokens',
 ]
 
 # Skip mail address validation (avoids DNS/SMTP false positives in CI)

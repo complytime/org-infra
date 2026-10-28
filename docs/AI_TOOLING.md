@@ -1,6 +1,6 @@
 # AI Tooling
 
-This repository uses AI tools to help contributors code, review PRs, and manage feature specifications. [OpenCode](https://opencode.ai) is the standardized agent tool. [OpenSpec](https://opencode.ai) is the recommended spec-driven framework — both OpenSpec and SpecKit are agent-agnostic and work with any supported AI tool.
+This repository uses AI tools to help contributors code, review PRs, and manage feature specifications. [OpenCode](https://opencode.ai) is the standardized agent tool. [OpenSpec](https://github.com/Fission-AI/OpenSpec) is the recommended spec-driven framework — both OpenSpec and SpecKit are agent-agnostic and work with any supported AI tool.
 
 ## Getting Started
 
