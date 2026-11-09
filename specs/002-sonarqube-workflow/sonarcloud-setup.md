@@ -243,4 +243,4 @@ After completing SonarCloud setup:
 - [SonarCloud Documentation](https://docs.sonarcloud.io/)
 - [Quality Gate Configuration](https://docs.sonarcloud.io/improving/quality-gates/)
 - [Token Management](https://docs.sonarcloud.io/advanced-setup/user-accounts/)
-- [GitHub Integration](https://docs.sonarcloud.io/advanced-setup/ci-based-analysis/github-actions/)
+- [GitHub Integration](https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/ci-based-analysis/github-actions-for-sonarcloud)
