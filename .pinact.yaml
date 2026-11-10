@@ -5,7 +5,7 @@
 # in sync-config.yml for this file.
 version: 3
 min_age:
-  value: 3
+  value: 1
 ignore_actions:
   # Reusable workflows are consumed cross-repo via @main by design.
   # This is the standard org pattern for all downstream repositories.
