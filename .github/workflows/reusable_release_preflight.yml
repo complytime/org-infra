@@ -261,7 +261,7 @@ jobs:
             echo "::notice::Auto-discovering CI checks from workflow files"
 
             if [[ -f ".github/workflows/ci_checks.yml" ]]; then
-              REQUIRED_CHECKS+=("CI / Standardized CI / Run linters")
+              REQUIRED_CHECKS+=("Standardized CI / Run linters")
               echo "::notice::Discovered ci_checks.yml — added linter check"
             fi
 
@@ -272,15 +272,15 @@ jobs:
 
             if [[ -f ".github/workflows/ci_local.yml" ]]; then
               if command -v yq > /dev/null 2>&1; then
-                WORKFLOW_NAME=$(yq '.name' .github/workflows/ci_local.yml)
-                if [[ -n "$WORKFLOW_NAME" && "$WORKFLOW_NAME" != "null" ]]; then
-                  while IFS= read -r key; do
-                    JOB_NAME=$(yq ".jobs.${key}.name // \"${key}\"" \
-                      .github/workflows/ci_local.yml)
-                    REQUIRED_CHECKS+=("${WORKFLOW_NAME} / ${JOB_NAME}")
-                    echo "::notice::Discovered ci_local job: ${WORKFLOW_NAME} / ${JOB_NAME}"
-                  done < <(yq '.jobs | keys | .[]' .github/workflows/ci_local.yml)
-                fi
+                # The Checks API reports the job's own name for direct jobs. It does
+                # not prepend the calling workflow's name, so adding it here would
+                # make every discovered check fail the exact-match lookup below.
+                while IFS= read -r key; do
+                  JOB_NAME=$(yq ".jobs.${key}.name // \"${key}\"" \
+                    .github/workflows/ci_local.yml)
+                  REQUIRED_CHECKS+=("${JOB_NAME}")
+                  echo "::notice::Discovered ci_local job: ${JOB_NAME}"
+                done < <(yq '.jobs | keys | .[]' .github/workflows/ci_local.yml)
               else
                 echo "::warning::yq not found — skipping ci_local.yml check discovery"
               fi

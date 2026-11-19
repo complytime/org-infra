@@ -339,21 +339,22 @@ The preflight workflow automatically discovers which CI checks must pass before 
 
 ### The Three-File Convention
 
-| File              | Source                | Check name construction                                                   |
-|-------------------|-----------------------|---------------------------------------------------------------------------|
-| `ci_checks.yml`   | Synced from org-infra | Known by convention: `CI / Standardized CI / Run linters`                 |
-| `ci_security.yml` | Synced from org-infra | Pattern match: at least one `Security Checks / OSV-Scanner / *` must pass |
-| `ci_local.yml`    | Repo-specific         | Parsed with `yq`: `<workflow name> / <job name>` for each job             |
+| File              | Source                | Check name construction                                                          |
+|-------------------|-----------------------|----------------------------------------------------------------------------------|
+| `ci_checks.yml`   | Synced from org-infra | Known by convention: `Standardized CI / Run linters` (caller job / reusable job) |
+| `ci_security.yml` | Synced from org-infra | Pattern match: at least one `Security Checks / OSV-Scanner / *` must pass        |
+| `ci_local.yml`    | Repo-specific         | Parsed with `yq`: each job's `name`, falling back to its job key                 |
 
 ### How Check Names Are Constructed
 
-GitHub Actions check names follow the pattern: `<workflow name> / <job name>` (or `<workflow name> / <job name> / <step name>` for reusable workflow calls).
+GitHub Actions reports a check name that matches the job, not the workflow:
 
-For `ci_local.yml`, the preflight uses `yq` to extract:
-1. The workflow `name:` field
-2. Each job key and its optional `name:` field
+- A direct job is reported as its `name`, or as the job key when the job declares no `name`.
+- A job that calls a reusable workflow is reported as `<caller job name> / <called job name>`.
+- The workflow's top-level `name:` is never part of a check name.
 
-Example: if your `ci_local.yml` contains:
+For `ci_local.yml`, the preflight uses `yq` to extract each job key and its optional
+`name:` field. Example: if your `ci_local.yml` contains:
 
 ```yaml
 name: Local CI
@@ -367,15 +368,19 @@ jobs:
 ```
 
 The preflight discovers two checks:
-- `Local CI / Unit Tests`
-- `Local CI / Integration Tests`
+- `Unit Tests`
+- `Integration Tests`
+
+A job that declares no `name` is discovered under its job key instead: a job written
+as `smoke:` produces the check `smoke`.
 
 ### When to Use the Override
 
 Pass an explicit JSON array via the `ci_checks` input when:
 
 - Your repo does not have `ci_local.yml` (tests live in custom-named workflows)
-- Your check names do not follow the `<workflow name> / <job name>` pattern
+- Your check names differ from what GitHub reports, for example when a job calls a
+  reusable workflow and picks up an extra `<caller job> / <called job>` level
 - You need to verify checks from workflows other than the three convention files
 
 Example override:
@@ -548,12 +553,12 @@ Use this checklist when migrating your repository to the reusable release workfl
 
 ### Check name mismatch
 
-**Symptom:** Preflight fails with `Check 'Local CI / unit-test' not found for commit <sha>`.
+**Symptom:** Preflight fails with `Check 'Unit Tests' not found for commit <sha>`.
 
 **Cause:** The check name constructed from `ci_local.yml` does not match the actual check name reported by GitHub. Common reasons:
 - The job has a `name:` field that differs from the job key
-- The workflow calls a reusable workflow, adding a third level to the check name (`Workflow / Job / Step`)
-- The workflow `name:` field was recently changed
+- The workflow calls a reusable workflow, adding a second level to the check name (`<caller job> / <called job>`)
+- The job key or `name:` field was recently changed
 
 **Fix:**
 1. Find the actual check names:

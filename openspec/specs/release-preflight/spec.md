@@ -174,17 +174,18 @@ required CI checks by reading workflow files from the checked-out repository.
 #### Scenario: ci_local.yml discovered
 
 - **WHEN** the file `.github/workflows/ci_local.yml` exists in the repository
-- **THEN** the preflight extracts the workflow name and job names from the file
-- **AND** constructs expected check names using the pattern
-  `<workflow name> / <job name>`
+- **THEN** the preflight reads each job key and its optional `name` field from the file
+- **AND** constructs one expected check name per job using the job's `name`,
+  falling back to the job key when the job declares no `name`
+- **AND** never prepends the workflow's top-level `name` to a check name
 - **AND** requires all constructed check names to have passed on HEAD
 
 #### Scenario: ci_checks.yml discovered
 
 - **WHEN** the file `.github/workflows/ci_checks.yml` exists in the repository
-- **THEN** the preflight requires the check `CI / Standardized CI / Run linters`
-  (constructed as `<workflow name> / <caller job name> / <reusable job name>`)
-  to have passed on HEAD
+- **THEN** the preflight requires the check `Standardized CI / Run linters`
+  (constructed as `<caller job name> / <called reusable job name>`) to have passed
+  on HEAD
 
 #### Scenario: ci_security.yml discovered
 

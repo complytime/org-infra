@@ -8,6 +8,7 @@ on:
       - ".github/workflows/ci_test_preflight.yml"
       - ".github/workflows/reusable_release_preflight.yml"
       - "tests/test_preflight_token.sh"
+      - "tests/test_preflight_check_discovery.sh"
   push:
     branches:
       - main
@@ -15,6 +16,7 @@ on:
       - ".github/workflows/ci_test_preflight.yml"
       - ".github/workflows/reusable_release_preflight.yml"
       - "tests/test_preflight_token.sh"
+      - "tests/test_preflight_check_discovery.sh"
 
 permissions:
   contents: read
@@ -29,5 +31,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install yq
+        run: |
+          YQ_VERSION="v4.45.1"
+          curl -fsSLo /tmp/yq --proto '=https' --tlsv1.2 \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          echo "654d2943ca1d3be2024089eb4f270f4070f491a0610481d128509b2834870049  /tmp/yq" | sha256sum --check
+          sudo install -m 0755 /tmp/yq /usr/local/bin/yq
+          yq --version
+
       - name: Run preflight token assertions
         run: bash tests/test_preflight_token.sh
+
+      - name: Run preflight check discovery assertions
+        run: bash tests/test_preflight_check_discovery.sh
